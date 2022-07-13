@@ -1,0 +1,70 @@
+{
+  // Add comma separated ids of the languages where the snippet is applicable in the scope field. If scope
+  // is left empty or omitted, the snippet gets applied to all languages. The prefix is what is
+  // used to trigger the snippet and the body will be expanded and inserted. Possible variables are:
+  // $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders.
+  // Placeholders with the same ids are connected.
+  "Shiny application": {
+    "scope": "python",
+    "prefix": "shinyapp",
+    "body": [
+      "from shiny import Inputs, Outputs, Session, App, reactive, render, ui",
+      "",
+      "app_ui = ui.page_fluid(",
+      "\tui.input_slider(\"n\", \"N\", 0, 100, 20),",
+      "\tui.output_text_verbatim(\"txt\"),",
+      ")",
+      "",
+      "",
+      "def server(input: Inputs, output: Outputs, session: Session):",
+      "\t@output",
+      "\t@render.text",
+      "\tdef txt():",
+      "\t\treturn f\"n*2 is {input.n() * 2}\"",
+      "",
+      "",
+      "# The debug=True causes it to print messages to the console.",
+      "app = App(app_ui, server, debug=True)",
+      ""
+    ],
+    "description": "Basic Shiny app skeleton"
+  },
+  "Shiny module": {
+    "scope": "python",
+    "prefix": "shinymod",
+    "body": [
+      "from shiny import Inputs, Outputs, Session, App, module, reactive, render, ui",
+      "",
+      "# ============================================================",
+      "# Module: ${1:modname}",
+      "# ============================================================",
+      "",
+      "@module.ui",
+      "def $1_ui(label: str = \"Increment counter\") -> ui.TagChildArg:",
+      "\treturn ui.div(",
+      "\t\t{\"style\": \"border: 1px solid #ccc; border-radius: 5px; margin: 5px 0;\"},",
+      "\t\tui.h2(\"This is \" + label),",
+      "\t\tui.input_action_button(id=\"button\", label=label),",
+      "\t\tui.output_text_verbatim(id=\"out\"),",
+      "\t)",
+      "",
+      "",
+      "@module.server",
+      "def $1_server(",
+      "\tinput: Inputs, output: Outputs, session: Session, starting_value: int = 0",
+      "):",
+      "\tcount: reactive.Value[int] = reactive.Value(starting_value)",
+      "",
+      "\t@reactive.Effect",
+      "\t@reactive.event(input.button)",
+      "\tdef _():",
+      "\t\tcount.set(count() + 1)",
+      "",
+      "\t@output",
+      "\t@render.text",
+      "\tdef out() -> str:",
+      "\t\treturn f\"Click count is {count()}\"",
+      ""
+    ]
+  }
+}

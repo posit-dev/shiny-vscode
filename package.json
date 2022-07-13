@@ -21,6 +21,12 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "snippets": [
+      {
+        "language": "python",
+        "path": "./snippets/shiny.json"
+      }
+    ],
     "commands": [
       {
         "category": "Shiny",

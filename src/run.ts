@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import * as net from "net";
+import * as http from "http";
 import { retryUntilTimeout } from "./retry-utils";
 import { TERMINAL_NAME, PYSHINY_EXEC_CMD } from "./extension";
 
@@ -60,15 +60,21 @@ export async function runApp() {
   // TODO: Wait until the port is available
   async function isPortOpen(host: string, port: number): Promise<boolean> {
     return new Promise<boolean>((resolve, reject) => {
-      const socket = net.connect(port, host);
-      socket.on("error", (err) => {
-        reject(err);
-        socket.end();
-      });
-      socket.on("connect", () => {
+      const options = {
+        hostname: host,
+        port,
+        path: "/",
+        method: "GET",
+      };
+      const req = http.request(options, (res) => {
         resolve(true);
-        socket.end();
+        res.destroy();
+        req.destroy();
       });
+      req.on("error", (err) => {
+        reject(err);
+      });
+      req.end();
     });
   }
 
@@ -76,6 +82,7 @@ export async function runApp() {
     await retryUntilTimeout(10000, () => isPortOpen("localhost", port));
   } catch {
     // Failed to connect. Don't bother trying to launch a browser
+    console.warn("Failed to connect to Shiny app, not launching browser");
     return;
   }
 

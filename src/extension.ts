@@ -36,7 +36,6 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {}
 
 function updateContext(): boolean {
-  console.log("updateContext()");
   const editor = vscode.window.activeTextEditor;
   const active =
     !!editor &&

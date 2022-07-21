@@ -21,4 +21,3 @@ jobs:
           pat: blah #${{ secrets.VSCE_PATzzzzz }}
           registryUrl: https://marketplace.visualstudio.com
           dryRun: ${{ github.ref_name == 'main' }}
-          yarn: true

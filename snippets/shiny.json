@@ -8,7 +8,7 @@
     "scope": "python",
     "prefix": "shinyapp",
     "body": [
-      "from shiny import Inputs, Outputs, Session, App, reactive, render, ui",
+      "from shiny import Inputs, Outputs, Session, App, reactive, render, req, ui",
       "",
       "app_ui = ui.page_fluid(",
       "\tui.input_slider(\"n\", \"N\", 0, 100, 20),",
@@ -23,8 +23,7 @@
       "\t\treturn f\"n*2 is {input.n() * 2}\"",
       "",
       "",
-      "# The debug=True causes it to print messages to the console.",
-      "app = App(app_ui, server, debug=True)",
+      "app = App(app_ui, server)",
       ""
     ],
     "description": "Basic Shiny app skeleton"

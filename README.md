@@ -6,7 +6,7 @@ This is an extension to help launch [Shiny for Python](https://shiny.rstudio.com
 
 The main feature of this extension is the addition of a "Run Shiny App" option to the Run button when an app.py is being edited. 
 
-![Run app](images/runapp.png)
+![Run app](runapp.png)
 
 It also provides a couple of Python snippets:
 

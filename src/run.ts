@@ -99,6 +99,9 @@ export async function runApp(context: vscode.ExtensionContext) {
   );
 }
 
+// Ports that are considered unsafe by Chrome
+// http://superuser.com/questions/188058/which-ports-are-considered-unsafe-on-chrome
+// https://github.com/rstudio/shiny/issues/1784
 const UNSAFE_PORTS = [
   1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 77, 79, 87,
   95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 139, 143,

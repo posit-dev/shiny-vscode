@@ -6,7 +6,9 @@ export const TERMINAL_NAME = "Shiny";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("shiny.python.runApp", runApp)
+    vscode.commands.registerCommand("shiny.python.runApp", () =>
+      runApp(context)
+    )
   );
 
   const throttledUpdateContext = new Throttler(2000, updateContext);

@@ -2,7 +2,7 @@
   "name": "pyshiny",
   "displayName": "Shiny for Python",
   "description": "Shiny for Python support",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "rstudio",
   "icon": "logo.png",
   "repository": {
@@ -50,8 +50,8 @@
       "properties": {
         "shiny.python.port": {
           "type": "integer",
-          "default": 8000,
-          "description": "The port number to listen on when running an app."
+          "default": 0,
+          "description": "The port number to listen on when running an app. (Use 0 to choose a random port for each workspace.)"
         }
       }
     }

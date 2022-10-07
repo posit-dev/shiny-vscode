@@ -111,6 +111,7 @@ const UNSAFE_PORTS = [
 ];
 
 async function defaultPort(context: vscode.ExtensionContext): Promise<number> {
+  // Retrieve most recently used port
   let port: number = context.workspaceState.get("transient_port", 0);
   while (port === 0 || !(await verifyPort(port))) {
     do {

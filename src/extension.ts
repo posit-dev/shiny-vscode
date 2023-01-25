@@ -35,7 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }
 
 function updateContext(): boolean {
   const editor = vscode.window.activeTextEditor;
@@ -43,7 +43,7 @@ function updateContext(): boolean {
     !!editor &&
     editor.document.languageId === "python" &&
     !editor.document.isUntitled &&
-    !!editor.document.fileName.match(/\/app\.py$/) &&
+    !!editor.document.fileName.match(/[\\\/]app\.py$/) &&
     editor.document.getText().search(/\bshiny\b/) >= 0;
   vscode.commands.executeCommand("setContext", "shiny.python.active", active);
   return active;

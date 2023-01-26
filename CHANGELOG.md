@@ -4,7 +4,7 @@
 
 ## 0.0.5
 
-- The next version of this extension will be published under a new Publisher name on the VS Code Marketplace, to reflect RStudio's rebranding to Posit. Unfortunately, there is no way for us to move the extension between publishers, so instead, this extension is deprecated and replaced with [posit.pyshiny](https://marketplace.visualstudio.com/items?itemName=posit.pyshiny).
+- The next version of this extension will be published under a new Publisher name on the VS Code Marketplace, to reflect RStudio's rebranding to Posit. Unfortunately, there is no way for us to move the extension between publishers, so instead, this extension is deprecated and replaced with [posit.shiny-python](https://marketplace.visualstudio.com/items?itemName=posit.shiny-python).
 
 ## 0.0.4
 

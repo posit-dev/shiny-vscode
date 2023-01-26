@@ -2,8 +2,8 @@
   "name": "shiny-python",
   "displayName": "Shiny for Python",
   "description": "Shiny for Python support",
-  "version": "0.1.0",
-  "publisher": "posit",
+  "version": "0.1.1",
+  "publisher": "Posit",
   "icon": "logo.png",
   "repository": {
     "type": "git",

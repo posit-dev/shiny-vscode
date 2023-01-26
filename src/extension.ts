@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { runApp } from "./run";
 
 export const PYSHINY_EXEC_CMD = "PYSHINY_EXEC_CMD";
@@ -35,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() { }
+export function deactivate() {}
 
 function updateContext(): boolean {
   const editor = vscode.window.activeTextEditor;
@@ -43,7 +44,7 @@ function updateContext(): boolean {
     !!editor &&
     editor.document.languageId === "python" &&
     !editor.document.isUntitled &&
-    !!editor.document.fileName.match(/[\\\/]app\.py$/) &&
+    path.basename(editor.document.fileName ?? "") === "app.py" &&
     editor.document.getText().search(/\bshiny\b/) >= 0;
   vscode.commands.executeCommand("setContext", "shiny.python.active", active);
   return active;

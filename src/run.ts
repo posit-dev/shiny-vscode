@@ -4,6 +4,7 @@ import { retryUntilTimeout } from "./retry-utils";
 import { TERMINAL_NAME, PYSHINY_EXEC_CMD } from "./extension";
 import { AddressInfo } from "net";
 import { resolve } from "path";
+import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
 
 export async function runApp(context: vscode.ExtensionContext) {
   const port: number =
@@ -89,14 +90,12 @@ export async function runApp(context: vscode.ExtensionContext) {
     return;
   }
 
-  vscode.commands.executeCommand(
-    "simpleBrowser.api.open",
-    `http://127.0.0.1:${port}`,
-    {
-      preserveFocus: true,
-      viewColumn: vscode.ViewColumn.Beside,
-    }
-  );
+  let previewUrl = await getRemoteSafeUrl(port);
+
+  vscode.commands.executeCommand("simpleBrowser.api.open", previewUrl, {
+    preserveFocus: true,
+    viewColumn: vscode.ViewColumn.Beside,
+  });
 }
 
 // Ports that are considered unsafe by Chrome

@@ -44,7 +44,7 @@ function updateContext(): boolean {
     !!editor &&
     editor.document.languageId === "python" &&
     !editor.document.isUntitled &&
-    path.basename(editor.document.fileName ?? "") === "app.py" &&
+    /^app([_-].+)?\.py$/i.test(path.basename(editor.document.fileName ?? "")) &&
     editor.document.getText().search(/\bshiny\b/) >= 0;
   vscode.commands.executeCommand("setContext", "shiny.python.active", active);
   return active;

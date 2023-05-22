@@ -3,7 +3,6 @@ import * as http from "http";
 import { retryUntilTimeout } from "./retry-utils";
 import { TERMINAL_NAME, PYSHINY_EXEC_CMD } from "./extension";
 import { AddressInfo } from "net";
-import { resolve } from "path";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
 
 export async function runApp(context: vscode.ExtensionContext) {

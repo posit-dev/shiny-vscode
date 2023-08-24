@@ -62,9 +62,15 @@ export async function runApp(context: vscode.ExtensionContext) {
 
 export async function debugApp(context: vscode.ExtensionContext) {
   runAppImpl(context, async (path, port) => {
+    const DEBUG_NAME = "Debug Shiny app";
+
+    if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
+      await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
+    }
+
     await vscode.debug.startDebugging(undefined, {
       type: "python",
-      name: "Debug Shiny app",
+      name: DEBUG_NAME,
       request: "launch",
       module: "shiny",
       args: ["run", "--port", port.toString(), path],

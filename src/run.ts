@@ -5,6 +5,8 @@ import { TERMINAL_NAME, PYSHINY_EXEC_CMD } from "./extension";
 import { AddressInfo } from "net";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
 
+const DEBUG_NAME = "Debug Shiny app";
+
 export async function runApp(context: vscode.ExtensionContext) {
   runAppImpl(context, async (path, port) => {
     // Gather details of the current Python interpreter. We want to make sure
@@ -57,13 +59,13 @@ export async function runApp(context: vscode.ExtensionContext) {
         "\\$1"
       )}"`
     );
+
+    return true;
   });
 }
 
 export async function debugApp(context: vscode.ExtensionContext) {
   runAppImpl(context, async (path, port) => {
-    const DEBUG_NAME = "Debug Shiny app";
-
     if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
       await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
     }
@@ -78,12 +80,23 @@ export async function debugApp(context: vscode.ExtensionContext) {
       justMyCode: true,
       stopOnEntry: false,
     });
+
+    // Don't spawn browser. We do so in onDidStartDebugSession instead, so when
+    // VSCode restarts the debugger instead of us, the SimpleBrowser is still
+    // opened.
+    return false;
   });
 }
 
-export async function runAppImpl(
+/**
+ * Template function for runApp and debugApp
+ * @param context The context
+ * @param launch Async function that launches the app. Returns true if
+ *   runAppImpl should open a browser.
+ */
+async function runAppImpl(
   context: vscode.ExtensionContext,
-  launch: (path: string, port: number) => Promise<void>
+  launch: (path: string, port: number) => Promise<boolean>
 ) {
   const port: number =
     vscode.workspace.getConfiguration("shiny.python").get("port") ||
@@ -95,29 +108,32 @@ export async function runAppImpl(
     return;
   }
 
-  await launch(appPath, port);
-
-  // TODO: Wait until the port is available
-  async function isPortOpen(host: string, port: number): Promise<boolean> {
-    return new Promise<boolean>((resolve, reject) => {
-      const options = {
-        hostname: host,
-        port,
-        path: "/",
-        method: "GET",
-      };
-      const req = http.request(options, (res) => {
-        resolve(true);
-        res.destroy();
-        req.destroy();
-      });
-      req.on("error", (err) => {
-        reject(err);
-      });
-      req.end();
-    });
+  if (await launch(appPath, port)) {
+    await openBrowserWhenReady(port);
   }
+}
 
+async function isPortOpen(host: string, port: number): Promise<boolean> {
+  return new Promise<boolean>((resolve, reject) => {
+    const options = {
+      hostname: host,
+      port,
+      path: "/",
+      method: "GET",
+    };
+    const req = http.request(options, (res) => {
+      resolve(true);
+      res.destroy();
+      req.destroy();
+    });
+    req.on("error", (err) => {
+      reject(err);
+    });
+    req.end();
+  });
+}
+
+async function openBrowserWhenReady(port: number) {
   try {
     await retryUntilTimeout(10000, () => isPortOpen("127.0.0.1", port));
   } catch {
@@ -207,4 +223,23 @@ async function closeServer(server: http.Server): Promise<void> {
       resolve();
     });
   });
+}
+
+export function onDidStartDebugSession(e: vscode.DebugSession) {
+  const { type, name } = e.configuration;
+  const args = e.configuration.args as string[];
+  if (type === "python" && name === DEBUG_NAME) {
+    const portIndex = args.indexOf("--port");
+    if (portIndex >= 0 && portIndex < args.length - 1) {
+      const port = args[portIndex + 1];
+      if (/^\d+$/.test(port)) {
+        const portNum = parseInt(port);
+        if (portNum > 0) {
+          openBrowserWhenReady(portNum).catch((err) => {
+            console.warn("Failed to open browser", err);
+          });
+        }
+      }
+    }
+  }
 }

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { runApp, debugApp } from "./run";
+import { runApp, debugApp, onDidStartDebugSession } from "./run";
 
 export const PYSHINY_EXEC_CMD = "PYSHINY_EXEC_CMD";
 export const TERMINAL_NAME = "Shiny";
@@ -67,6 +67,8 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
   throttledUpdateContext.immediateCall();
+
+  vscode.debug.onDidStartDebugSession(onDidStartDebugSession);
 }
 
 // this method is called when your extension is deactivated

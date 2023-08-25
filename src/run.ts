@@ -70,6 +70,10 @@ export async function debugApp(context: vscode.ExtensionContext) {
       await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
     }
 
+    const justMyCode = vscode.workspace
+      .getConfiguration("shiny.python")
+      .get("port", true);
+
     await vscode.debug.startDebugging(undefined, {
       type: "python",
       name: DEBUG_NAME,
@@ -77,7 +81,7 @@ export async function debugApp(context: vscode.ExtensionContext) {
       module: "shiny",
       args: ["run", "--port", port.toString(), path],
       jinja: true,
-      justMyCode: true,
+      justMyCode,
       stopOnEntry: false,
     });
 

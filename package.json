@@ -65,6 +65,11 @@
           "type": "integer",
           "default": 0,
           "description": "The port number to listen on when running an app. (Use 0 to choose a random port for each workspace.)"
+        },
+        "shiny.python.debug.justMyCode": {
+          "type": "boolean",
+          "default": true,
+          "description": "When running the \"Debug Shiny App\" command, whether to skip over code in packages."
         }
       }
     }

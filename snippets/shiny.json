@@ -1,9 +1,4 @@
 {
-  // Add comma separated ids of the languages where the snippet is applicable in the scope field. If scope
-  // is left empty or omitted, the snippet gets applied to all languages. The prefix is what is
-  // used to trigger the snippet and the body will be expanded and inserted. Possible variables are:
-  // $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders.
-  // Placeholders with the same ids are connected.
   "Shiny application": {
     "scope": "python",
     "prefix": "shinyapp",
@@ -32,14 +27,14 @@
     "scope": "python",
     "prefix": "shinymod",
     "body": [
-      "from shiny import Inputs, Outputs, Session, App, module, reactive, render, ui",
+      "from shiny import Inputs, Outputs, Session, module, reactive, render, ui",
       "",
       "# ============================================================",
       "# Module: ${1:modname}",
       "# ============================================================",
       "",
       "@module.ui",
-      "def $1_ui(label: str = \"Increment counter\") -> ui.TagChildArg:",
+      "def $1_ui(label: str = \"Increment counter\"):",
       "\treturn ui.div(",
       "\t\t{\"style\": \"border: 1px solid #ccc; border-radius: 5px; margin: 5px 0;\"},",
       "\t\tui.h2(\"This is \" + label),",

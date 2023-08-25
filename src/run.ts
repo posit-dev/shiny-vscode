@@ -226,20 +226,43 @@ async function closeServer(server: http.Server): Promise<void> {
 }
 
 export function onDidStartDebugSession(e: vscode.DebugSession) {
+  // When a debug session starts, check if it's a Shiny session and whether we
+  // can figure out the port number. If so, open a browser.
+
   const { type, name } = e.configuration;
-  const args = e.configuration.args as string[];
-  if (type === "python" && name === DEBUG_NAME) {
-    const portIndex = args.indexOf("--port");
-    if (portIndex >= 0 && portIndex < args.length - 1) {
-      const port = args[portIndex + 1];
-      if (/^\d+$/.test(port)) {
-        const portNum = parseInt(port);
-        if (portNum > 0) {
-          openBrowserWhenReady(portNum).catch((err) => {
-            console.warn("Failed to open browser", err);
-          });
-        }
-      }
-    }
+  const args = e.configuration.args as string[] | undefined;
+
+  // It's not a Shiny session
+  if (type !== "python" || name !== DEBUG_NAME) {
+    return;
   }
+
+  // No arguments are present
+  if (!args) {
+    return;
+  }
+
+  const idxPortFlag = args.indexOf("--port");
+  // No --port flag is present, or it's the last argument
+  if (idxPortFlag < 0 || idxPortFlag === args.length - 1) {
+    return;
+  }
+
+  const portStr = args[idxPortFlag + 1];
+  // Port number is not a number
+  if (!/^\d+$/.test(portStr)) {
+    return;
+  }
+
+  const port = parseInt(portStr);
+  // Port might be 0 which means random assignment--we don't ever set the port
+  // to 0 in our code but I guess it's theoretically possible that a user could.
+  if (port <= 0) {
+    return;
+  }
+
+  // Finally have a valid port number! Open a browser.
+  openBrowserWhenReady(port).catch((err) => {
+    console.warn("Failed to open browser", err);
+  });
 }

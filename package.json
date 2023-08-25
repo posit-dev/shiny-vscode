@@ -66,10 +66,10 @@
           "default": 0,
           "description": "The port number to listen on when running an app. (Use 0 to choose a random port for each workspace.)"
         },
-        "shiny.python.debug.justMyCode": {
+        "shiny.python.debugJustMyCode": {
           "type": "boolean",
           "default": true,
-          "description": "When running the \"Debug Shiny App\" command, whether to skip over code in packages."
+          "description": "When running the \"Debug Shiny App\" command, only step through user-written code. Disable this to allow stepping through library code."
         }
       }
     }

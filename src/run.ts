@@ -72,7 +72,7 @@ export async function debugApp(context: vscode.ExtensionContext) {
 
     const justMyCode = vscode.workspace
       .getConfiguration("shiny.python")
-      .get("port", true);
+      .get("debugJustMyCode", true);
 
     await vscode.debug.startDebugging(undefined, {
       type: "python",

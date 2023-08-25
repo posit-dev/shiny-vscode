@@ -7,37 +7,6 @@ export const TERMINAL_NAME = "Shiny";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.debug.registerDebugConfigurationProvider("shiny-python", {
-      provideDebugConfigurations: () => {
-        return [
-          {
-            name: "Shiny",
-            type: "shiny-python",
-            request: "launch",
-            program: "${file}",
-            console: "integratedTerminal",
-            env: {
-              PYSHINY_EXEC_CMD: "shiny",
-            },
-          },
-        ];
-      },
-      resolveDebugConfiguration(folder, debugConfiguration, token) {
-        debugConfiguration.type = "python";
-        debugConfiguration.request = "launch";
-        debugConfiguration.module = "shiny";
-        debugConfiguration.args = [
-          "run",
-          "--port",
-          "0",
-          debugConfiguration.program,
-        ];
-        return debugConfiguration;
-      },
-    })
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand("shiny.python.runApp", () =>
       runApp(context)
     ),

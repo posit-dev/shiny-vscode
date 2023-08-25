@@ -2,7 +2,7 @@
   "name": "shiny-python",
   "displayName": "Shiny for Python",
   "description": "Shiny for Python support",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "Posit",
   "icon": "logo.png",
   "repository": {
@@ -17,7 +17,8 @@
   ],
   "activationEvents": [
     "onLanguage:python",
-    "onCommand:shiny.python.runApp"
+    "onCommand:shiny.python.runApp",
+    "onCommand:shiny.python.debugApp"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -34,12 +35,24 @@
         "title": "Run Shiny App",
         "icon": "$(play)",
         "enablement": "editorLangId == python && shellExecutionSupported"
+      },
+      {
+        "category": "Shiny",
+        "command": "shiny.python.debugApp",
+        "title": "Debug Shiny App",
+        "icon": "$(debug-alt)",
+        "enablement": "editorLangId == python && shellExecutionSupported"
       }
     ],
     "menus": {
       "editor/title/run": [
         {
           "command": "shiny.python.runApp",
+          "group": "navigation@-3",
+          "when": "shiny.python.active && shellExecutionSupported"
+        },
+        {
+          "command": "shiny.python.debugApp",
           "group": "navigation@-2",
           "when": "shiny.python.active && shellExecutionSupported"
         }
@@ -52,6 +65,11 @@
           "type": "integer",
           "default": 0,
           "description": "The port number to listen on when running an app. (Use 0 to choose a random port for each workspace.)"
+        },
+        "shiny.python.debugJustMyCode": {
+          "type": "boolean",
+          "default": true,
+          "description": "When running the \"Debug Shiny App\" command, only step through user-written code. Disable this to allow stepping through library code."
         }
       }
     }

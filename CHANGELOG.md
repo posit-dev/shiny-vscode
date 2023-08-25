@@ -2,6 +2,10 @@
 
 <!-- Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file. -->
 
+## 0.1.3
+
+- Add "Debug Shiny App" button to launch Shiny apps under the Python debugger. (#17)
+
 ## 0.1.2
 
 - Recognize files named app-\*.py and app\_\*.py as potentially Shiny apps (and enabling the "Run Shiny App" button).

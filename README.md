@@ -4,7 +4,7 @@ This is an extension to help launch [Shiny for Python](https://shiny.rstudio.com
 
 ## Features
 
-The main feature of this extension is the addition of a "Run Shiny App" option to the Run button when an app.py is being edited.
+The main features of this extension are the addition of "Run Shiny App" and "Debug Shiny App" options to the Run button when an app.py is being edited.
 
 ![Run app](https://shiny.rstudio.com/py/docs/assets/vscode.png)
 
@@ -20,3 +20,4 @@ See [the docs](https://shiny.rstudio.com/py/docs/install.html#configure-visual-s
 This extension contributes the following settings:
 
 - `shiny.python.port`: The port number to listen on when running a Shiny app. (By default, 0, which will choose a random port for each workspace.)
+- `shiny.python.debugJustMyCode`: When running the "Debug Shiny App" command, only step through user-written code. Disable this to allow stepping through library code. (Defaults to true.)

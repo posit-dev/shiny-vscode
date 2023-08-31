@@ -2,6 +2,10 @@
 
 <!-- Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file. -->
 
+## 0.1.4
+
+- No code changes; required a new version number to recover from continuous integration issue.
+
 ## 0.1.3
 
 - Add "Debug Shiny App" button to launch Shiny apps under the Python debugger. (#17)

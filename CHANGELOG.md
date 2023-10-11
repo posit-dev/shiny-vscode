@@ -2,6 +2,10 @@
 
 <!-- Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file. -->
 
+## 0.1.5
+
+- Recognize files named \*-app.py and \*\_app.py as potentially Shiny apps, enabling the "Run Shiny App" and "Debug Shiny App" buttons. (We continue to recognize app.py, app-\*.py, and app\_\*.py.) (#19)
+
 ## 0.1.4
 
 - No code changes; required a new version number to recover from continuous integration issue.

@@ -49,7 +49,8 @@ function updateContext(): boolean {
     !!editor &&
     editor.document.languageId === "python" &&
     !editor.document.isUntitled &&
-    /^app([_-].+)?\.py$/i.test(path.basename(editor.document.fileName ?? "")) &&
+    !!editor.document.fileName &&
+    isShinyAppUsername(editor.document.fileName) &&
     editor.document.getText().search(/\bshiny\b/) >= 0;
   vscode.commands.executeCommand("setContext", "shiny.python.active", active);
   return active;
@@ -113,4 +114,29 @@ class Throttler {
     this._clearTimer();
     this._pending = false;
   }
+}
+
+function isShinyAppUsername(filename: string): boolean {
+  filename = path.basename(filename);
+
+  // Only .py files
+  if (!/\.py$/i.test(filename)) {
+    return false;
+  }
+
+  // Accepted patterns:
+  // app.py
+  // app-*.py
+  // app_*.py
+  // *-app.py
+  // *_app.py
+  if (/^app\.py$/i.test(filename)) {
+    return true;
+  } else if (/^app[-_]/i.test(filename)) {
+    return true;
+  } else if (/[-_]app\.py$/i.test(filename)) {
+    return true;
+  }
+
+  return false;
 }

@@ -13,11 +13,16 @@ export async function runApp(context: vscode.ExtensionContext) {
     // only to re-use a terminal if it's using the same interpreter.
     const pythonAPI =
       vscode.extensions.getExtension("ms-python.python")!.exports;
-    const pythonExecCommand = (
-      await pythonAPI.environment.getExecutionDetails(
-        vscode.window.activeTextEditor?.document.uri
-      )
-    ).execCommand.join(" ");
+
+    // The getActiveEnvironmentPath docstring says: "Note that this can be an
+    // invalid environment, use resolveEnvironment to get full details."
+    const unresolvedEnv = pythonAPI.environments.getActiveEnvironmentPath(
+      vscode.window.activeTextEditor?.document.uri
+    );
+    const resolvedEnv = await pythonAPI.environments.resolveEnvironment(
+      unresolvedEnv
+    );
+    const pythonExecCommand = resolvedEnv.path;
 
     const shinyTerminals = vscode.window.terminals.filter(
       (term) => term.name === TERMINAL_NAME

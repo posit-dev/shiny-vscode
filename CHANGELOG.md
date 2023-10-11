@@ -5,6 +5,7 @@
 ## 0.1.5
 
 - Recognize files named \*-app.py and \*\_app.py as potentially Shiny apps, enabling the "Run Shiny App" and "Debug Shiny App" buttons. (We continue to recognize app.py, app-\*.py, and app\_\*.py.) (#19)
+- Stop using an exported API from the ms-python.python extension that has been deprecated and replaced. (#19)
 
 ## 0.1.4
 

@@ -3,7 +3,7 @@
     "scope": "python",
     "prefix": "shinyapp",
     "body": [
-      "from shiny import Inputs, Outputs, Session, App, reactive, render, req, ui",
+      "from shiny import App, reactive, render, req, ui",
       "",
       "app_ui = ui.page_fluid(",
       "\tui.input_slider(\"n\", \"N\", 0, 100, 20),",
@@ -11,8 +11,7 @@
       ")",
       "",
       "",
-      "def server(input: Inputs, output: Outputs, session: Session):",
-      "\t@output",
+      "def server(input, output, session):",
       "\t@render.text",
       "\tdef txt():",
       "\t\treturn f\"n*2 is {input.n() * 2}\"",

@@ -21,3 +21,5 @@ This extension contributes the following settings:
 
 - `shiny.python.port`: The port number to listen on when running a Shiny app. (By default, 0, which will choose a random port for each workspace.)
 - `shiny.python.debugJustMyCode`: When running the "Debug Shiny App" command, only step through user-written code. Disable this to allow stepping through library code. (Defaults to true.)
+
+Note that there is no setting for Python executable path or virtual environment. This extension uses whatever Python environment the VS Code Python extension thinks is active. If you find that the "Run Shiny App" and "Debug Shiny App" commands are launching with a different version of Python or different virtual environment than you intended, use the Python extension's [Select Interpreter](https://code.visualstudio.com/docs/python/environments#_working-with-python-interpreters) command to change it.

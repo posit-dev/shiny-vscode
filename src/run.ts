@@ -1,10 +1,14 @@
-import * as vscode from "vscode";
+import { PythonExtension } from "@vscode/python-extension";
 import * as http from "http";
-import { retryUntilTimeout } from "./retry-utils";
-import { TERMINAL_NAME, PYSHINY_EXEC_SHELL } from "./constants";
-import { PYSHINY_EXEC_CMD } from "./constants";
 import { AddressInfo } from "net";
+import * as vscode from "vscode";
+import {
+  PYSHINY_EXEC_CMD,
+  PYSHINY_EXEC_SHELL,
+  TERMINAL_NAME,
+} from "./constants";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
+import { retryUntilTimeout } from "./retry-utils";
 import { escapeCommandForTerminal } from "./shell-utils";
 
 const DEBUG_NAME = "Debug Shiny app";
@@ -13,8 +17,7 @@ export async function runApp(context: vscode.ExtensionContext) {
   runAppImpl(context, async (path, port) => {
     // Gather details of the current Python interpreter. We want to make sure
     // only to re-use a terminal if it's using the same interpreter.
-    const pythonAPI =
-      vscode.extensions.getExtension("ms-python.python")!.exports;
+    const pythonAPI: PythonExtension = await PythonExtension.api();
 
     // The getActiveEnvironmentPath docstring says: "Note that this can be an
     // invalid environment, use resolveEnvironment to get full details."
@@ -24,6 +27,14 @@ export async function runApp(context: vscode.ExtensionContext) {
     const resolvedEnv = await pythonAPI.environments.resolveEnvironment(
       unresolvedEnv
     );
+    if (!resolvedEnv) {
+      vscode.window.showErrorMessage(
+        "Unable to find Python interpreter. " +
+          'Please use the "Python: Select Interpreter" command, and try again.'
+      );
+      return false;
+    }
+
     const pythonExecCommand = resolvedEnv.path;
 
     const shinyTerminals = vscode.window.terminals.filter(
@@ -58,20 +69,8 @@ export async function runApp(context: vscode.ExtensionContext) {
     await new Promise((resolve) => setTimeout(resolve, 250));
     shinyTerm.show(true);
 
-    const filePath = vscode.window.activeTextEditor?.document.uri.fsPath;
-    if (!filePath) {
-      return false;
-    }
-
-    const cmd = escapeCommandForTerminal(shinyTerm, pythonExecCommand, [
-      "-m",
-      "shiny",
-      "run",
-      "--port",
-      port + "",
-      "--reload",
-      filePath,
-    ]);
+    const args = ["-m", "shiny", "run", "--port", port + "", "--reload", path];
+    const cmd = escapeCommandForTerminal(shinyTerm, pythonExecCommand, args);
     shinyTerm.sendText(cmd);
 
     return true;

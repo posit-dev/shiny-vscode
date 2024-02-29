@@ -4,7 +4,7 @@ export async function retryUntilTimeout<T>(
 ): Promise<T | undefined> {
   let { result, cancel: cancelResult } = retryUntilCancel(20, callback);
 
-  let timer: NodeJS.Timer | undefined;
+  let timer: NodeJS.Timeout | undefined;
   let timeoutPromise = new Promise<undefined>((resolve) => {
     timer = setTimeout(() => resolve, timeoutMs);
   });

@@ -2,9 +2,6 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { runApp, debugApp, onDidStartDebugSession } from "./run";
 
-export const PYSHINY_EXEC_CMD = "PYSHINY_EXEC_CMD";
-export const TERMINAL_NAME = "Shiny";
-
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("shiny.python.runApp", () =>

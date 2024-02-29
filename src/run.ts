@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
 import * as http from "http";
 import { retryUntilTimeout } from "./retry-utils";
-import { TERMINAL_NAME, PYSHINY_EXEC_CMD } from "./extension";
+import { TERMINAL_NAME, PYSHINY_EXEC_SHELL } from "./constants";
+import { PYSHINY_EXEC_CMD } from "./constants";
 import { AddressInfo } from "net";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
+import { escapeCommandForTerminal } from "./shell-utils";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -45,6 +47,7 @@ export async function runApp(context: vscode.ExtensionContext) {
         env: {
           // eslint-disable-next-line @typescript-eslint/naming-convention
           [PYSHINY_EXEC_CMD]: pythonExecCommand,
+          [PYSHINY_EXEC_SHELL]: vscode.env.shell,
         },
       });
     } else {
@@ -56,14 +59,20 @@ export async function runApp(context: vscode.ExtensionContext) {
     shinyTerm.show(true);
 
     const filePath = vscode.window.activeTextEditor?.document.uri.fsPath;
-    // TODO: Bash-escape filePath more completely than this?
-    shinyTerm.sendText(pythonExecCommand, false);
-    shinyTerm.sendText(
-      ` -m shiny run --port ${port} --reload "${filePath?.replace(
-        /([\\"])/g,
-        "\\$1"
-      )}"`
-    );
+    if (!filePath) {
+      return false;
+    }
+
+    const cmd = escapeCommandForTerminal(shinyTerm, pythonExecCommand, [
+      "-m",
+      "shiny",
+      "run",
+      "--port",
+      port + "",
+      "--reload",
+      filePath,
+    ]);
+    shinyTerm.sendText(cmd);
 
     return true;
   });

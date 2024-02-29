@@ -1,6 +1,8 @@
 # Change Log
 
-<!-- Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file. -->
+## 0.1.6
+
+- "Run Shiny App" now works with Python executable paths that have spaces or other special characters. (#26)
 
 ## 0.1.5
 

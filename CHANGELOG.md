@@ -3,6 +3,8 @@
 ## 0.1.6
 
 - "Run Shiny App" now works with Python executable paths that have spaces or other special characters. (#26)
+- "Run Shiny App" now starts a fresh console for each run (and closes the last console it started), so that the app's output is not mixed with the output of previous runs. (#27)
+- Improved compatibility with GitHub Codespaces. (#27)
 
 ## 0.1.5
 

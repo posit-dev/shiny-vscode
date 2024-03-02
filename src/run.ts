@@ -1,273 +1,118 @@
 import { PythonExtension } from "@vscode/python-extension";
-import * as http from "http";
-import * as net from "net";
-import { AddressInfo } from "net";
 import * as vscode from "vscode";
+import { openBrowser, openBrowserWhenReady } from "./net-utils";
 import {
-  PYSHINY_EXEC_CMD,
-  PYSHINY_EXEC_SHELL,
-  TERMINAL_NAME,
-} from "./constants";
-import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
-import { retryUntilTimeout } from "./retry-utils";
-import { escapeCommandForTerminal } from "./shell-utils";
+  envVarsForShell as envVarsForTerminal,
+  escapeCommandForTerminal,
+} from "./shell-utils";
+import { getAppPort, getAutoreloadPort } from "./port-settings";
 
 const DEBUG_NAME = "Debug Shiny app";
 
-export async function runApp(context: vscode.ExtensionContext) {
-  runAppImpl(context, "run", true, async (path, port, autoreloadPort) => {
-    // Gather details of the current Python interpreter. We want to make sure
-    // only to re-use a terminal if it's using the same interpreter.
-    const pythonAPI: PythonExtension = await PythonExtension.api();
-
-    // The getActiveEnvironmentPath docstring says: "Note that this can be an
-    // invalid environment, use resolveEnvironment to get full details."
-    const unresolvedEnv = pythonAPI.environments.getActiveEnvironmentPath(
-      vscode.window.activeTextEditor?.document.uri
-    );
-    const resolvedEnv = await pythonAPI.environments.resolveEnvironment(
-      unresolvedEnv
-    );
-    if (!resolvedEnv) {
-      vscode.window.showErrorMessage(
-        "Unable to find Python interpreter. " +
-          'Please use the "Python: Select Interpreter" command, and try again.'
-      );
-      return false;
-    }
-
-    const pythonExecCommand = resolvedEnv.path;
-
-    const shinyTerminals = vscode.window.terminals.filter(
-      (term) => term.name === TERMINAL_NAME
-    );
-
-    const shinyTerm = vscode.window.createTerminal({
-      name: TERMINAL_NAME,
-      env: {
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        [PYSHINY_EXEC_CMD]: pythonExecCommand,
-        [PYSHINY_EXEC_SHELL]: vscode.env.shell,
-      },
-    });
-    shinyTerm.show(true);
-
-    // Wait until new terminal is showing before disposing the old one.
-    // Otherwise we get a flicker of some other terminal in the in-between time.
-
-    const oldTerminals = shinyTerminals.map((x) => {
-      const p = new Promise<void>((resolve) => {
-        const subscription = vscode.window.onDidCloseTerminal(function sub(
-          term
-        ) {
-          if (term === x) {
-            subscription.dispose();
-            resolve();
-          }
-        });
-      });
-      x.dispose();
-      return p;
-    });
-    await Promise.allSettled(oldTerminals);
-
-    const args = ["-m", "shiny", "run", "--port", port + "", "--reload", path];
-    const cmd = escapeCommandForTerminal(shinyTerm, pythonExecCommand, args);
-    shinyTerm.sendText(cmd);
-
-    return true;
-  });
-}
-
-export async function debugApp(context: vscode.ExtensionContext) {
-  runAppImpl(context, "debug", false, async (path, port) => {
-    if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
-      await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
-    }
-
-    const justMyCode = vscode.workspace
-      .getConfiguration("shiny.python")
-      .get("debugJustMyCode", true);
-
-    await vscode.debug.startDebugging(undefined, {
-      type: "python",
-      name: DEBUG_NAME,
-      request: "launch",
-      module: "shiny",
-      args: ["run", "--port", port.toString(), path],
-      jinja: true,
-      justMyCode,
-      stopOnEntry: false,
-    });
-
-    // Don't spawn browser. We do so in onDidStartDebugSession instead, so when
-    // VSCode restarts the debugger instead of us, the SimpleBrowser is still
-    // opened.
-    return false;
-  });
-}
-
-/**
- * Template function for runApp and debugApp
- * @param context The context
- * @param launch Async function that launches the app. Returns true if
- *   runAppImpl should open a browser.
- */
-async function runAppImpl(
-  context: vscode.ExtensionContext,
-  reason: "run" | "debug",
-  autoreload: boolean,
-  launch: (
-    path: string,
-    port: number,
-    autoreloadPort?: number
-  ) => Promise<boolean>
-) {
-  const port: number =
-    vscode.workspace.getConfiguration("shiny.python").get("port") ||
-    (await defaultPort(context, `shiny_app_${reason}`));
-
-  const autoreloadPort: number | undefined = autoreload
-    ? await defaultPort(context, `shiny_autoreload_${reason}`)
-    : undefined;
-
-  const appPath = vscode.window.activeTextEditor?.document.uri.fsPath;
-  if (typeof appPath !== "string") {
-    vscode.window.showErrorMessage("No active file");
+export async function runApp(): Promise<void> {
+  const path = getActiveEditorFile();
+  if (!path) {
     return;
   }
 
-  if (await launch(appPath, port, autoreloadPort)) {
-    openBrowser("about:blank");
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  const python = await getSelectedPythonInterpreter();
+  if (!python) {
+    return;
+  }
+
+  const port = await getAppPort("run");
+  const autoreloadPort = await getAutoreloadPort("run");
+
+  const terminal = await createTerminalAndCloseOthersWithSameName({
+    name: "Shiny",
+    env: {
+      // We store the Python path here so we know whether the terminal can be
+      // reused by us in the future (yes if the selected Python interpreter has
+      // changed, no if it has). Currently we don't ever reuse terminals,
+      // instead we always close the old ones--but this could change in the
+      // future.
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      PYSHINY_EXEC_CMD: python,
+      // We save this here so escapeCommandForTerminal knows what shell
+      // semantics to use when escaping arguments. A bit magical, but oh well.
+      ...envVarsForTerminal(),
+    },
+  });
+
+  const args: string[] = ["-m", "shiny", "run"];
+  args.push("--port", port + "");
+  args.push("--reload");
+  args.push("--autoreload-port", autoreloadPort + "");
+  args.push(path);
+  const cmdline = escapeCommandForTerminal(terminal, python, args);
+  terminal.sendText(cmdline);
+
+  // Clear out the browser. Without this it can be a little confusing as to
+  // whether the app is trying to load or not.
+  openBrowser("about:blank");
+  // If we start too quickly, openBrowserWhenReady may detect the old Shiny
+  // process (in the process of shutting down), not the new one. Give it a
+  // second. It's a shame to wait an extra second, but it's only when the Play
+  // button is hit, not on autoreload.
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  if (process.env["CODESPACES"] === "true") {
+    // Codespaces has a port forwarding system that has an interesting auth
+    // system. By default, forwarded ports are private, and each forwarded port
+    // is served at a different hostname. Authentication is handled in one of
+    // two ways: 1) in a browser, you would attempt to navigate to a page and it
+    // would send you through an authentication flow, resulting in cookies being
+    // set; or 2) for an API call, you can add a custom header with a GitHub
+    // token. Our autoreload WebSocket client wants to connect, but it can't add
+    // custom headers (the browser WebSocket client intentionally doesn't
+    // support it). So we need to navigate the browser to the autoreload port to
+    // get the cookies set. Fortunately, Shiny's autoreload port does nothing
+    // but redirect you to the main port.
+    //
+    // So that's what we do on Cloudspaces: send the browser to the autoreload
+    // port instead of the main port.
+    await openBrowserWhenReady(autoreloadPort, port);
+  } else {
+    // For non-Cloudspace environments, simply go to the main port.
     await openBrowserWhenReady(port, autoreloadPort);
   }
 }
 
-async function isPortOpen(host: string, port: number): Promise<boolean> {
-  return new Promise<boolean>((resolve, reject) => {
-    const client = new net.Socket();
+export async function debugApp(): Promise<void> {
+  if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
+    await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
+  }
 
-    client.setTimeout(1000);
-    client.connect(port, host, function () {
-      resolve(true);
-      client.end();
-    });
-
-    client.on("timeout", () => {
-      client.destroy();
-      reject(new Error("Timed out"));
-    });
-
-    client.on("error", (err) => {
-      reject(err);
-    });
-
-    client.on("close", () => {
-      reject(new Error("Connection closed"));
-    });
-  });
-}
-
-async function openBrowserWhenReady(port: number, autoreloadPort?: number) {
-  try {
-    await retryUntilTimeout(10000, () => isPortOpen("127.0.0.1", port));
-    if (autoreloadPort) {
-      await retryUntilTimeout(10000, () =>
-        isPortOpen("127.0.0.1", autoreloadPort)
-      );
-    }
-  } catch {
-    // Failed to connect. Don't bother trying to launch a browser
-    console.warn("Failed to connect to Shiny app, not launching browser");
+  const path = getActiveEditorFile();
+  if (!path) {
     return;
   }
 
-  const portToUse =
-    autoreloadPort && process.env["CODESPACES"] === "true"
-      ? autoreloadPort
-      : port;
-
-  let previewUrl = await getRemoteSafeUrl(portToUse);
-  await openBrowser(previewUrl);
-}
-
-async function openBrowser(url: string): Promise<void> {
-  // if (process.env["CODESPACES"] === "true") {
-  //   vscode.env.openExternal(vscode.Uri.parse(url));
-  // } else {
-  await vscode.commands.executeCommand("simpleBrowser.api.open", url, {
-    preserveFocus: true,
-    viewColumn: vscode.ViewColumn.Beside,
-  });
-  // }
-}
-
-// Ports that are considered unsafe by Chrome
-// http://superuser.com/questions/188058/which-ports-are-considered-unsafe-on-chrome
-// https://github.com/rstudio/shiny/issues/1784
-const UNSAFE_PORTS = [
-  1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79,
-  87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137,
-  139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532,
-  540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723,
-  2049, 3659, 4045, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6697,
-  10080,
-];
-
-async function defaultPort(
-  context: vscode.ExtensionContext,
-  portType: string
-): Promise<number> {
-  // Retrieve most recently used port
-  let port: number = context.workspaceState.get(
-    "transient_port_" + portType,
-    0
-  );
-
-  if (port !== 0) {
-    return port;
+  const python = await getSelectedPythonInterpreter();
+  if (!python) {
+    return;
   }
 
-  do {
-    port = await suggestPort();
-    // Ports that are considered unsafe by Chrome
-    // http://superuser.com/questions/188058/which-ports-are-considered-unsafe-on-chrome
-    // https://github.com/rstudio/shiny/issues/1784
-  } while (UNSAFE_PORTS.includes(port));
-  await context.workspaceState.update("transient_port_" + portType, port);
+  const port = await getAppPort("debug");
 
-  return port;
-}
+  const justMyCode = vscode.workspace
+    .getConfiguration("shiny.python")
+    .get("debugJustMyCode", true);
 
-async function suggestPort(): Promise<number> {
-  const server = http.createServer();
-
-  const p = new Promise<number>((resolve, reject) => {
-    server.on("listening", () =>
-      resolve((server.address() as AddressInfo).port)
-    );
-    server.on("error", reject);
-  }).finally(() => {
-    return closeServer(server);
+  await vscode.debug.startDebugging(undefined, {
+    type: "python",
+    name: DEBUG_NAME,
+    request: "launch",
+    module: "shiny",
+    args: ["run", "--port", port.toString(), path],
+    jinja: true,
+    justMyCode,
+    stopOnEntry: false,
   });
 
-  server.listen(0, "127.0.0.1");
-
-  return p;
-}
-
-async function closeServer(server: http.Server): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    server.close((errClose) => {
-      if (errClose) {
-        // Don't bother logging, we don't care (e.g. if the server
-        // failed to listen, close() will fail)
-      }
-      // Whether close succeeded or not, we're now ready to continue
-      resolve();
-    });
-  });
+  // Don't spawn browser. We do so in onDidStartDebugSession instead, so when
+  // VSCode restarts the debugger instead of us, the SimpleBrowser is still
+  // opened.
 }
 
 export function onDidStartDebugSession(e: vscode.DebugSession) {
@@ -310,4 +155,79 @@ export function onDidStartDebugSession(e: vscode.DebugSession) {
   openBrowserWhenReady(port).catch((err) => {
     console.warn("Failed to open browser", err);
   });
+}
+
+async function createTerminalAndCloseOthersWithSameName(
+  options: vscode.TerminalOptions
+): Promise<vscode.Terminal> {
+  if (!options.name) {
+    throw new Error("Terminal name is required");
+  }
+
+  // Grab a list of all terminals with the same name, before we create the new
+  // one. We'll close them. (It'd be surprising if there was more than one,
+  // given that we always close the previous ones when starting a new one.)
+  const oldTerminals = vscode.window.terminals.filter(
+    (term) => term.name === options.name
+  );
+
+  const newTerm = vscode.window.createTerminal(options);
+  newTerm.show(true);
+
+  // Wait until new terminal is showing before disposing the old ones.
+  // Otherwise we get a flicker of some other terminal in the in-between time.
+
+  const closingTerminals = oldTerminals.map((x) => {
+    const p = new Promise<void>((resolve) => {
+      // Resolve when the terminal is closed
+      const subscription = vscode.window.onDidCloseTerminal(function sub(term) {
+        if (term === x) {
+          subscription.dispose();
+          resolve();
+        }
+      });
+    });
+    x.dispose();
+    return p;
+  });
+  await Promise.allSettled(closingTerminals);
+
+  return newTerm;
+}
+
+/**
+ * Gets the currently selected Python interpreter, according to the Python extension.
+ * @returns A path, or false if no interpreter is selected.
+ */
+async function getSelectedPythonInterpreter(): Promise<string | false> {
+  // Gather details of the current Python interpreter. We want to make sure
+  // only to re-use a terminal if it's using the same interpreter.
+  const pythonAPI: PythonExtension = await PythonExtension.api();
+
+  // The getActiveEnvironmentPath docstring says: "Note that this can be an
+  // invalid environment, use resolveEnvironment to get full details."
+  const unresolvedEnv = pythonAPI.environments.getActiveEnvironmentPath(
+    vscode.window.activeTextEditor?.document.uri
+  );
+  const resolvedEnv = await pythonAPI.environments.resolveEnvironment(
+    unresolvedEnv
+  );
+  if (!resolvedEnv) {
+    vscode.window.showErrorMessage(
+      "Unable to find Python interpreter. " +
+        'Please use the "Python: Select Interpreter" command, and try again.'
+    );
+    return false;
+  }
+
+  return resolvedEnv.path;
+}
+
+function getActiveEditorFile(): string | undefined {
+  const appPath = vscode.window.activeTextEditor?.document.uri.fsPath;
+  if (typeof appPath !== "string") {
+    vscode.window.showErrorMessage("No active file");
+    return;
+  }
+  return appPath;
 }

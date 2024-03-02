@@ -4,12 +4,8 @@ import { runApp, debugApp, onDidStartDebugSession } from "./run";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("shiny.python.runApp", () =>
-      runApp(context)
-    ),
-    vscode.commands.registerCommand("shiny.python.debugApp", () =>
-      debugApp(context)
-    )
+    vscode.commands.registerCommand("shiny.python.runApp", runApp),
+    vscode.commands.registerCommand("shiny.python.debugApp", debugApp)
   );
 
   const throttledUpdateContext = new Throttler(2000, updateContext);

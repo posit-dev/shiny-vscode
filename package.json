@@ -94,7 +94,6 @@
     "@types/vscode": "^1.66.0",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "@typescript-eslint/parser": "^7.1.0",
-    "@vscode/python-extension": "^1.0.5",
     "@vscode/test-electron": "^2.1.3",
     "eslint": "^8.11.0",
     "glob": "^10.3.10",
@@ -103,5 +102,8 @@
   },
   "extensionDependencies": [
     "ms-python.python"
-  ]
+  ],
+  "dependencies": {
+    "@vscode/python-extension": "^1.0.5"
+  }
 }

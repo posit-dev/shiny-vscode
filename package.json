@@ -64,7 +64,12 @@
         "shiny.python.port": {
           "type": "integer",
           "default": 0,
-          "description": "The port number to listen on when running an app. (Use 0 to choose a random port for each workspace.)"
+          "description": "The port number Shiny should listen on when running an app. (Use 0 to choose a random port.)"
+        },
+        "shiny.python.autoreloadPort": {
+          "type": "integer",
+          "default": 0,
+          "description": "The port number Shiny should use for a supplemental WebSocket channel it uses to support reload-on-save. (Use 0 to choose a random port.)"
         },
         "shiny.python.debugJustMyCode": {
           "type": "boolean",

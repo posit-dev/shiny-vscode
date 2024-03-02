@@ -1,5 +1,6 @@
 import { PythonExtension } from "@vscode/python-extension";
 import * as http from "http";
+import * as net from "net";
 import { AddressInfo } from "net";
 import * as vscode from "vscode";
 import {
@@ -14,7 +15,7 @@ import { escapeCommandForTerminal } from "./shell-utils";
 const DEBUG_NAME = "Debug Shiny app";
 
 export async function runApp(context: vscode.ExtensionContext) {
-  runAppImpl(context, async (path, port) => {
+  runAppImpl(context, "run", true, async (path, port, autoreloadPort) => {
     // Gather details of the current Python interpreter. We want to make sure
     // only to re-use a terminal if it's using the same interpreter.
     const pythonAPI: PythonExtension = await PythonExtension.api();
@@ -41,33 +42,34 @@ export async function runApp(context: vscode.ExtensionContext) {
       (term) => term.name === TERMINAL_NAME
     );
 
-    let shinyTerm = shinyTerminals.find((x) => {
-      const env = (x.creationOptions as Readonly<vscode.TerminalOptions>)?.env;
-      const canUse = env && env[PYSHINY_EXEC_CMD] === pythonExecCommand;
-      if (!canUse) {
-        // Existing Terminal windows named $TERMINAL_NAME but not using the
-        // correct Python interpreter are closed.
-        x.dispose();
-      }
-      return canUse;
+    const shinyTerm = vscode.window.createTerminal({
+      name: TERMINAL_NAME,
+      env: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        [PYSHINY_EXEC_CMD]: pythonExecCommand,
+        [PYSHINY_EXEC_SHELL]: vscode.env.shell,
+      },
     });
-
-    if (!shinyTerm) {
-      shinyTerm = vscode.window.createTerminal({
-        name: TERMINAL_NAME,
-        env: {
-          // eslint-disable-next-line @typescript-eslint/naming-convention
-          [PYSHINY_EXEC_CMD]: pythonExecCommand,
-          [PYSHINY_EXEC_SHELL]: vscode.env.shell,
-        },
-      });
-    } else {
-      // Send Ctrl+C to interrupt any existing Shiny process
-      shinyTerm.sendText("\u0003");
-    }
-    // Wait for shell to be created, or for existing process to be interrupted
-    await new Promise((resolve) => setTimeout(resolve, 250));
     shinyTerm.show(true);
+
+    // Wait until new terminal is showing before disposing the old one.
+    // Otherwise we get a flicker of some other terminal in the in-between time.
+
+    const oldTerminals = shinyTerminals.map((x) => {
+      const p = new Promise<void>((resolve) => {
+        const subscription = vscode.window.onDidCloseTerminal(function sub(
+          term
+        ) {
+          if (term === x) {
+            subscription.dispose();
+            resolve();
+          }
+        });
+      });
+      x.dispose();
+      return p;
+    });
+    await Promise.allSettled(oldTerminals);
 
     const args = ["-m", "shiny", "run", "--port", port + "", "--reload", path];
     const cmd = escapeCommandForTerminal(shinyTerm, pythonExecCommand, args);
@@ -78,7 +80,7 @@ export async function runApp(context: vscode.ExtensionContext) {
 }
 
 export async function debugApp(context: vscode.ExtensionContext) {
-  runAppImpl(context, async (path, port) => {
+  runAppImpl(context, "debug", false, async (path, port) => {
     if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
       await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
     }
@@ -113,11 +115,21 @@ export async function debugApp(context: vscode.ExtensionContext) {
  */
 async function runAppImpl(
   context: vscode.ExtensionContext,
-  launch: (path: string, port: number) => Promise<boolean>
+  reason: "run" | "debug",
+  autoreload: boolean,
+  launch: (
+    path: string,
+    port: number,
+    autoreloadPort?: number
+  ) => Promise<boolean>
 ) {
   const port: number =
     vscode.workspace.getConfiguration("shiny.python").get("port") ||
-    (await defaultPort(context));
+    (await defaultPort(context, `shiny_app_${reason}`));
+
+  const autoreloadPort: number | undefined = autoreload
+    ? await defaultPort(context, `shiny_autoreload_${reason}`)
+    : undefined;
 
   const appPath = vscode.window.activeTextEditor?.document.uri.fsPath;
   if (typeof appPath !== "string") {
@@ -125,46 +137,70 @@ async function runAppImpl(
     return;
   }
 
-  if (await launch(appPath, port)) {
-    await openBrowserWhenReady(port);
+  if (await launch(appPath, port, autoreloadPort)) {
+    openBrowser("about:blank");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await openBrowserWhenReady(port, autoreloadPort);
   }
 }
 
 async function isPortOpen(host: string, port: number): Promise<boolean> {
   return new Promise<boolean>((resolve, reject) => {
-    const options = {
-      hostname: host,
-      port,
-      path: "/",
-      method: "GET",
-    };
-    const req = http.request(options, (res) => {
+    const client = new net.Socket();
+
+    client.setTimeout(1000);
+    client.connect(port, host, function () {
       resolve(true);
-      res.destroy();
-      req.destroy();
+      client.end();
     });
-    req.on("error", (err) => {
+
+    client.on("timeout", () => {
+      client.destroy();
+      reject(new Error("Timed out"));
+    });
+
+    client.on("error", (err) => {
       reject(err);
     });
-    req.end();
+
+    client.on("close", () => {
+      reject(new Error("Connection closed"));
+    });
   });
 }
 
-async function openBrowserWhenReady(port: number) {
+async function openBrowserWhenReady(port: number, autoreloadPort?: number) {
   try {
     await retryUntilTimeout(10000, () => isPortOpen("127.0.0.1", port));
+    if (autoreloadPort) {
+      await retryUntilTimeout(10000, () =>
+        isPortOpen("127.0.0.1", autoreloadPort)
+      );
+    }
   } catch {
     // Failed to connect. Don't bother trying to launch a browser
     console.warn("Failed to connect to Shiny app, not launching browser");
     return;
   }
 
-  let previewUrl = await getRemoteSafeUrl(port);
+  const portToUse =
+    autoreloadPort && process.env["CODESPACES"] === "true"
+      ? autoreloadPort
+      : port;
 
-  vscode.commands.executeCommand("simpleBrowser.api.open", previewUrl, {
+  let previewUrl = await getRemoteSafeUrl(portToUse);
+  await openBrowser(previewUrl);
+}
+
+async function openBrowser(url: string): Promise<void> {
+  // if (process.env["CODESPACES"] === "true") {
+  //   vscode.env.openExternal(vscode.Uri.parse(url));
+  // } else {
+  await vscode.commands.executeCommand("simpleBrowser.api.open", url, {
     preserveFocus: true,
     viewColumn: vscode.ViewColumn.Beside,
   });
+  // }
 }
 
 // Ports that are considered unsafe by Chrome
@@ -179,18 +215,28 @@ const UNSAFE_PORTS = [
   10080,
 ];
 
-async function defaultPort(context: vscode.ExtensionContext): Promise<number> {
+async function defaultPort(
+  context: vscode.ExtensionContext,
+  portType: string
+): Promise<number> {
   // Retrieve most recently used port
-  let port: number = context.workspaceState.get("transient_port", 0);
-  while (port === 0 || !(await verifyPort(port))) {
-    do {
-      port = await suggestPort();
-      // Ports that are considered unsafe by Chrome
-      // http://superuser.com/questions/188058/which-ports-are-considered-unsafe-on-chrome
-      // https://github.com/rstudio/shiny/issues/1784
-    } while (UNSAFE_PORTS.includes(port));
-    await context.workspaceState.update("transient_port", port);
+  let port: number = context.workspaceState.get(
+    "transient_port_" + portType,
+    0
+  );
+
+  if (port !== 0) {
+    return port;
   }
+
+  do {
+    port = await suggestPort();
+    // Ports that are considered unsafe by Chrome
+    // http://superuser.com/questions/188058/which-ports-are-considered-unsafe-on-chrome
+    // https://github.com/rstudio/shiny/issues/1784
+  } while (UNSAFE_PORTS.includes(port));
+  await context.workspaceState.update("transient_port_" + portType, port);
+
   return port;
 }
 
@@ -207,24 +253,6 @@ async function suggestPort(): Promise<number> {
   });
 
   server.listen(0, "127.0.0.1");
-
-  return p;
-}
-
-async function verifyPort(
-  port: number,
-  host: string = "127.0.0.1"
-): Promise<boolean> {
-  const server = http.createServer();
-
-  const p = new Promise<boolean>((resolve, reject) => {
-    server.on("listening", () => resolve(true));
-    server.on("error", () => resolve(false));
-  }).finally(() => {
-    return closeServer(server);
-  });
-
-  server.listen(port, host);
 
   return p;
 }

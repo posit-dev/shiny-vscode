@@ -64,7 +64,12 @@
         "shiny.python.port": {
           "type": "integer",
           "default": 0,
-          "description": "The port number to listen on when running an app. (Use 0 to choose a random port for each workspace.)"
+          "description": "The port number Shiny should listen on when running an app. (Use 0 to choose a random port.)"
+        },
+        "shiny.python.autoreloadPort": {
+          "type": "integer",
+          "default": 0,
+          "description": "The port number Shiny should use for a supplemental WebSocket channel it uses to support reload-on-save. (Use 0 to choose a random port.)"
         },
         "shiny.python.debugJustMyCode": {
           "type": "boolean",
@@ -89,7 +94,6 @@
     "@types/vscode": "^1.66.0",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "@typescript-eslint/parser": "^7.1.0",
-    "@vscode/python-extension": "^1.0.5",
     "@vscode/test-electron": "^2.1.3",
     "eslint": "^8.11.0",
     "glob": "^10.3.10",
@@ -98,5 +102,8 @@
   },
   "extensionDependencies": [
     "ms-python.python"
-  ]
+  ],
+  "dependencies": {
+    "@vscode/python-extension": "^1.0.5"
+  }
 }

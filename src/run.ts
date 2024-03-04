@@ -179,7 +179,10 @@ async function createTerminalAndCloseOthersWithSameName(
 
   const closingTerminals = oldTerminals.map((x) => {
     const p = new Promise<void>((resolve) => {
-      // Resolve when the terminal is closed
+      // Resolve when the terminal is closed. We're working hard to be accurate
+      // BUT empirically it doesn't seem like the old Shiny processes are
+      // actually terminated at the time this promise is resolved, so callers
+      // shouldn't assume that.
       const subscription = vscode.window.onDidCloseTerminal(function sub(term) {
         if (term === x) {
           subscription.dispose();

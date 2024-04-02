@@ -1,11 +1,13 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { runApp, debugApp, onDidStartDebugSession } from "./run";
+import { runApp as runAppPy, debugApp, onDidStartDebugSession } from "./run-py";
+import { runApp as runAppR } from "./run-r";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("shiny.python.runApp", runApp),
-    vscode.commands.registerCommand("shiny.python.debugApp", debugApp)
+    vscode.commands.registerCommand("shiny.python.runApp", runAppPy),
+    vscode.commands.registerCommand("shiny.python.debugApp", debugApp),
+    vscode.commands.registerCommand("shiny.r.runApp", runAppR)
   );
 
   const throttledUpdateContext = new Throttler(2000, updateContext);
@@ -38,14 +40,31 @@ export function deactivate() {}
 
 function updateContext(): boolean {
   const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.commands.executeCommand("setContext", "shiny.r.active", false);
+    vscode.commands.executeCommand("setContext", "shiny.python.active", false);
+    return false;
+  }
+
+  const { languageId } = editor.document;
+
   const active =
-    !!editor &&
-    editor.document.languageId === "python" &&
+    ["python", "r"].includes(languageId) &&
     !editor.document.isUntitled &&
     !!editor.document.fileName &&
-    isShinyAppUsername(editor.document.fileName) &&
+    isShinyAppUsername(editor.document.fileName, languageId) &&
     editor.document.getText().search(/\bshiny\b/) >= 0;
-  vscode.commands.executeCommand("setContext", "shiny.python.active", active);
+
+  if (languageId === "python") {
+    console.log(`R active: ${active}`);
+    vscode.commands.executeCommand("setContext", "shiny.r.active", false);
+    vscode.commands.executeCommand("setContext", "shiny.python.active", active);
+  } else if (languageId === "r") {
+    console.log(`R active: ${active}`);
+    vscode.commands.executeCommand("setContext", "shiny.r.active", active);
+    vscode.commands.executeCommand("setContext", "shiny.python.active", false);
+  }
+
   return active;
 }
 
@@ -109,25 +128,31 @@ class Throttler {
   }
 }
 
-function isShinyAppUsername(filename: string): boolean {
+function isShinyAppUsername(filename: string, language: string): boolean {
   filename = path.basename(filename);
 
-  // Only .py files
-  if (!/\.py$/i.test(filename)) {
+  language = language === "R" ? "r" : language;
+
+  // Only .py or .R files
+  if (!new RegExp(`\\.${language}$`, "i").test(filename)) {
     return false;
   }
 
   // Accepted patterns:
-  // app.py
-  // app-*.py
-  // app_*.py
-  // *-app.py
-  // *_app.py
-  if (/^app\.py$/i.test(filename)) {
+  // app.py|R
+  const rxApp = new RegExp(`^app\\.${language}$`, "i");
+  // app-*.py|R
+  // app_*.py|R
+  const rxAppDash = new RegExp(`^app[-_]\\.${language}$`, "i");
+  // *-app.py|R
+  // *_app.py|R
+  const rxDashApp = new RegExp(`[-_]app\\.${language}$`, "i");
+
+  if (rxApp.test(filename)) {
     return true;
-  } else if (/^app[-_]/i.test(filename)) {
+  } else if (rxAppDash.test(filename)) {
     return true;
-  } else if (/[-_]app\.py$/i.test(filename)) {
+  } else if (rxDashApp.test(filename)) {
     return true;
   }
 

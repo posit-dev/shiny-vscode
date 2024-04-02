@@ -18,7 +18,9 @@
   "activationEvents": [
     "onLanguage:python",
     "onCommand:shiny.python.runApp",
-    "onCommand:shiny.python.debugApp"
+    "onCommand:shiny.python.debugApp",
+    "onLanguage:r",
+    "onCommand:shiny.r.runApp"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -42,6 +44,13 @@
         "title": "Debug Shiny App",
         "icon": "$(debug-alt)",
         "enablement": "editorLangId == python && shellExecutionSupported"
+      },
+      {
+        "category": "Shiny",
+        "command": "shiny.r.runApp",
+        "title": "Run Shiny App",
+        "icon": "$(play)",
+        "enablement": "editorLangId == r && shellExecutionSupported"
       }
     ],
     "menus": {
@@ -55,6 +64,11 @@
           "command": "shiny.python.debugApp",
           "group": "navigation@-2",
           "when": "shiny.python.active && shellExecutionSupported"
+        },
+        {
+          "command": "shiny.r.runApp",
+          "group": "navigation@-3",
+          "when": "shiny.r.active && shellExecutionSupported"
         }
       ]
     },

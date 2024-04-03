@@ -26,3 +26,8 @@ jobs:
           pat: ${{ secrets.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com
           dryRun: ${{ github.ref_name == 'main' }}
+      - name: Upload extension to Actions Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: shiny-vscode
+          path: "shiny*.vsix"

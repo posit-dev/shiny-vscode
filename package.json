@@ -73,7 +73,7 @@
       ]
     },
     "configuration": {
-      "title": "Shiny for Python",
+      "title": "Shiny",
       "properties": {
         "shiny.python.port": {
           "type": "integer",

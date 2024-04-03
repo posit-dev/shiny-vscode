@@ -89,6 +89,11 @@
           "type": "boolean",
           "default": true,
           "description": "When running the \"Debug Shiny App\" command, only step through user-written code. Disable this to allow stepping through library code."
+        },
+        "shiny.r.devmode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
         }
       }
     }

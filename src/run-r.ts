@@ -25,7 +25,15 @@ export async function runApp(): Promise<void> {
     },
   });
 
-  const runApp = `shiny::devmode(); shiny::runApp("${path}", port=${port}, launch.browser=FALSE)`;
+  const useDevmode = vscode.workspace
+    .getConfiguration("shiny.r")
+    .get("devmode");
+
+  let runApp = `shiny::runApp("${path}", port=${port}, launch.browser=FALSE)`;
+  if (useDevmode) {
+    runApp = `shiny::devmode(); ${runApp}`;
+  }
+
   const cmdline = escapeCommandForTerminal(terminal, "Rscript", ["-e", runApp]);
   terminal.sendText(cmdline);
 

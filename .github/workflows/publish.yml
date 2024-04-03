@@ -4,6 +4,9 @@ on:
       - "v[0-9]*"
     branches:
       - "main"
+  pull_request:
+    branches:
+      - "main"
 
 name: Deploy Extension
 jobs:
@@ -19,10 +22,15 @@ jobs:
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
-          dryRun: ${{ github.ref_name == 'main' }}
+          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
       - name: Publish to Visual Studio Marketplace
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com
-          dryRun: ${{ github.ref_name == 'main' }}
+          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
+      - name: Upload extension to Actions Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: shiny-vscode
+          path: "shiny*.vsix"

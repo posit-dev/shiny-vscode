@@ -56,5 +56,41 @@
       "\t\treturn f\"Click count is {count()}\"",
       ""
     ]
+  },
+  "Shiny application (R)": {
+    "scope": "r",
+    "prefix": "shinyapp",
+    "body": [
+      "library(shiny)",
+      "library(bslib)",
+      "",
+      "ui <- page_${1:fluid}(",
+      "  ${0}",
+      ")",
+      "",
+      "server <- function(input, output, session) {",
+      "",
+      "}",
+      "",
+      "shinyApp(ui, server)"
+    ]
+  },
+  "Shiny module (R)": {
+    "scope": "r",
+    "prefix": "shinymod",
+    "body": [
+      "${1:name}UI <- function(id) {",
+      "  ns <- NS(id)",
+      "  tagList(",
+      "    ${0}",
+      "  )",
+      "}",
+      "",
+      "${1:name}Server <- function(id) {",
+      "  moduleServer(id, function(input, output, session) {",
+      "    ",
+      "  })",
+      "}"
+    ]
   }
 }

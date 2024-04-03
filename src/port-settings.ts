@@ -3,10 +3,13 @@ import { suggestPort } from "./net-utils";
 
 const transientPorts: Record<string, number | undefined> = {};
 
-export async function getAppPort(reason: "run" | "debug"): Promise<number> {
+export async function getAppPort(
+  reason: "run" | "debug",
+  language: "python" | "r" = "python"
+): Promise<number> {
   return (
     // Port can be zero, which means random assignment
-    vscode.workspace.getConfiguration("shiny.python").get("port") ||
+    vscode.workspace.getConfiguration(`shiny.${language}`).get("port") ||
     (await defaultPort(`app_${reason}`))
   );
 }

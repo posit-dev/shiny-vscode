@@ -78,7 +78,7 @@
         "shiny.python.port": {
           "type": "integer",
           "default": 0,
-          "description": "The port number Shiny should listen on when running an app. (Use 0 to choose a random port.)"
+          "description": "The port number Shiny should listen on when running a Shiny for Python app. (Use 0 to choose a random port.)"
         },
         "shiny.python.autoreloadPort": {
           "type": "integer",
@@ -89,6 +89,11 @@
           "type": "boolean",
           "default": true,
           "description": "When running the \"Debug Shiny App\" command, only step through user-written code. Disable this to allow stepping through library code."
+        },
+        "shiny.r.port": {
+          "type": "integer",
+          "default": 0,
+          "description": "The port number Shiny should listen on when running a Shiny for R app. (Use 0 to choose a random port.)"
         },
         "shiny.r.devmode": {
           "type": "boolean",

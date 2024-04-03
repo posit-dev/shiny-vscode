@@ -20,7 +20,7 @@ export async function runApp(): Promise<void> {
     return;
   }
 
-  const port = await getAppPort("run");
+  const port = await getAppPort("run", "python");
   const autoreloadPort = await getAutoreloadPort("run");
 
   const terminal = await createTerminalAndCloseOthersWithSameName({
@@ -93,7 +93,7 @@ export async function debugApp(): Promise<void> {
     return;
   }
 
-  const port = await getAppPort("debug");
+  const port = await getAppPort("debug", "python");
 
   const justMyCode = vscode.workspace
     .getConfiguration("shiny.python")

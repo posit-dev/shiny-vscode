@@ -12,7 +12,7 @@ export async function runApp(): Promise<void> {
     return;
   }
 
-  const port = await getAppPort("run");
+  const port = await getAppPort("run", "r");
   // TODO: Is this needed for Shiny for R too?
   // const autoreloadPort = await getAutoreloadPort("run");
 

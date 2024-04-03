@@ -29,10 +29,11 @@ export async function runApp(): Promise<void> {
     .getConfiguration("shiny.r")
     .get("devmode");
 
-  let runApp = `shiny::runApp("${path}", port=${port}, launch.browser=FALSE)`;
-  if (useDevmode) {
-    runApp = `shiny::devmode(); ${runApp}`;
-  }
+  const devOrReload = useDevmode
+    ? "shiny::devmode()"
+    : "options(shiny.autoreload = TRUE)";
+
+  const runApp = `${devOrReload}; shiny::runApp("${path}", port=${port}, launch.browser=FALSE)`;
 
   const cmdline = escapeCommandForTerminal(terminal, "Rscript", ["-e", runApp]);
   terminal.sendText(cmdline);

@@ -18,22 +18,17 @@ jobs:
         with:
           node-version: "18.x"
       - run: yarn install --immutable --immutable-cache --check-cache
-      - name: Will publish?
-        run: >
-          echo "dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}"
       - name: Publish to Open VSX Registry
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
-          dryRun: true
-          # dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
+          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
       - name: Publish to Visual Studio Marketplace
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com
-          dryRun: true
-          # dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
+          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
       - name: Upload extension to Actions Artifact
         uses: actions/upload-artifact@v3
         with:

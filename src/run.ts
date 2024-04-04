@@ -9,7 +9,9 @@ import { getAppPort, getAutoreloadPort } from "./port-settings";
 
 const DEBUG_NAME = "Debug Shiny app";
 
-export async function runApp(): Promise<void> {
+/* Shiny for Python --------------------------------------------------------- */
+
+export async function runAppPy(): Promise<void> {
   const path = getActiveEditorFile();
   if (!path) {
     return;
@@ -114,6 +116,55 @@ export async function debugApp(): Promise<void> {
   // VSCode restarts the debugger instead of us, the SimpleBrowser is still
   // opened.
 }
+
+/* Shiny for R --------------------------------------------------------- */
+export async function runAppR(): Promise<void> {
+  const path = getActiveEditorFile();
+  if (!path) {
+    return;
+  }
+
+  const port = await getAppPort("run", "r");
+  // TODO: Is this needed for Shiny for R too?
+  // const autoreloadPort = await getAutoreloadPort("run");
+
+  const terminal = await createTerminalAndCloseOthersWithSameName({
+    name: "Shiny",
+    env: {
+      // We save this here so escapeCommandForTerminal knows what shell
+      // semantics to use when escaping arguments. A bit magical, but oh well.
+      ...envVarsForTerminal(),
+    },
+  });
+
+  const useDevmode = vscode.workspace
+    .getConfiguration("shiny.r")
+    .get("devmode");
+
+  const devOrReload = useDevmode
+    ? "shiny::devmode()"
+    : "options(shiny.autoreload = TRUE)";
+
+  const runApp = `${devOrReload}; shiny::runApp("${path}", port=${port}, launch.browser=FALSE)`;
+
+  const cmdline = escapeCommandForTerminal(terminal, "Rscript", ["-e", runApp]);
+  terminal.sendText(cmdline);
+
+  // Clear out the browser. Without this it can be a little confusing as to
+  // whether the app is trying to load or not.
+  openBrowser("about:blank");
+  // If we start too quickly, openBrowserWhenReady may detect the old Shiny
+  // process (in the process of shutting down), not the new one. Give it a
+  // second. It's a shame to wait an extra second, but it's only when the Play
+  // button is hit, not on autoreload.
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  // if (process.env["CODESPACES"] === "true") {
+  // TODO: Support Codespaces
+  await openBrowserWhenReady(port);
+}
+
+/* Utilities --------------------------------------------------------- */
 
 export function onDidStartDebugSession(e: vscode.DebugSession) {
   // When a debug session starts, check if it's a Shiny session and whether we

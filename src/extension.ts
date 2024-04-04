@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { runApp as runAppPy, debugApp, onDidStartDebugSession } from "./run-py";
-import { runApp as runAppR } from "./run-r";
+import { runAppPy, runAppR, debugApp, onDidStartDebugSession } from "./run";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(

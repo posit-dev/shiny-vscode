@@ -11,7 +11,7 @@ const DEBUG_NAME = "Debug Shiny app";
 
 /* Shiny for Python --------------------------------------------------------- */
 
-export async function runAppPy(): Promise<void> {
+export async function pyRunApp(): Promise<void> {
   const path = getActiveEditorFile();
   if (!path) {
     return;
@@ -80,7 +80,7 @@ export async function runAppPy(): Promise<void> {
   }
 }
 
-export async function debugApp(): Promise<void> {
+export async function pyDebugApp(): Promise<void> {
   if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
     await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
   }
@@ -118,7 +118,7 @@ export async function debugApp(): Promise<void> {
 }
 
 /* Shiny for R --------------------------------------------------------- */
-export async function runAppR(): Promise<void> {
+export async function rRunApp(): Promise<void> {
   const path = getActiveEditorFile();
   if (!path) {
     return;

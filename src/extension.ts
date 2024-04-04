@@ -1,12 +1,12 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { runAppPy, runAppR, debugApp, onDidStartDebugSession } from "./run";
+import { pyRunApp, rRunApp, pyDebugApp, onDidStartDebugSession } from "./run";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("shiny.python.runApp", runAppPy),
-    vscode.commands.registerCommand("shiny.python.debugApp", debugApp),
-    vscode.commands.registerCommand("shiny.r.runApp", runAppR)
+    vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
+    vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
+    vscode.commands.registerCommand("shiny.r.runApp", rRunApp)
   );
 
   const throttledUpdateContext = new Throttler(2000, () => {

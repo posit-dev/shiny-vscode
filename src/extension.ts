@@ -131,22 +131,22 @@ class Throttler {
 function isShinyAppUsername(filename: string, language: string): boolean {
   filename = path.basename(filename);
 
-  language = language === "R" ? "r" : language;
+  const extension = { python: "py", r: "R" }[language];
 
   // Only .py or .R files
-  if (!new RegExp(`\\.${language}$`, "i").test(filename)) {
+  if (!new RegExp(`\\.${extension}$`, "i").test(filename)) {
     return false;
   }
 
   // Accepted patterns:
   // app.py|R
-  const rxApp = new RegExp(`^app\\.${language}$`, "i");
+  const rxApp = new RegExp(`^app\\.${extension}$`, "i");
   // app-*.py|R
   // app_*.py|R
-  const rxAppDash = new RegExp(`^app[-_]\\.${language}$`, "i");
+  const rxAppDash = new RegExp(`^app[-_]\\.${extension}$`, "i");
   // *-app.py|R
   // *_app.py|R
-  const rxDashApp = new RegExp(`[-_]app\\.${language}$`, "i");
+  const rxDashApp = new RegExp(`[-_]app\\.${extension}$`, "i");
 
   if (rxApp.test(filename)) {
     return true;

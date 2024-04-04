@@ -10,7 +10,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("shiny.r.runApp", runAppR)
   );
 
-  const throttledUpdateContext = new Throttler(2000, updateContext);
+  const throttledUpdateContext = new Throttler(2000, () => {
+    updateContext("python");
+    updateContext("r");
+  });
   context.subscriptions.push(throttledUpdateContext);
 
   // When switching between text editors, immediately update.
@@ -38,33 +41,22 @@ export function activate(context: vscode.ExtensionContext) {
 // this method is called when your extension is deactivated
 export function deactivate() {}
 
-function updateContext(): boolean {
+function updateContext(language: "python" | "r"): boolean {
+  const shinyContext = `shiny.${language}.active`;
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
-    vscode.commands.executeCommand("setContext", "shiny.r.active", false);
-    vscode.commands.executeCommand("setContext", "shiny.python.active", false);
+    vscode.commands.executeCommand("setContext", shinyContext, false);
     return false;
   }
 
-  const { languageId } = editor.document;
-
   const active =
-    ["python", "r"].includes(languageId) &&
+    editor.document.languageId === language &&
     !editor.document.isUntitled &&
     !!editor.document.fileName &&
-    isShinyAppUsername(editor.document.fileName, languageId) &&
+    isShinyAppUsername(editor.document.fileName, language) &&
     editor.document.getText().search(/\bshiny\b/) >= 0;
 
-  if (languageId === "python") {
-    console.log(`R active: ${active}`);
-    vscode.commands.executeCommand("setContext", "shiny.r.active", false);
-    vscode.commands.executeCommand("setContext", "shiny.python.active", active);
-  } else if (languageId === "r") {
-    console.log(`R active: ${active}`);
-    vscode.commands.executeCommand("setContext", "shiny.r.active", active);
-    vscode.commands.executeCommand("setContext", "shiny.python.active", false);
-  }
-
+  vscode.commands.executeCommand("setContext", shinyContext, active);
   return active;
 }
 

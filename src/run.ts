@@ -1,5 +1,6 @@
 import { PythonExtension } from "@vscode/python-extension";
 import * as vscode from "vscode";
+import { join as path_join } from "path";
 import { openBrowser, openBrowserWhenReady } from "./net-utils";
 import {
   envVarsForShell as envVarsForTerminal,
@@ -141,13 +142,15 @@ export async function rRunApp(): Promise<void> {
     .getConfiguration("shiny.r")
     .get("devmode");
 
-  const devOrReload = useDevmode
-    ? "shiny::devmode()"
-    : "options(shiny.autoreload = TRUE)";
+  const extensionRoot = getExtensionPath();
+  if (!extensionRoot) {
+    return;
+  }
+  const scriptPath = path_join(extensionRoot, "rscripts", "runShinyApp.R");
 
-  const runApp = `${devOrReload}; shiny::runApp("${path}", port=${port}, launch.browser=FALSE)`;
+  const args = [scriptPath, path, port + "", useDevmode ? "--devmode" : ""];
 
-  const cmdline = escapeCommandForTerminal(terminal, "Rscript", ["-e", runApp]);
+  const cmdline = escapeCommandForTerminal(terminal, "Rscript", args);
   terminal.sendText(cmdline);
 
   // Clear out the browser. Without this it can be a little confusing as to
@@ -284,4 +287,16 @@ function getActiveEditorFile(): string | undefined {
     return;
   }
   return appPath;
+}
+
+function getExtensionPath(): string | undefined {
+  const extensionPath =
+    vscode.extensions.getExtension("Posit.shiny-python")?.extensionPath;
+  if (!extensionPath) {
+    vscode.window.showErrorMessage(
+      "Cannot run Shiny app: failed to locate extension directory"
+    );
+    return;
+  }
+  return extensionPath;
 }

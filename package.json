@@ -125,9 +125,7 @@
     "mocha": "^10.3.0",
     "typescript": "^5.3.3"
   },
-  "extensionDependencies": [
-    "ms-python.python"
-  ],
+  "extensionDependencies": [],
   "dependencies": {
     "@vscode/python-extension": "^1.0.5"
   }

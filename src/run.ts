@@ -18,6 +18,10 @@ export async function pyRunApp(): Promise<void> {
     return;
   }
 
+  if (!(await checkForPythonExtension())) {
+    return;
+  }
+
   const python = await getSelectedPythonInterpreter();
   if (!python) {
     return;
@@ -88,6 +92,10 @@ export async function pyDebugApp(): Promise<void> {
 
   const path = getActiveEditorFile();
   if (!path) {
+    return;
+  }
+
+  if (!(await checkForPythonExtension())) {
     return;
   }
 
@@ -250,6 +258,25 @@ async function createTerminalAndCloseOthersWithSameName(
   await Promise.allSettled(closingTerminals);
 
   return newTerm;
+}
+
+async function checkForPythonExtension(): Promise<boolean> {
+  if (vscode.extensions.getExtension("ms-python.python")) {
+    return true;
+  }
+
+  const response = await vscode.window.showErrorMessage(
+    "The Python extension is required to run Shiny apps. " +
+      "Please install it and try again.",
+    "Show Python extension",
+    "Not now"
+  );
+
+  if (response === "Show Python extension") {
+    vscode.commands.executeCommand("extension.open", "ms-python.python");
+  }
+
+  return false;
 }
 
 /**

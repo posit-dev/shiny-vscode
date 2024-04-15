@@ -134,7 +134,7 @@ function isShinyAppUsername(filename: string, language: string): boolean {
   const rxApp = new RegExp(`^app\\.${extension}$`, "i");
   // app-*.py|R
   // app_*.py|R
-  const rxAppDash = new RegExp(`^app[-_]\\.${extension}$`, "i");
+  const rxAppDash = new RegExp(`^app[-_].+\\.${extension}$`, "i");
   // *-app.py|R
   // *_app.py|R
   const rxDashApp = new RegExp(`[-_]app\\.${extension}$`, "i");

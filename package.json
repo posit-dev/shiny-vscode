@@ -127,6 +127,9 @@
   },
   "extensionDependencies": [],
   "dependencies": {
-    "@vscode/python-extension": "^1.0.5"
+    "@types/winreg": "^1.2.36",
+    "@vscode/python-extension": "^1.0.5",
+    "fs": "^0.0.1-security",
+    "winreg": "^1.2.5"
   }
 }

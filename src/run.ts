@@ -1,12 +1,14 @@
 import { PythonExtension } from "@vscode/python-extension";
 import * as vscode from "vscode";
 import { join as path_join } from "path";
+import * as fs from "fs";
 import { openBrowser, openBrowserWhenReady } from "./net-utils";
 import {
   envVarsForShell as envVarsForTerminal,
   escapeCommandForTerminal,
 } from "./shell-utils";
 import { getAppPort, getAutoreloadPort } from "./port-settings";
+import * as winreg from "winreg";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -158,7 +160,17 @@ export async function rRunApp(): Promise<void> {
 
   const args = [scriptPath, path, port + "", useDevmode ? "--devmode" : ""];
 
-  const cmdline = escapeCommandForTerminal(terminal, "Rscript", args);
+  const rscriptBinPath = await getRBinPath("Rscript");
+  if (!rscriptBinPath) {
+    vscode.window.showErrorMessage(
+      "Could not find R. Is R installed on your system?" +
+      "If R is installed, please make sure your PATH " +
+      "environment variable is configured correctly."
+    );
+    return;
+  }
+
+  const cmdline = escapeCommandForTerminal(terminal, rscriptBinPath, args);
   terminal.sendText(cmdline);
 
   // Clear out the browser. Without this it can be a little confusing as to
@@ -267,7 +279,7 @@ async function checkForPythonExtension(): Promise<boolean> {
 
   const response = await vscode.window.showErrorMessage(
     "The Python extension is required to run Shiny apps. " +
-      "Please install it and try again.",
+    "Please install it and try again.",
     "Show Python extension",
     "Not now"
   );
@@ -299,7 +311,7 @@ async function getSelectedPythonInterpreter(): Promise<string | false> {
   if (!resolvedEnv) {
     vscode.window.showErrorMessage(
       "Unable to find Python interpreter. " +
-        'Please use the "Python: Select Interpreter" command, and try again.'
+      'Please use the "Python: Select Interpreter" command, and try again.'
     );
     return false;
   }
@@ -326,4 +338,50 @@ function getExtensionPath(): string | undefined {
     return;
   }
   return extensionPath;
+}
+
+async function getRBinPath(bin: string): Promise<string> {
+  return getRPathFromEnv(bin) || await getRPathFromWindowsReg(bin) || "";
+}
+
+function getRPathFromEnv(bin: string = "R"): string {
+  const { platform } = process;
+  const splitChr = platform === "win32" ? ";" : ":";
+  const fileExt = platform === "win32" ? ".exe" : "";
+
+  if (!process.env.PATH) {
+    return "";
+  }
+
+  for (const envPath of process.env.PATH.split(splitChr)) {
+    const rBinPath = path_join(envPath, bin + fileExt);
+    if (fs.existsSync(rBinPath)) {
+      return rBinPath;
+    }
+  }
+
+  return "";
+}
+
+async function getRPathFromWindowsReg(bin: string = "R"): Promise<string> {
+  if (process.platform !== "win32") {
+    return "";
+  }
+
+  let rPath = "";
+
+  try {
+    const key = new winreg({
+      hive: winreg.HKLM,
+      key: '\\Software\\R-Core\\R',
+    });
+    const item: winreg.RegistryItem = await new Promise((c, e) =>
+      key.get('InstallPath', (err, result) => err === null ? c(result) : e(err)));
+    rPath = path_join(item.value, 'bin', bin + ".exe");
+    rPath = fs.existsSync(rPath) ? rPath : "";
+  } catch (e) {
+    rPath = '';
+  }
+
+  return rPath;
 }

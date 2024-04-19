@@ -17,4 +17,8 @@ if (devmode) {
   options(shiny.autoreload = TRUE)
 }
 
+message("Running Shiny app")
+message("-----------------")
+message(sprintf('shiny::runApp("%s", port = %d)\n', path, port))
+
 shiny::runApp(path, port = port, launch.browser = FALSE)

@@ -1,12 +1,12 @@
 on:
   push:
     tags:
-      - "v[0-9]*"
+      - 'v[0-9]*'
     branches:
-      - "main"
+      - 'main'
   pull_request:
     branches:
-      - "main"
+      - 'main'
 
 name: Deploy Extension
 jobs:
@@ -16,21 +16,29 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
-          node-version: "18.x"
+          node-version: '18.x'
       - run: yarn install --immutable --immutable-cache --check-cache
-      - name: Publish to Open VSX Registry
-        uses: HaaLeo/publish-vscode-extension@v1
-        with:
-          pat: ${{ secrets.OPEN_VSX_TOKEN }}
-          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
-      - name: Publish to Visual Studio Marketplace
-        uses: HaaLeo/publish-vscode-extension@v1
-        with:
-          pat: ${{ secrets.VSCE_PAT }}
-          registryUrl: https://marketplace.visualstudio.com
-          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
+
+      - name: Build Extension
+        run: yarn vsix
+
       - name: Upload extension to Actions Artifact
         uses: actions/upload-artifact@v3
         with:
           name: shiny-vscode
-          path: "shiny*.vsix"
+          path: 'shiny*.vsix'
+
+      - name: Publish to Open VSX Registry
+        uses: HaaLeo/publish-vscode-extension@v1
+        if: ${{ github.repository_owner == 'posit-dev' }}
+        with:
+          pat: ${{ secrets.OPEN_VSX_TOKEN }}
+          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
+
+      - name: Publish to Visual Studio Marketplace
+        uses: HaaLeo/publish-vscode-extension@v1
+        if: ${{ github.repository_owner == 'posit-dev' }}
+        with:
+          pat: ${{ secrets.VSCE_PAT }}
+          registryUrl: https://marketplace.visualstudio.com
+          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}

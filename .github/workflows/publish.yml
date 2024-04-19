@@ -33,7 +33,7 @@ jobs:
         if: ${{
           (github.event_name == 'push' &&
           github.repository_owner == 'posit-dev') ||
-          github.event.pull_request.head.repo.fork == true
+          github.event.pull_request.head.repo.fork == false
           }}
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
@@ -44,7 +44,7 @@ jobs:
         if: ${{
           (github.event_name == 'push' &&
           github.repository_owner == 'posit-dev') ||
-          github.event.pull_request.head.repo.fork == true
+          github.event.pull_request.head.repo.fork == false
           }}
         with:
           pat: ${{ secrets.VSCE_PAT }}

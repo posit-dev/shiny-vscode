@@ -19,6 +19,6 @@ if (devmode) {
 
 message("Running Shiny app")
 message("-----------------")
-message(sprintf('shiny::runApp("%s", port = %d)\n', path, port))
+message(sprintf('shiny::runApp(%s, port = %d)\n', deparse(path), port))
 
 shiny::runApp(path, port = port, launch.browser = FALSE)

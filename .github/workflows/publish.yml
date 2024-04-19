@@ -31,8 +31,7 @@ jobs:
       - name: Publish to Open VSX Registry
         uses: HaaLeo/publish-vscode-extension@v1
         if: ${{
-          (github.event_name == 'push' &&
-          github.repository_owner == 'posit-dev') ||
+          (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
           github.event.pull_request.head.repo.fork == false
           }}
         with:
@@ -42,8 +41,7 @@ jobs:
       - name: Publish to Visual Studio Marketplace
         uses: HaaLeo/publish-vscode-extension@v1
         if: ${{
-          (github.event_name == 'push' &&
-          github.repository_owner == 'posit-dev') ||
+          (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
           github.event.pull_request.head.repo.fork == false
           }}
         with:

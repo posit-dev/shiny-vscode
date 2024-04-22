@@ -10,17 +10,14 @@
     "url": "https://github.com/rstudio/pyshiny-vscode"
   },
   "engines": {
-    "vscode": "^1.66.0"
+    "vscode": "^1.75.0"
   },
   "categories": [
     "Other"
   ],
   "activationEvents": [
     "onLanguage:python",
-    "onCommand:shiny.python.runApp",
-    "onCommand:shiny.python.debugApp",
-    "onLanguage:r",
-    "onCommand:shiny.r.runApp"
+    "onLanguage:r"
   ],
   "main": "./out/extension.js",
   "contributes": {

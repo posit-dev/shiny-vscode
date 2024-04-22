@@ -1,17 +1,26 @@
 import { PythonExtension } from "@vscode/python-extension";
 import * as vscode from "vscode";
+import { join as path_join } from "path";
+import * as fs from "fs";
 import { openBrowser, openBrowserWhenReady } from "./net-utils";
 import {
   envVarsForShell as envVarsForTerminal,
   escapeCommandForTerminal,
 } from "./shell-utils";
 import { getAppPort, getAutoreloadPort } from "./port-settings";
+import * as winreg from "winreg";
 
 const DEBUG_NAME = "Debug Shiny app";
 
-export async function runApp(): Promise<void> {
+/* Shiny for Python --------------------------------------------------------- */
+
+export async function pyRunApp(): Promise<void> {
   const path = getActiveEditorFile();
   if (!path) {
+    return;
+  }
+
+  if (!(await checkForPythonExtension())) {
     return;
   }
 
@@ -20,7 +29,7 @@ export async function runApp(): Promise<void> {
     return;
   }
 
-  const port = await getAppPort("run");
+  const port = await getAppPort("run", "python");
   const autoreloadPort = await getAutoreloadPort("run");
 
   const terminal = await createTerminalAndCloseOthersWithSameName({
@@ -78,7 +87,7 @@ export async function runApp(): Promise<void> {
   }
 }
 
-export async function debugApp(): Promise<void> {
+export async function pyDebugApp(): Promise<void> {
   if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
     await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
   }
@@ -88,12 +97,16 @@ export async function debugApp(): Promise<void> {
     return;
   }
 
+  if (!(await checkForPythonExtension())) {
+    return;
+  }
+
   const python = await getSelectedPythonInterpreter();
   if (!python) {
     return;
   }
 
-  const port = await getAppPort("debug");
+  const port = await getAppPort("debug", "python");
 
   const justMyCode = vscode.workspace
     .getConfiguration("shiny.python")
@@ -114,6 +127,67 @@ export async function debugApp(): Promise<void> {
   // VSCode restarts the debugger instead of us, the SimpleBrowser is still
   // opened.
 }
+
+/* Shiny for R --------------------------------------------------------- */
+export async function rRunApp(): Promise<void> {
+  const path = getActiveEditorFile();
+  if (!path) {
+    return;
+  }
+
+  const port = await getAppPort("run", "r");
+  // TODO: Is this needed for Shiny for R too?
+  // const autoreloadPort = await getAutoreloadPort("run");
+
+  const terminal = await createTerminalAndCloseOthersWithSameName({
+    name: "Shiny",
+    env: {
+      // We save this here so escapeCommandForTerminal knows what shell
+      // semantics to use when escaping arguments. A bit magical, but oh well.
+      ...envVarsForTerminal(),
+    },
+  });
+
+  const useDevmode = vscode.workspace
+    .getConfiguration("shiny.r")
+    .get("devmode");
+
+  const extensionRoot = getExtensionPath();
+  if (!extensionRoot) {
+    return;
+  }
+  const scriptPath = path_join(extensionRoot, "rscripts", "runShinyApp.R");
+
+  const args = [scriptPath, path, port + "", useDevmode ? "--devmode" : ""];
+
+  const rscriptBinPath = await getRBinPath("Rscript");
+  if (!rscriptBinPath) {
+    vscode.window.showErrorMessage(
+      "Could not find R. Is R installed on your system?" +
+      "If R is installed, please make sure your PATH " +
+      "environment variable is configured correctly."
+    );
+    return;
+  }
+
+  const cmdline = escapeCommandForTerminal(terminal, rscriptBinPath, args);
+  terminal.sendText(cmdline);
+
+  // Clear out the browser. Without this it can be a little confusing as to
+  // whether the app is trying to load or not.
+  openBrowser("about:blank");
+  // If we start too quickly, openBrowserWhenReady may detect the old Shiny
+  // process (in the process of shutting down), not the new one. Give it a
+  // second. It's a shame to wait an extra second, but it's only when the Play
+  // button is hit, not on autoreload.
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  // if (process.env["CODESPACES"] === "true") {
+  // TODO: Support Codespaces
+  await openBrowserWhenReady(port);
+}
+
+/* Utilities --------------------------------------------------------- */
 
 export function onDidStartDebugSession(e: vscode.DebugSession) {
   // When a debug session starts, check if it's a Shiny session and whether we
@@ -198,6 +272,25 @@ async function createTerminalAndCloseOthersWithSameName(
   return newTerm;
 }
 
+async function checkForPythonExtension(): Promise<boolean> {
+  if (vscode.extensions.getExtension("ms-python.python")) {
+    return true;
+  }
+
+  const response = await vscode.window.showErrorMessage(
+    "The Python extension is required to run Shiny apps. " +
+    "Please install it and try again.",
+    "Show Python extension",
+    "Not now"
+  );
+
+  if (response === "Show Python extension") {
+    vscode.commands.executeCommand("extension.open", "ms-python.python");
+  }
+
+  return false;
+}
+
 /**
  * Gets the currently selected Python interpreter, according to the Python extension.
  * @returns A path, or false if no interpreter is selected.
@@ -218,7 +311,7 @@ async function getSelectedPythonInterpreter(): Promise<string | false> {
   if (!resolvedEnv) {
     vscode.window.showErrorMessage(
       "Unable to find Python interpreter. " +
-        'Please use the "Python: Select Interpreter" command, and try again.'
+      'Please use the "Python: Select Interpreter" command, and try again.'
     );
     return false;
   }
@@ -233,4 +326,62 @@ function getActiveEditorFile(): string | undefined {
     return;
   }
   return appPath;
+}
+
+function getExtensionPath(): string | undefined {
+  const extensionPath =
+    vscode.extensions.getExtension("Posit.shiny-python")?.extensionPath;
+  if (!extensionPath) {
+    vscode.window.showErrorMessage(
+      "Cannot run Shiny app: failed to locate extension directory"
+    );
+    return;
+  }
+  return extensionPath;
+}
+
+async function getRBinPath(bin: string): Promise<string> {
+  return getRPathFromEnv(bin) || await getRPathFromWindowsReg(bin) || "";
+}
+
+function getRPathFromEnv(bin: string = "R"): string {
+  const { platform } = process;
+  const splitChr = platform === "win32" ? ";" : ":";
+  const fileExt = platform === "win32" ? ".exe" : "";
+
+  if (!process.env.PATH) {
+    return "";
+  }
+
+  for (const envPath of process.env.PATH.split(splitChr)) {
+    const rBinPath = path_join(envPath, bin + fileExt);
+    if (fs.existsSync(rBinPath)) {
+      return rBinPath;
+    }
+  }
+
+  return "";
+}
+
+async function getRPathFromWindowsReg(bin: string = "R"): Promise<string> {
+  if (process.platform !== "win32") {
+    return "";
+  }
+
+  let rPath = "";
+
+  try {
+    const key = new winreg({
+      hive: winreg.HKLM,
+      key: '\\Software\\R-Core\\R',
+    });
+    const item: winreg.RegistryItem = await new Promise((c, e) =>
+      key.get('InstallPath', (err, result) => err === null ? c(result) : e(err)));
+    rPath = path_join(item.value, 'bin', bin + ".exe");
+    rPath = fs.existsSync(rPath) ? rPath : "";
+  } catch (e) {
+    rPath = '';
+  }
+
+  return rPath;
 }

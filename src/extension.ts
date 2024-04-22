@@ -1,14 +1,18 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { runApp, debugApp, onDidStartDebugSession } from "./run";
+import { pyRunApp, rRunApp, pyDebugApp, onDidStartDebugSession } from "./run";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("shiny.python.runApp", runApp),
-    vscode.commands.registerCommand("shiny.python.debugApp", debugApp)
+    vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
+    vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
+    vscode.commands.registerCommand("shiny.r.runApp", rRunApp)
   );
 
-  const throttledUpdateContext = new Throttler(2000, updateContext);
+  const throttledUpdateContext = new Throttler(2000, () => {
+    updateContext("python");
+    updateContext("r");
+  });
   context.subscriptions.push(throttledUpdateContext);
 
   // When switching between text editors, immediately update.
@@ -36,16 +40,22 @@ export function activate(context: vscode.ExtensionContext) {
 // this method is called when your extension is deactivated
 export function deactivate() {}
 
-function updateContext(): boolean {
+function updateContext(language: "python" | "r"): boolean {
+  const shinyContext = `shiny.${language}.active`;
   const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.commands.executeCommand("setContext", shinyContext, false);
+    return false;
+  }
+
   const active =
-    !!editor &&
-    editor.document.languageId === "python" &&
+    editor.document.languageId === language &&
     !editor.document.isUntitled &&
     !!editor.document.fileName &&
-    isShinyAppUsername(editor.document.fileName) &&
+    isShinyAppUsername(editor.document.fileName, language) &&
     editor.document.getText().search(/\bshiny\b/) >= 0;
-  vscode.commands.executeCommand("setContext", "shiny.python.active", active);
+
+  vscode.commands.executeCommand("setContext", shinyContext, active);
   return active;
 }
 
@@ -109,25 +119,31 @@ class Throttler {
   }
 }
 
-function isShinyAppUsername(filename: string): boolean {
+function isShinyAppUsername(filename: string, language: string): boolean {
   filename = path.basename(filename);
 
-  // Only .py files
-  if (!/\.py$/i.test(filename)) {
+  const extension = { python: "py", r: "R" }[language];
+
+  // Only .py or .R files
+  if (!new RegExp(`\\.${extension}$`, "i").test(filename)) {
     return false;
   }
 
   // Accepted patterns:
-  // app.py
-  // app-*.py
-  // app_*.py
-  // *-app.py
-  // *_app.py
-  if (/^app\.py$/i.test(filename)) {
+  // app.py|R
+  const rxApp = new RegExp(`^app\\.${extension}$`, "i");
+  // app-*.py|R
+  // app_*.py|R
+  const rxAppDash = new RegExp(`^app[-_].+\\.${extension}$`, "i");
+  // *-app.py|R
+  // *_app.py|R
+  const rxDashApp = new RegExp(`[-_]app\\.${extension}$`, "i");
+
+  if (rxApp.test(filename)) {
     return true;
-  } else if (/^app[-_]/i.test(filename)) {
+  } else if (rxAppDash.test(filename)) {
     return true;
-  } else if (/[-_]app\.py$/i.test(filename)) {
+  } else if (rxDashApp.test(filename)) {
     return true;
   }
 

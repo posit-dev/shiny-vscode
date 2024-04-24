@@ -33,7 +33,7 @@
       "",
       "@render.text",
       "def txt():",
-      "\t\treturn f\"n*2 is {input.n() * 2}\"",
+      "\treturn f\"n*2 is {input.n() * 2}\"",
       ""
     ],
     "description": "Basic Shiny Express app skeleton"

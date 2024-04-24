@@ -90,7 +90,7 @@
             "Preview using a preview panel inside VS Code",
             "Preview using a Simple Browser inside VS Code",
             "Preview using an external web browser",
-            "Don't automatically show a preview after render"
+            "Don't automatically launch the app after starting"
           ]
         },
         "shiny.python.port": {

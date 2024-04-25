@@ -1,6 +1,6 @@
 # Shiny - VS Code Extension
 
-This is an extension to help launch [Shiny applications](https://shiny.posit.co) applications. Shiny is a package for [Python](https://shiny.posit.co/py/) and [R](https://shiny.posit.co/r/getstarted/) that is designed to make it easy to build interactive web applications with the powerful data and scientific features of Python and R.
+This is an extension to help launch [Shiny applications](https://shiny.posit.co). Shiny is a package for [Python](https://shiny.posit.co/py/) and [R](https://shiny.posit.co/r/getstarted/) that is designed to make it easy to build interactive web applications with the powerful data and scientific features of Python and R.
 
 ## Features
 

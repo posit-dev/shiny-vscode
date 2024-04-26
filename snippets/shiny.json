@@ -20,7 +20,23 @@
       "app = App(app_ui, server)",
       ""
     ],
-    "description": "Basic Shiny app skeleton"
+    "description": "Basic Shiny Core app skeleton"
+  },
+  "Shiny Express application": {
+    "scope": "python",
+    "prefix": "shinyexpress",
+    "body": [
+      "from shiny.express import input, render, ui",
+      "",
+      "ui.input_slider(\"n\", \"N\", 0, 100, 20)",
+      "",
+      "",
+      "@render.text",
+      "def txt():",
+      "\treturn f\"n*2 is {input.n() * 2}\"",
+      ""
+    ],
+    "description": "Basic Shiny Express app skeleton"
   },
   "Shiny module": {
     "scope": "python",

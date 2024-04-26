@@ -7,11 +7,11 @@
   "icon": "logo.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/posit-dev/pyshiny-vscode"
+    "url": "https://github.com/posit-dev/shiny-vscode"
   },
-  "homepage": "https://github.com/posit-dev/pyshiny-vscode/",
+  "homepage": "https://github.com/posit-dev/shiny-vscode/",
   "bugs": {
-    "url": "https://github.com/posit-dev/pyshiny-vscode/issues/"
+    "url": "https://github.com/posit-dev/shiny-vscode/issues/"
   },
   "engines": {
     "vscode": "^1.66.0"

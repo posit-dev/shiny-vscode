@@ -4,6 +4,7 @@
 
 - The extension now supports Shiny for R apps. (#30)
 - The [Python VS Code extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python) is now a soft dependency and is no longer installed by default with the Shiny for VS Code extension. (#30)
+- Added a new setting, `shiny.previewType`, to control where the Shiny app preview should be opened. (#40)
 
 ## 0.1.6
 

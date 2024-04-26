@@ -75,6 +75,24 @@
     "configuration": {
       "title": "Shiny",
       "properties": {
+        "shiny.previewType": {
+          "scope": "window",
+          "type": "string",
+          "description": "Where should the Shiny app preview open?",
+          "enum": [
+            "internal",
+            "simpleBrowser",
+            "external",
+            "none"
+          ],
+          "default": "internal",
+          "markdownEnumDescriptions": [
+            "Preview using a preview panel inside VS Code",
+            "Preview using a Simple Browser inside VS Code",
+            "Preview using an external web browser",
+            "Don't automatically launch the app after starting"
+          ]
+        },
         "shiny.python.port": {
           "type": "integer",
           "default": 0,

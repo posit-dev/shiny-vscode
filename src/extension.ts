@@ -147,5 +147,14 @@ function isShinyAppUsername(filename: string, language: string): boolean {
     return true;
   }
 
+  if (language === "r") {
+    return isShinyAppRPart(filename);
+  }
+
   return false;
+}
+
+export function isShinyAppRPart(filename: string): boolean {
+  filename = path.basename(filename);
+  return ["ui.r", "server.r", "global.r"].includes(filename.toLowerCase());
 }

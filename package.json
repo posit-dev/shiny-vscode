@@ -2,7 +2,7 @@
   "name": "shiny-python",
   "displayName": "Shiny",
   "description": "Run and develop Shiny apps in Python or R.",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "publisher": "Posit",
   "icon": "logo.png",
   "repository": {

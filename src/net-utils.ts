@@ -4,6 +4,7 @@ import { AddressInfo } from "net";
 import * as vscode from "vscode";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
 import { retryUntilTimeout } from "./retry-utils";
+import { getExtensionHostPreview } from "./extension-api-utils/extensionHostPreview";
 
 /**
  * Tests if a port is open on a host, by trying to connect to it with a TCP
@@ -63,14 +64,33 @@ export async function openBrowserWhenReady(
 }
 
 export async function openBrowser(url: string): Promise<void> {
-  // if (process.env["CODESPACES"] === "true") {
-  //   vscode.env.openExternal(vscode.Uri.parse(url));
-  // } else {
-  await vscode.commands.executeCommand("simpleBrowser.api.open", url, {
-    preserveFocus: true,
-    viewColumn: vscode.ViewColumn.Beside,
-  });
-  // }
+  const previewType = vscode.workspace
+    .getConfiguration()
+    .get("shiny.previewType");
+
+  switch (previewType) {
+    case "none":
+      return;
+    case "external": {
+      vscode.env.openExternal(vscode.Uri.parse(url));
+      return;
+    }
+    // @ts-ignore-next-line
+    case "internal": {
+      const hostPreview = getExtensionHostPreview();
+      if (hostPreview) {
+        hostPreview(url);
+        return;
+      }
+      // fallthrough to simpleBrowser default if no hostPreview feature
+    }
+    default: {
+      await vscode.commands.executeCommand("simpleBrowser.api.open", url, {
+        preserveFocus: true,
+        viewColumn: vscode.ViewColumn.Beside,
+      });
+    }
+  }
 }
 
 export async function suggestPort(): Promise<number> {

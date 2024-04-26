@@ -1,13 +1,17 @@
 {
   "name": "shiny-python",
-  "displayName": "Shiny for Python",
-  "description": "Shiny for Python support",
+  "displayName": "Shiny",
+  "description": "Run and develop Shiny apps in Python or R.",
   "version": "0.1.6",
   "publisher": "Posit",
   "icon": "logo.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/rstudio/pyshiny-vscode"
+    "url": "https://github.com/posit-dev/shiny-vscode"
+  },
+  "homepage": "https://github.com/posit-dev/shiny-vscode/",
+  "bugs": {
+    "url": "https://github.com/posit-dev/shiny-vscode/issues/"
   },
   "engines": {
     "vscode": "^1.66.0"
@@ -75,6 +79,24 @@
     "configuration": {
       "title": "Shiny",
       "properties": {
+        "shiny.previewType": {
+          "scope": "window",
+          "type": "string",
+          "description": "Where should the Shiny app preview open?",
+          "enum": [
+            "internal",
+            "simpleBrowser",
+            "external",
+            "none"
+          ],
+          "default": "internal",
+          "markdownEnumDescriptions": [
+            "Preview using a preview panel inside VS Code",
+            "Preview using a Simple Browser inside VS Code",
+            "Preview using an external web browser",
+            "Don't automatically launch the app after starting"
+          ]
+        },
         "shiny.python.port": {
           "type": "integer",
           "default": 0,

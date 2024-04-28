@@ -55,6 +55,13 @@
         "title": "Run Shiny App",
         "icon": "$(play)",
         "enablement": "editorLangId == r && shellExecutionSupported"
+      },
+      {
+        "category": "Shiny",
+        "command": "shiny.shinylive.createFromActiveFile",
+        "title": "Send Current File to ShinyLive",
+        "icon": "$(link)",
+        "enablement": "editorLangId == python || editorLangId == r"
       }
     ],
     "menus": {
@@ -121,6 +128,31 @@
           "type": "boolean",
           "default": true,
           "description": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
+        },
+        "shiny.shinylive.mode": {
+          "type": "string",
+          "default": "ask",
+          "description": "Which Shinylive mode to use when creating a Shinylive app.",
+          "enum": [
+            "ask",
+            "app",
+            "editor"
+          ]
+        },
+        "shiny.shinylive.action": {
+          "type": "string",
+          "default": "ask",
+          "description": "Choose the default action upon creating a Shinylive link.",
+          "enum": [
+            "ask",
+            "open",
+            "copy"
+          ]
+        },
+        "shiny.shinylive.includeHeader": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the Shiny header when creating Shinylive app links."
         }
       }
     }
@@ -152,6 +184,7 @@
     "@types/winreg": "^1.2.36",
     "@vscode/python-extension": "^1.0.5",
     "fs": "^0.0.1-security",
+    "lz-string": "^1.5.0",
     "winreg": "^1.2.5"
   }
 }

@@ -1,12 +1,17 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { pyRunApp, rRunApp, pyDebugApp, onDidStartDebugSession } from "./run";
+import { shinyliveCreateFromActiveFile } from "./shinylive";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
-    vscode.commands.registerCommand("shiny.r.runApp", rRunApp)
+    vscode.commands.registerCommand("shiny.r.runApp", rRunApp),
+    vscode.commands.registerCommand(
+      "shiny.shinylive.createFromActiveFile",
+      shinyliveCreateFromActiveFile
+    )
   );
 
   const throttledUpdateContext = new Throttler(2000, () => {

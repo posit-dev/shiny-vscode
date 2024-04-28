@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { pyRunApp, rRunApp, pyDebugApp, onDidStartDebugSession } from "./run";
-import { shinyliveCreateFromActiveFile } from "./shinylive";
+import {
+  shinyliveCreateFromActiveFile,
+  shinyliveSaveAppFromUrl,
+} from "./shinylive";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -11,6 +14,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "shiny.shinylive.createFromActiveFile",
       shinyliveCreateFromActiveFile
+    ),
+    vscode.commands.registerCommand(
+      "shiny.shinylive.saveAppFromUrl",
+      shinyliveSaveAppFromUrl
     )
   );
 

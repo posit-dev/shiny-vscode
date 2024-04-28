@@ -60,8 +60,14 @@
         "category": "Shiny",
         "command": "shiny.shinylive.createFromActiveFile",
         "title": "Send Current File to ShinyLive",
-        "icon": "$(link)",
+        "icon": "$(cloud-upload)",
         "enablement": "editorLangId == python || editorLangId == r"
+      },
+      {
+        "category": "Shiny",
+        "command": "shiny.shinylive.saveAppFromUrl",
+        "title": "Save App from Shinylive Link",
+        "icon": "$(cloud-download)"
       }
     ],
     "menus": {

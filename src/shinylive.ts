@@ -393,17 +393,20 @@ function shinyliveUrlEncode({ language, files, mode }: ShinyliveBundle) {
   const filesJson = JSON.stringify(files);
   const filesLZ = lzstring.compressToEncodedURIComponent(filesJson);
 
+  const host = vscode.workspace
+    .getConfiguration("shiny.shinylive")
+    .get<string>("host");
+
+  let includeHeader;
   if (mode === "app") {
-    const includeHeader = vscode.workspace
+    // Header is only relevant in the `app` mode
+    includeHeader = vscode.workspace
       .getConfiguration("shiny.shinylive")
       .get<boolean>("includeHeader");
-
-    const h = includeHeader ? "" : "h=0&";
-
-    return `https://shinylive.io/${language}/${mode}/#${h}code=${filesLZ}`;
   }
+  const h = includeHeader ? "" : "h=0&";
 
-  return `https://shinylive.io/${language}/${mode}/#code=${filesLZ}`;
+  return `${host}/${language}/${mode}/#${h}code=${filesLZ}`;
 }
 
 /**

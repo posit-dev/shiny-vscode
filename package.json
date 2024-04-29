@@ -178,6 +178,19 @@
           "type": "boolean",
           "default": true,
           "description": "Include the Shiny header when creating Shinylive app links."
+        },
+        "shiny.shinylive.host": {
+          "type": "string",
+          "default": "https://shinylive.io",
+          "description": "The default Shinylive host to use when creating Shinylive app links.",
+          "enum": [
+            "https://shinylive.io",
+            "https://posit-dev.github.io/shinylive"
+          ],
+          "enumDescriptions": [
+            "Uses the latest released version of Shiny in Python or R",
+            "Uses the latest development version of Shiny in Python or R"
+          ]
         }
       }
     }

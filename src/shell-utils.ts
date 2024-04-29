@@ -15,7 +15,7 @@ function escapeStyle(terminal: vscode.Terminal): EscapeStyle {
 
   if (/\bcmd\.exe$/i.test(shellPath)) {
     return "cmd";
-  } else if (/\bpowershell.exe$/i.test(shellPath)) {
+  } else if (/\b(powershell|pwsh).exe$/i.test(shellPath)) {
     return "ps";
   } else {
     return "sh";

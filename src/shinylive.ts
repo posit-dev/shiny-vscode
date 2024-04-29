@@ -192,6 +192,7 @@ export async function shinyliveCreateFromExplorer(
           return { name, content, type };
 
         default:
+          // Save some characters by relying on the implicit type "text" default
           return { name, content };
       }
     })

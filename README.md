@@ -4,6 +4,8 @@ This is an extension to help launch [Shiny applications](https://shiny.posit.co)
 
 ## Features
 
+### Run and Debug Shiny Apps
+
 The main features of this extension are additional options in the Run button menu when editing an `app.py` or `app.R` file to "Run Shiny App" or "Debug Shiny App" (Python only).
 
 ![Run app](https://shiny.posit.co/py/docs/assets/vscode.png)
@@ -14,6 +16,20 @@ It also provides a couple of code snippets in both Python and R:
 - `shinymod` for creating a new Shiny module
 
 For a complete Shiny for Python experience in VS Code, please [visit our docs for more information](https://shiny.posit.co/py/docs/install-create-run.html#vs-code), including instructions for configuring the type checker and debugger for use with Shiny.
+
+### Shinylive
+
+You can use the extension to create shareable links to your apps using [Shinylive](https://shinylive.io), a free service for sharing Shiny apps via static hosting. Shinylive links encode the app's code and data in the URL, so you can share your app with others without needing to deploy it to a server. When the link is opened, the app runs in the user's browser using special version of Python or R that can run in the browser.
+
+**To create a Shinylive link from your app**, you have two choices:
+
+1. For single-file apps, e.g. `app.py` or `app.R`, run the **Create ShinyLive Link from Active File** from the command palette with the app file open and active.
+
+2. For multi-file apps, select all of the files or directories you want to include in your Shinylive app in the Explorer pane. Then right click on the selection and choose **Create ShinyLive Link from Selected Files**.
+
+The Shiny extension will ask you which app mode you want to use (display the _app_ or show an _editor_ next to the app) and what action to take (to _open_ or _copy_ the link).You can also configure these options in the extension settings.
+
+For the reverse operation, use the **Save App from Shinylive Link** command in the command palette to save an app and its files from a Shinylive link. You'll be prompted to paste the Shinylive link and then to choose a directory where the app will be saved in your workspace.
 
 ## Extension Settings
 
@@ -30,3 +46,10 @@ Note that there is no setting for Python executable path or virtual environment.
 
 - `shiny.r.port`: The port number to listen on when running a Shiny app. (By default, 0, which will choose a random port for each workspace.)
 - `shiny.r.devmode`: When `true` (default), Shiny for R apps are launched [in developer mode](https://shiny.posit.co/r/reference/shiny/latest/devmode.html).
+
+### Shinylive
+
+- `shiny.shinylive.appMode`: Should the Shinylive link open the app in `"app"` mode, showing only the app and an optional header, or in `"editor"` mode with the app alongside an editor and console pane. The default is `"ask"`, which prompts you each time you create Shinylive link.
+- `shiny.includeHeader`: Include the "Shiny" header in the Shinylive link when opening in app mode?
+- `shiny.shinylive.openAction`: What action should be taken when opening a Shinylive link? Options are `"open"` to open the link in an external browser, `"copy"` the link to the clipboard, or `"ask"`. The default is `"ask"`, which prompts you each time you create a Shinylive link.
+- `shiny.shinylive.host`: The Shinylive host used when creating a Shinylive link. The default is `"https://shinylive.io"`, which uses the latest released version of Shiny in Python or R. Or `"https://posit-dev.github.io/shinylive"`, which uses the latest development version of Shiny in Python or R.

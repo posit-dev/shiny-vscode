@@ -86,7 +86,7 @@ async function createAndOpenShinyliveApp(
   files: ShinyliveFile[],
   language: ShinyliveLanguage = "py"
 ): Promise<string> {
-  const mode = await askUserForMode();
+  const mode = await askUserForAppMode();
   const url = shinyliveUrlEncode({
     language,
     files,
@@ -300,7 +300,7 @@ async function askUserForOpenAction(): Promise<UserOpenAction> {
   const prefAction =
     vscode.workspace
       .getConfiguration("shiny.shinylive")
-      .get<string>("action") || "ask";
+      .get<string>("openAction") || "ask";
 
   if (["open", "copy"].includes(prefAction)) {
     return prefAction as UserOpenAction;
@@ -320,11 +320,12 @@ async function askUserForOpenAction(): Promise<UserOpenAction> {
  * @async
  * @returns {Promise<ShinyliveMode>} One of `"app"` or `"editor"`.
  */
-async function askUserForMode(): Promise<ShinyliveMode> {
+async function askUserForAppMode(): Promise<ShinyliveMode> {
   // first check if the user has set a default mode
   const prefMode =
-    vscode.workspace.getConfiguration("shiny.shinylive").get<string>("mode") ||
-    "ask";
+    vscode.workspace
+      .getConfiguration("shiny.shinylive")
+      .get<string>("appMode") || "ask";
 
   if (["app", "editor"].includes(prefMode)) {
     return prefMode as ShinyliveMode;

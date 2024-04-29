@@ -154,7 +154,7 @@
           "default": true,
           "markdownDescription": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
         },
-        "shiny.shinylive.mode": {
+        "shiny.shinylive.appMode": {
           "type": "string",
           "default": "ask",
           "description": "Which Shinylive mode to use when creating a Shinylive app.",
@@ -169,7 +169,7 @@
             "Editor mode displays the app alongside an editor and console."
           ]
         },
-        "shiny.shinylive.action": {
+        "shiny.shinylive.openAction": {
           "type": "string",
           "default": "ask",
           "description": "Choose the default action upon creating a Shinylive link.",

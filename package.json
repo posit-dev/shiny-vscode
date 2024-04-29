@@ -80,7 +80,14 @@
       "explorer/context": [
         {
           "command": "shiny.shinylive.createFromExplorer",
-          "group": "shinylive"
+          "group": "shinylive",
+          "when": "true"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "shiny.shinylive.createFromExplorer",
+          "when": "false"
         }
       ],
       "editor/title/run": [

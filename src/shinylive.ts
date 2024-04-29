@@ -21,6 +21,15 @@ type ShinyliveBundle = {
   mode: ShinyliveMode;
 };
 
+/**
+ * Command: Create a Shinylive app from the active file in the editor.
+ *
+ * The active file must be a single-file Shiny app in Python or R, named
+ * `app.py` or `app.R` (or similar).
+ *
+ * @export
+ * @async
+ */
 export async function shinyliveCreateFromActiveFile(): Promise<void> {
   if (!vscode.window.activeTextEditor) {
     vscode.window.showErrorMessage("No active file");
@@ -63,10 +72,20 @@ export async function shinyliveCreateFromActiveFile(): Promise<void> {
   );
 }
 
+/**
+ * Create a Shinylive app link and ask the user how to open it.
+ *
+ * @async
+ * @param {ShinyliveFile[]} files A list of files to include the app, structured
+ * as `ShinyliveFile` objects.
+ * @param {ShinyliveLanguage} [language="py"] One of `"py"` or `"r"`, defaults
+ * to `"py"`.
+ * @returns {string} The Shinylive URL.
+ */
 async function createAndOpenShinyliveApp(
   files: ShinyliveFile[],
   language: ShinyliveLanguage = "py"
-) {
+): Promise<string> {
   const mode = await askUserForMode();
   const url = shinyliveUrlEncode({
     language,
@@ -82,8 +101,20 @@ async function createAndOpenShinyliveApp(
     await vscode.env.clipboard.writeText(url);
     vscode.window.showInformationMessage("Copied shinylive link to clipboard!");
   }
+
+  return url;
 }
 
+/**
+ * Command: Save a Shinylive app from a Shinylive link.
+ *
+ * This command asks the user for a Shinylive link and a directory where the
+ * files will be saved. The link is decoded and the files are saved into the
+ * directory.
+ *
+ * @export
+ * @async
+ */
 export async function shinyliveSaveAppFromUrl(): Promise<void> {
   const url = await askUserForUrl();
   if (!url) {
@@ -121,6 +152,21 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
   await vscode.window.showTextDocument(doc, 2, false);
 }
 
+/**
+ * Command: Save a Shinylive app from the Explorer context menu.
+ *
+ * This command creates a Shinylive app link from the selected files or
+ * directories in the Explorer. Directories whose names start with `_` or `.`
+ * are ignored to avoid adding private or sensitive files. Files within those
+ * directories can be added directly, however.
+ *
+ * @export
+ * @async
+ * @param {vscode.Uri} _activatedFile The file that was right-clicked to
+ * activate the command, not used.
+ * @param {vscode.Uri[]} selectedFiles The files that were selected in the
+ * Explorer.
+ */
 export async function shinyliveCreateFromExplorer(
   _activatedFile: vscode.Uri,
   selectedFiles: vscode.Uri[]
@@ -201,6 +247,15 @@ export async function shinyliveCreateFromExplorer(
   await createAndOpenShinyliveApp(files, isPythonApp ? "py" : "r");
 }
 
+/**
+ * Read a directory recursively and return a list of all files as `vscode.Uri`
+ * objects. Directories whose names start with `_` or `.` are ignored.
+ *
+ * @async
+ * @param {vscode.Uri} uri A `vscode.Uri` of any type. If not a directory, the
+ * function returns an array with the single `vscode.Uri` object.
+ * @returns {Promise<vscode.Uri[] | void>}
+ */
 async function readDirectoryRecursively(
   uri: vscode.Uri
 ): Promise<vscode.Uri[] | void> {
@@ -232,6 +287,14 @@ async function readDirectoryRecursively(
   return files;
 }
 
+/**
+ * Consult the user's preferred open action, or ask them directly. The default
+ * preference is `"ask"`, but users can choose `"open"` or `"copy"` in their
+ * settings to avoid the prompt.
+ *
+ * @async
+ * @returns {Promise<UserOpenAction>} One of `"open"` or `"copy"`.
+ */
 async function askUserForOpenAction(): Promise<UserOpenAction> {
   // first check if the user has set a default action
   const prefAction =
@@ -249,6 +312,14 @@ async function askUserForOpenAction(): Promise<UserOpenAction> {
   return (action || "open") as UserOpenAction;
 }
 
+/**
+ * Consult the user's preferred Shinylive mode, or ask them directly. The
+ * default preference is `"ask"`, but users can choose `"app"` or `"editor"` in
+ * their settings to avoid the prompt.
+ *
+ * @async
+ * @returns {Promise<ShinyliveMode>} One of `"app"` or `"editor"`.
+ */
 async function askUserForMode(): Promise<ShinyliveMode> {
   // first check if the user has set a default mode
   const prefMode =
@@ -267,6 +338,13 @@ async function askUserForMode(): Promise<ShinyliveMode> {
   return (mode || "editor") as ShinyliveMode;
 }
 
+/**
+ * Request a Shinylive URL from the user.
+ *
+ * @async
+ * @returns {Promise<string>} The URL the user entered, or an empty string if
+ * the user canceled the input.
+ */
 async function askUserForUrl(): Promise<string> {
   const url = await vscode.window.showInputBox({
     title: "Enter or paste a Shinylive link",
@@ -277,6 +355,13 @@ async function askUserForUrl(): Promise<string> {
 
 let lastUsedDir = "";
 
+/**
+ * Ask the user for a directory where the Shinylive app will be saved.
+ *
+ * @async
+ * @returns {Promise<vscode.Uri | undefined>} A `vscode.Uri` object of the
+ * selected directory, or `undefined` if the user canceled the selection.
+ */
 async function askUserForDir(): Promise<vscode.Uri | undefined> {
   const defaultDir =
     lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri.fsPath;
@@ -297,6 +382,13 @@ async function askUserForDir(): Promise<vscode.Uri | undefined> {
   return;
 }
 
+/**
+ * Encode a Shinylive bundle into a URL string.
+ *
+ * @param {ShinyliveBundle} { language, files, mode } A Shinylive bundle object
+ * with the language, files, and mode to encode.
+ * @returns {string} The encoded Shinylive URL.
+ */
 function shinyliveUrlEncode({ language, files, mode }: ShinyliveBundle) {
   const filesJson = JSON.stringify(files);
   const filesLZ = lzstring.compressToEncodedURIComponent(filesJson);
@@ -314,6 +406,13 @@ function shinyliveUrlEncode({ language, files, mode }: ShinyliveBundle) {
   return `https://shinylive.io/${language}/${mode}/#code=${filesLZ}`;
 }
 
+/**
+ * Decode a Shinylive URL string into a Shinylive bundle object.
+ *
+ * @param {string} url The Shinylive URL string to decode.
+ * @returns {ShinyliveBundle | undefined} The decoded Shinylive bundle, or
+ * `undefined` if the URL could not be decoded.
+ */
 function shinyliveUrlDecode(url: string): ShinyliveBundle | undefined {
   const { hash, pathname } = new URL(url);
   const { searchParams } = new URL(
@@ -338,6 +437,16 @@ function shinyliveUrlDecode(url: string): ShinyliveBundle | undefined {
   };
 }
 
+/**
+ * Write a list of Shinylive files to the output directory.
+ *
+ * @async
+ * @param {ShinyliveFile[]} files A list of files to write to the output
+ * directory.
+ * @param {vscode.Uri} outputDir The directory where the files will be saved.
+ * @returns {Promise<string[]>} A list of the local file paths where the files
+ * were saved.
+ */
 async function shinyliveWriteFiles(
   files: ShinyliveFile[],
   outputDir: vscode.Uri

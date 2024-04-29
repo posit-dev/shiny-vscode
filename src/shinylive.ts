@@ -122,7 +122,7 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
 }
 
 export async function shinyliveCreateFromExplorer(
-  currentFile: vscode.Uri,
+  _activatedFile: vscode.Uri,
   selectedFiles: vscode.Uri[]
 ): Promise<void> {
   const allFiles: vscode.Uri[] = [];

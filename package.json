@@ -59,7 +59,7 @@
       {
         "category": "Shiny",
         "command": "shiny.shinylive.createFromActiveFile",
-        "title": "Send Current File to ShinyLive",
+        "title": "Create ShinyLive Link from Active File",
         "icon": "$(cloud-upload)",
         "enablement": "editorLangId == python || editorLangId == r"
       },
@@ -202,6 +202,7 @@
     "@types/winreg": "^1.2.36",
     "@vscode/python-extension": "^1.0.5",
     "fs": "^0.0.1-security",
+    "istextorbinary": "^9.5.0",
     "lz-string": "^1.5.0",
     "winreg": "^1.2.5"
   }

@@ -2,11 +2,13 @@ import * as vscode from "vscode";
 import * as lzstring from "lz-string";
 import * as path from "path";
 import * as fs from "fs";
+import { isBinary } from "istextorbinary";
+import { isShinyAppUsername } from "./extension";
 
 type ShinyliveFile = {
   name: string;
   content: string;
-  type: "text" | "binary";
+  type?: "text" | "binary";
 };
 
 type UserOpenAction = "open" | "copy";
@@ -55,9 +57,19 @@ export async function shinyliveCreateFromActiveFile(): Promise<void> {
     },
   ];
 
+  await createAndOpenShinyliveApp(
+    files,
+    extension.toLowerCase() as ShinyliveLanguage
+  );
+}
+
+async function createAndOpenShinyliveApp(
+  files: ShinyliveFile[],
+  language: ShinyliveLanguage = "py"
+) {
   const mode = await askUserForMode();
   const url = shinyliveUrlEncode({
-    language: extension.toLowerCase() as ShinyliveLanguage,
+    language,
     files,
     mode,
   });
@@ -107,6 +119,116 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
   );
 
   await vscode.window.showTextDocument(doc, 2, false);
+}
+
+export async function shinyliveCreateFromExplorer(
+  currentFile: vscode.Uri,
+  selectedFiles: vscode.Uri[]
+): Promise<void> {
+  const allFiles: vscode.Uri[] = [];
+  for (const file of selectedFiles) {
+    const expanded = await readDirectoryRecursively(file);
+    if (expanded) {
+      allFiles.push(...expanded);
+    }
+  }
+
+  const allFilesSorted = allFiles
+    // Reduce file list to unique files only
+    .filter(
+      (file: vscode.Uri, index: number, self: vscode.Uri[]) =>
+        index === self.findIndex((x) => x.fsPath === file.fsPath)
+    )
+    // Push shiny app file to the start of the list
+    .sort((a, b) => {
+      const aIsAppFile =
+        isShinyAppUsername(a.path, "python") || isShinyAppUsername(a.path, "r");
+
+      const bIsAppFile =
+        isShinyAppUsername(b.path, "python") || isShinyAppUsername(b.path, "r");
+
+      // A first (-1) or B first (+1) or same
+      return -aIsAppFile + +bIsAppFile;
+    });
+
+  const primaryFile = allFilesSorted[0].path;
+  const isPythonApp = isShinyAppUsername(primaryFile, "python");
+  const isRApp = isShinyAppUsername(primaryFile, "r");
+
+  if (!isPythonApp && !isRApp) {
+    vscode.window.showErrorMessage(
+      "The selected files did not contain a Shiny for Python or R app."
+    );
+    return;
+  }
+
+  const rootDir = path.dirname(primaryFile);
+
+  const pathRelativeToRootDir = (file: vscode.Uri) =>
+    path.relative(rootDir, file.path);
+
+  const files = await Promise.all(
+    allFilesSorted.map(async (file: vscode.Uri): Promise<ShinyliveFile> => {
+      const type = isBinary(file.fsPath) ? "binary" : "text";
+      let name = pathRelativeToRootDir(file);
+
+      // Primary file needs to be `app.R` or `app.py` (or ui/server.R)
+      if (file.path === primaryFile) {
+        if (isPythonApp) {
+          name = "app.py";
+        } else if (isRApp && name.indexOf("app") >= 0) {
+          name = "app.R";
+        }
+      }
+
+      const contentRaw = await vscode.workspace.fs.readFile(file);
+      const content =
+        type === "binary"
+          ? Buffer.from(contentRaw).toString("base64")
+          : Buffer.from(contentRaw).toString();
+
+      switch (type) {
+        case "binary":
+          return { name, content, type };
+
+        default:
+          return { name, content };
+      }
+    })
+  );
+
+  await createAndOpenShinyliveApp(files, isPythonApp ? "py" : "r");
+}
+
+async function readDirectoryRecursively(
+  uri: vscode.Uri
+): Promise<vscode.Uri[] | void> {
+  const pathStat = await vscode.workspace.fs.stat(uri);
+  if (pathStat.type !== vscode.FileType.Directory) {
+    return [uri];
+  }
+
+  // Treat `_dir/` or `.dir/` as hidden directories and discard them
+  if (["_", "."].some((chr) => path.basename(uri.path).startsWith(chr))) {
+    return;
+  }
+
+  const files: vscode.Uri[] = [];
+  const filesInDir = await vscode.workspace.fs.readDirectory(uri);
+
+  for (const [name, type] of filesInDir) {
+    if (type === vscode.FileType.Directory) {
+      const subdir = vscode.Uri.file(`${uri.path}/${name}`);
+      const subdirFiles = await readDirectoryRecursively(subdir);
+      if (subdirFiles) {
+        files.push(...subdirFiles);
+      }
+    } else {
+      files.push(vscode.Uri.file(`${uri.path}/${name}`));
+    }
+  }
+
+  return files;
 }
 
 async function askUserForOpenAction(): Promise<UserOpenAction> {

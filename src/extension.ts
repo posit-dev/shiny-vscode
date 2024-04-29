@@ -4,6 +4,7 @@ import { pyRunApp, rRunApp, pyDebugApp, onDidStartDebugSession } from "./run";
 import {
   shinyliveCreateFromActiveFile,
   shinyliveSaveAppFromUrl,
+  shinyliveCreateFromExplorer,
 } from "./shinylive";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -18,6 +19,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "shiny.shinylive.saveAppFromUrl",
       shinyliveSaveAppFromUrl
+    ),
+    vscode.commands.registerCommand(
+      "shiny.shinylive.createFromExplorer",
+      shinyliveCreateFromExplorer
     )
   );
 
@@ -131,7 +136,10 @@ class Throttler {
   }
 }
 
-function isShinyAppUsername(filename: string, language: string): boolean {
+export function isShinyAppUsername(
+  filename: string,
+  language: string
+): boolean {
   filename = path.basename(filename);
 
   const extension = { python: "py", r: "R" }[language];

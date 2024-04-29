@@ -68,9 +68,21 @@
         "command": "shiny.shinylive.saveAppFromUrl",
         "title": "Save App from Shinylive Link",
         "icon": "$(cloud-download)"
+      },
+      {
+        "category": "Shiny",
+        "command": "shiny.shinylive.createFromExplorer",
+        "title": "Create Shinylive Link from Selected Files",
+        "icon": "$(cloud-upload)"
       }
     ],
     "menus": {
+      "explorer/context": [
+        {
+          "command": "shiny.shinylive.createFromExplorer",
+          "group": "shinylive"
+        }
+      ],
       "editor/title/run": [
         {
           "command": "shiny.python.runApp",

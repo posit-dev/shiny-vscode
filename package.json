@@ -152,7 +152,7 @@
         "shiny.r.devmode": {
           "type": "boolean",
           "default": true,
-          "description": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
+          "markdownDescription": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
         },
         "shiny.shinylive.mode": {
           "type": "string",
@@ -162,6 +162,11 @@
             "ask",
             "app",
             "editor"
+          ],
+          "enumDescriptions": [
+            "Ask which mode to use.",
+            "App mode displays only the app with an optional header.",
+            "Editor mode displays the app alongside an editor and console."
           ]
         },
         "shiny.shinylive.action": {
@@ -172,12 +177,17 @@
             "ask",
             "open",
             "copy"
+          ],
+          "enumDescriptions": [
+            "Ask which action to take.",
+            "Open the link in the default browser.",
+            "Copy the link to the clipboard."
           ]
         },
         "shiny.shinylive.includeHeader": {
           "type": "boolean",
           "default": true,
-          "description": "Include the Shiny header when creating Shinylive app links."
+          "description": "Include the Shiny header when creating Shinylive app links. Only relevant for app mode Shinylive links."
         },
         "shiny.shinylive.host": {
           "type": "string",
@@ -188,8 +198,8 @@
             "https://posit-dev.github.io/shinylive"
           ],
           "enumDescriptions": [
-            "Uses the latest released version of Shiny in Python or R",
-            "Uses the latest development version of Shiny in Python or R"
+            "Uses the latest released version of Shiny in Python or R.",
+            "Uses the latest development version of Shiny in Python or R."
           ]
         }
       }

@@ -29,7 +29,7 @@ You can use the extension to create shareable links to your apps using [Shinyliv
 
 The Shiny extension will ask you which app mode you want to use (display the _app_ or show an _editor_ next to the app) and what action to take (to _open_ or _copy_ the link).You can also configure these options in the extension settings.
 
-For the reverse operation, use the **Save App from Shinylive Link** command in the command palette to save an app and its files from a Shinylive link. You'll be prompted to paste the Shinylive link and then to choose a directory where the app will be saved in your workspace.
+For the reverse operation, use the **Save App from Shinylive Link** command in the command palette to save an app and its files from a Shinylive link. You'll be prompted to paste the Shinylive link and then to choose where the app will be saved in your workspace.
 
 ## Extension Settings
 

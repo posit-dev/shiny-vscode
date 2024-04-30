@@ -6,6 +6,7 @@
 - The [Python VS Code extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python) is now a soft dependency and is no longer installed by default with the Shiny for VS Code extension. (#30)
 - Added a new setting, `shiny.previewType`, to control where the Shiny app preview should be opened. (#40)
 - Added a new `shinyexpress` snippet to quickly create a basic Shiny Express app in Python. (#42)
+- The extension now correctly escapes commands on PowerShell 7 where the binary is named `pwsh.exe`. (#48)
 - Fixed a bug that would doubly-escape paths with spaces when launching Shiny apps on Windows via `cmd.exe`. ([#46](https://github.com/posit-dev/shiny-vscode/issues/46))
 
 ## 0.1.6

@@ -165,7 +165,7 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
   if (files.length === 1 && path.parse(outputDir.path).ext) {
     // update the `name` of the file in the app to the user's selection
     files[0].name = path.basename(outputDir.path);
-    outputDir = vscode.Uri.file(path.dirname(outputDir.path));
+    outputDir = outputDir.with({ path: path.dirname(outputDir.path) });
   }
 
   const localFiles = await shinyliveWriteFiles(
@@ -174,13 +174,11 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
     files.length > 1 // confirmOverwrite: vscode save dialog will have asked already
   );
 
-  if (!localFiles) {
+  if (localFiles.length === 0) {
     return;
   }
 
-  const doc = await vscode.workspace.openTextDocument(
-    vscode.Uri.file(localFiles[0])
-  );
+  const doc = await vscode.workspace.openTextDocument(localFiles[0]);
 
   await vscode.window.showTextDocument(doc, 2, false);
 }
@@ -417,7 +415,7 @@ async function askUserForUrl(): Promise<string> {
   return url || "";
 }
 
-let lastUsedDir = "";
+let lastUsedDir: vscode.Uri;
 
 /**
  * Ask the user for an output location where the Shinylive app will be saved.
@@ -435,32 +433,57 @@ let lastUsedDir = "";
 async function askUserForOutputLocation(
   singleFileName: string | undefined = undefined
 ): Promise<vscode.Uri | undefined> {
-  const defaultDir =
-    lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+  let defaultUri = lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri;
 
-  let defaultUri = vscode.Uri.file(defaultDir || ".");
   if (singleFileName) {
-    defaultUri = vscode.Uri.file(`${defaultDir || "."}/${singleFileName}`);
+    defaultUri = vscode.Uri.joinPath(defaultUri, singleFileName);
   }
 
   const uri = await vscode.window.showSaveDialog({
     defaultUri: defaultUri,
     saveLabel: singleFileName ? "App file" : "App directory",
-    title: `Choose a ${
-      singleFileName ? "path" : "directory"
-    } where Shinylive app will be saved`,
+    title: singleFileName
+      ? "Choose a path for the Shinylive app"
+      : "Choose a directory for the Shinylive app and files",
+    filters: singleFileName
+      ? singleFileName.endsWith(".py")
+        ? // eslint-disable-next-line @typescript-eslint/naming-convention
+          { Python: ["py"] }
+        : // eslint-disable-next-line @typescript-eslint/naming-convention
+          { R: ["R", "r"] }
+      : undefined,
   });
 
   if (!uri) {
+    // Reset the last used directory if the user cancels, otherwise they can
+    // get stuck in the "local" directory picker on remote vscode instances
+    lastUsedDir =
+      vscode.workspace.workspaceFolders?.[0].uri || vscode.Uri.file(".");
     return;
   }
 
-  if (path.parse(uri.path).ext === "" && !singleFileName) {
-    // create directory based on uri
-    await vscode.workspace.fs.createDirectory(uri);
+  const uriIsDir = path.parse(uri.path).ext === "";
+
+  if (uri.scheme !== "file" && uriIsDir) {
+    vscode.window.showErrorMessage(
+      "Shinylive: Remote directories are not supported at this time. " +
+        "Please save the app locally instead."
+    );
+    return;
   }
 
-  lastUsedDir = path.dirname(uri.path);
+  if (uriIsDir && !singleFileName) {
+    try {
+      await vscode.workspace.fs.createDirectory(uri);
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Shinylive failed to create new directory "${uri.toString()}". ${error}`
+      );
+      return;
+    }
+  }
+
+  lastUsedDir = uriIsDir ? uri : uri.with({ path: path.dirname(uri.path) });
   return uri;
 }
 
@@ -542,15 +565,23 @@ async function shinyliveWriteFiles(
   files: ShinyliveFile[],
   outputDir: vscode.Uri,
   confirmOverwrite = true
-): Promise<string[]> {
+): Promise<vscode.Uri[]> {
   const localFiles = [];
 
   for (const file of files) {
-    const filePath = vscode.Uri.file(`${outputDir.fsPath}/${file.name}`);
-    const fileDir = vscode.Uri.file(path.dirname(filePath.fsPath));
+    const filePath = vscode.Uri.joinPath(outputDir, file.name);
+    const fileDir = filePath.with({ path: path.dirname(filePath.path) });
 
-    if (!fs.existsSync(fileDir.fsPath)) {
-      await vscode.workspace.fs.createDirectory(fileDir);
+    if (fileDir.scheme === "file" && !(await pathExists(fileDir))) {
+      // Create the directory if it doesn't exist, local filesystems only
+      try {
+        await vscode.workspace.fs.createDirectory(fileDir);
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Shinylive failed to create directory "${fileDir.toString()}". ${error}`
+        );
+        return [];
+      }
     }
 
     let contentBuffer: Buffer;
@@ -560,35 +591,53 @@ async function shinyliveWriteFiles(
         contentBuffer = Buffer.from(file.content, "base64");
         break;
       default:
-        contentBuffer = Buffer.from(file.content);
+        contentBuffer = Buffer.from(file.content, "utf8");
         break;
     }
 
-    let doWrite: boolean;
-
-    if (confirmOverwrite && fs.existsSync(filePath.fsPath)) {
-      const userOverwrite = await vscode.window.showInformationMessage(
-        `File exists, overwrite? "${filePath.fsPath}"`,
-        "Yes",
-        "No",
-        "Cancel"
-      );
-
-      if (userOverwrite === "Cancel") {
+    if (!confirmOverwrite || (await askUserToConfirmOverwrite(filePath))) {
+      try {
+        await vscode.workspace.fs.writeFile(filePath, contentBuffer);
+        localFiles.push(filePath);
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Shinylive failed to write file ${
+            file.name
+          } to "${filePath.toString()}". ${error}`
+        );
         return [];
       }
-
-      doWrite = userOverwrite === "Yes";
-    } else {
-      doWrite = false;
     }
-
-    if (doWrite) {
-      await vscode.workspace.fs.writeFile(filePath, contentBuffer);
-    }
-
-    localFiles.push(filePath.path);
   }
 
   return localFiles;
+}
+
+async function askUserToConfirmOverwrite(filePath: vscode.Uri) {
+  if (filePath.scheme !== "file") {
+    // We can't stat remote files, so we have to assume they don't exist
+    return true;
+  }
+
+  const exists = await pathExists(filePath);
+  if (!exists) {
+    return true;
+  }
+
+  const userOverwrite = await vscode.window.showInformationMessage(
+    `File exists, overwrite? "${filePath.fsPath}"`,
+    "Yes",
+    "No"
+  );
+
+  return userOverwrite === "Yes";
+}
+
+async function pathExists(file: vscode.Uri): Promise<boolean> {
+  try {
+    typeof (await vscode.workspace.fs.stat(file)).type !== "undefined";
+    return true;
+  } catch (error) {
+    return false;
+  }
 }

@@ -22,9 +22,9 @@ type ShinyliveBundle = {
 };
 
 /**
- * Command: Create a Shinylive app from the active file in the editor.
+ * Command: Create a Shinylive link from the active editor.
  *
- * The active file must be a single-file Shiny app in Python or R, named
+ * The active editor must be a single-file Shiny app in Python or R, named
  * `app.py` or `app.R` (or similar).
  *
  * @export
@@ -113,7 +113,7 @@ async function createAndOpenShinyliveLink(
 }
 
 /**
- * Command: Save a Shinylive app from a Shinylive link.
+ * Command: Save a Shiny app from a Shinylive link.
  *
  * This command asks the user for a Shinylive link and a directory where the
  * files will be saved. The link is decoded and the files are saved into the
@@ -198,7 +198,7 @@ function filesAreNotSingleDir(files: ShinyliveFile[]): boolean {
 }
 
 /**
- * Command: Save a Shinylive app from the Explorer context menu.
+ * Command: Create a Shinylive link from the Explorer context menu.
  *
  * This command creates a Shinylive app link from the selected files or
  * directories in the Explorer. Directories whose names start with `_` or `.`

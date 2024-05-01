@@ -37,8 +37,11 @@ export async function shinyliveCreateFromActiveEditor(): Promise<void> {
   }
 
   const content = vscode.window.activeTextEditor.document.getText();
-  const { fileName: filePath, languageId: language } =
-    vscode.window.activeTextEditor.document;
+  const {
+    fileName: filePath,
+    languageId: language,
+    isUntitled,
+  } = vscode.window.activeTextEditor.document;
 
   if (!language || !["r", "python"].includes(language)) {
     vscode.window.showErrorMessage(
@@ -47,13 +50,15 @@ export async function shinyliveCreateFromActiveEditor(): Promise<void> {
     return;
   }
 
-  const { name: fileName } = path.parse(filePath);
+  if (!isUntitled) {
+    const { name: fileName } = path.parse(filePath);
 
-  if (!/(^app|app$)/i.test(fileName)) {
-    vscode.window.showErrorMessage(
-      "A single-file Shiny app is required when sending the current file to Shinylive."
-    );
-    return;
+    if (!/(^app|app$)/i.test(fileName)) {
+      vscode.window.showErrorMessage(
+        "A single-file Shiny app is required when sending the current file to Shinylive."
+      );
+      return;
+    }
   }
 
   const extension = language === "r" ? "R" : "py";

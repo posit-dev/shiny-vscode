@@ -66,7 +66,7 @@ export async function shinyliveCreateFromActiveFile(): Promise<void> {
     },
   ];
 
-  await createAndOpenShinyliveApp(
+  await createAndOpenShinyliveLink(
     files,
     extension.toLowerCase() as ShinyliveLanguage
   );
@@ -82,7 +82,7 @@ export async function shinyliveCreateFromActiveFile(): Promise<void> {
  * to `"py"`.
  * @returns {string} The Shinylive URL, or undefined if the user cancelled.
  */
-async function createAndOpenShinyliveApp(
+async function createAndOpenShinyliveLink(
   files: ShinyliveFile[],
   language: ShinyliveLanguage = "py"
 ): Promise<string | void> {
@@ -289,7 +289,7 @@ export async function shinyliveCreateFromExplorer(
     })
   );
 
-  await createAndOpenShinyliveApp(files, isPythonApp ? "py" : "r");
+  await createAndOpenShinyliveLink(files, isPythonApp ? "py" : "r");
 }
 
 /**

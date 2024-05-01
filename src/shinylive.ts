@@ -158,7 +158,6 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
   );
 
   if (!outputDir) {
-    vscode.window.showErrorMessage("Canceled: no location selected.");
     return;
   }
 
@@ -459,6 +458,7 @@ async function askUserForOutputLocation(
     // get stuck in the "local" directory picker on remote vscode instances
     lastUsedDir =
       vscode.workspace.workspaceFolders?.[0].uri || vscode.Uri.file(".");
+
     return;
   }
 

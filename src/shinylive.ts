@@ -163,7 +163,15 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
     outputDir = vscode.Uri.file(path.dirname(outputDir.path));
   }
 
-  const localFiles = await shinyliveWriteFiles(files, outputDir);
+  const localFiles = await shinyliveWriteFiles(
+    files,
+    outputDir,
+    files.length > 1 // confirmOverwrite: vscode save dialog will have asked already
+  );
+
+  if (!localFiles) {
+    return;
+  }
 
   const doc = await vscode.workspace.openTextDocument(
     vscode.Uri.file(localFiles[0])
@@ -519,12 +527,16 @@ function shinyliveUrlDecode(url: string): ShinyliveBundle | undefined {
  * @param {ShinyliveFile[]} files A list of files to write to the output
  * directory.
  * @param {vscode.Uri} outputDir The directory where the files will be saved.
+ * @param {boolean} confirmOverwrite When `true`, confirm with the user before
+ * overwriting existing files.
  * @returns {Promise<string[]>} A list of the local file paths where the files
- * were saved.
+ * were saved, or an empty array if the user cancels due to existing file
+ * conflicts.
  */
 async function shinyliveWriteFiles(
   files: ShinyliveFile[],
-  outputDir: vscode.Uri
+  outputDir: vscode.Uri,
+  confirmOverwrite = true
 ): Promise<string[]> {
   const localFiles = [];
 
@@ -547,7 +559,28 @@ async function shinyliveWriteFiles(
         break;
     }
 
-    await vscode.workspace.fs.writeFile(filePath, contentBuffer);
+    let doWrite: boolean;
+
+    if (confirmOverwrite && fs.existsSync(filePath.fsPath)) {
+      const userOverwrite = await vscode.window.showInformationMessage(
+        `File exists, overwrite? "${filePath.fsPath}"`,
+        "Yes",
+        "No",
+        "Cancel"
+      );
+
+      if (userOverwrite === "Cancel") {
+        return [];
+      }
+
+      doWrite = userOverwrite === "Yes";
+    } else {
+      doWrite = false;
+    }
+
+    if (doWrite) {
+      await vscode.workspace.fs.writeFile(filePath, contentBuffer);
+    }
 
     localFiles.push(filePath.path);
   }

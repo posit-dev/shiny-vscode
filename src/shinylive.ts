@@ -32,7 +32,7 @@ type ShinyliveBundle = {
  */
 export async function shinyliveCreateFromActiveEditor(): Promise<void> {
   if (!vscode.window.activeTextEditor) {
-    vscode.window.showErrorMessage("No active file");
+    vscode.window.showErrorMessage("Shinylive: no editor is currently active.");
     return;
   }
 
@@ -55,7 +55,7 @@ export async function shinyliveCreateFromActiveEditor(): Promise<void> {
 
     if (!/(^app|app$)/i.test(fileName)) {
       vscode.window.showErrorMessage(
-        "A single-file Shiny app is required when sending the current file to Shinylive."
+        "Shinylive: A single-file Shiny app is required when creating a link from the active editor."
       );
       return;
     }
@@ -136,7 +136,10 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
   const bundle = shinyliveUrlDecode(url);
 
   if (!bundle) {
-    vscode.window.showErrorMessage("Failed to parse the Shinylive link.");
+    vscode.window.showErrorMessage(
+      "Shinylive: Failed to parse the Shinylive link. " +
+        "Please check the link and try again."
+    );
     return;
   }
 
@@ -144,7 +147,7 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
 
   if (files.length < 1) {
     vscode.window.showErrorMessage(
-      "The Shinylive link did not contain any files."
+      "Shinylive: The provided link did not contain any files."
     );
     return;
   }
@@ -187,7 +190,7 @@ function filesAreNotSingleDir(files: ShinyliveFile[]): boolean {
 
   if (bad.length) {
     vscode.window.showErrorMessage(
-      "The Shinylive link includes files that cannot be written into a " +
+      "Shinylive link includes files that cannot be written into a " +
         "single, contained directory, e.g. '" +
         bad[0] +
         "'. " +
@@ -250,7 +253,7 @@ export async function shinyliveCreateFromExplorer(
 
   if (!isPythonApp && !isRApp) {
     vscode.window.showErrorMessage(
-      "The selected files did not contain a Shiny for Python or R app."
+      "Shinylive: the selected files did not contain a Shiny for Python or R app."
     );
     return;
   }

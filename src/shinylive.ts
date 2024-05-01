@@ -80,13 +80,17 @@ export async function shinyliveCreateFromActiveFile(): Promise<void> {
  * as `ShinyliveFile` objects.
  * @param {ShinyliveLanguage} [language="py"] One of `"py"` or `"r"`, defaults
  * to `"py"`.
- * @returns {string} The Shinylive URL.
+ * @returns {string} The Shinylive URL, or undefined if the user cancelled.
  */
 async function createAndOpenShinyliveApp(
   files: ShinyliveFile[],
   language: ShinyliveLanguage = "py"
-): Promise<string> {
+): Promise<string | void> {
   const mode = await askUserForAppMode();
+  if (!mode) {
+    return;
+  }
+
   const url = shinyliveUrlEncode({
     language,
     files,
@@ -94,6 +98,9 @@ async function createAndOpenShinyliveApp(
   });
 
   const action = await askUserForOpenAction();
+  if (!action) {
+    return;
+  }
 
   if (action === "open") {
     vscode.env.openExternal(vscode.Uri.parse(url));
@@ -302,9 +309,10 @@ async function readDirectoryRecursively(
  * settings to avoid the prompt.
  *
  * @async
- * @returns {Promise<UserOpenAction>} One of `"open"` or `"copy"`.
+ * @returns {Promise<UserOpenAction>} One of `"open"` or `"copy"`, or an empty
+ * string if the user cancelled.
  */
-async function askUserForOpenAction(): Promise<UserOpenAction> {
+async function askUserForOpenAction(): Promise<UserOpenAction | ""> {
   // first check if the user has set a default action
   const prefAction =
     vscode.workspace
@@ -318,7 +326,8 @@ async function askUserForOpenAction(): Promise<UserOpenAction> {
   const action = await vscode.window.showQuickPick(["open", "copy"], {
     title: "Open or copy the ShinyLive link?",
   });
-  return (action || "open") as UserOpenAction;
+
+  return action ? (action as UserOpenAction) : "";
 }
 
 /**
@@ -327,9 +336,10 @@ async function askUserForOpenAction(): Promise<UserOpenAction> {
  * their settings to avoid the prompt.
  *
  * @async
- * @returns {Promise<ShinyliveMode>} One of `"app"` or `"editor"`.
+ * @returns {Promise<ShinyliveMode>} One of `"app"` or `"editor"`, or an empty
+ * string if the user cancelled.
  */
-async function askUserForAppMode(): Promise<ShinyliveMode> {
+async function askUserForAppMode(): Promise<ShinyliveMode | ""> {
   // first check if the user has set a default mode
   const prefMode =
     vscode.workspace
@@ -345,7 +355,7 @@ async function askUserForAppMode(): Promise<ShinyliveMode> {
     title: "Which shinylive mode?",
   });
 
-  return (mode || "editor") as ShinyliveMode;
+  return mode ? (mode as ShinyliveMode) : "";
 }
 
 /**

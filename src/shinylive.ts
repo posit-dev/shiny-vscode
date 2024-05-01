@@ -30,7 +30,7 @@ type ShinyliveBundle = {
  * @export
  * @async
  */
-export async function shinyliveCreateFromActiveFile(): Promise<void> {
+export async function shinyliveCreateFromActiveEditor(): Promise<void> {
   if (!vscode.window.activeTextEditor) {
     vscode.window.showErrorMessage("No active file");
     return;

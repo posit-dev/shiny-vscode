@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { pyRunApp, rRunApp, pyDebugApp, onDidStartDebugSession } from "./run";
 import {
-  shinyliveCreateFromActiveFile,
+  shinyliveCreateFromActiveEditor,
   shinyliveSaveAppFromUrl,
   shinyliveCreateFromExplorer,
 } from "./shinylive";
@@ -13,8 +13,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
     vscode.commands.registerCommand("shiny.r.runApp", rRunApp),
     vscode.commands.registerCommand(
-      "shiny.shinylive.createFromActiveFile",
-      shinyliveCreateFromActiveFile
+      "shiny.shinylive.createFromActiveEditor",
+      shinyliveCreateFromActiveEditor
     ),
     vscode.commands.registerCommand(
       "shiny.shinylive.saveAppFromUrl",

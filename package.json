@@ -58,8 +58,8 @@
       },
       {
         "category": "Shiny",
-        "command": "shiny.shinylive.createFromActiveFile",
-        "title": "Create ShinyLive Link from Active File",
+        "command": "shiny.shinylive.createFromActiveEditor",
+        "title": "Create ShinyLive Link from Active Editor",
         "icon": "$(cloud-upload)",
         "enablement": "editorLangId == python || editorLangId == r"
       },

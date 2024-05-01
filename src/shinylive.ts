@@ -144,6 +144,10 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
     return;
   }
 
+  if (filesAreNotSingleDir(files)) {
+    return;
+  }
+
   let outputDir = await askUserForOutputLocation(
     files.length === 1 ? files[0].name : undefined
   );
@@ -166,6 +170,23 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
   );
 
   await vscode.window.showTextDocument(doc, 2, false);
+}
+
+function filesAreNotSingleDir(files: ShinyliveFile[]): boolean {
+  const bad = files.map((f) => f.name).filter((nm) => nm.startsWith(".."));
+
+  if (bad.length) {
+    vscode.window.showErrorMessage(
+      "The Shinylive link includes files that cannot be written into a " +
+        "single, contained directory, e.g. '" +
+        bad[0] +
+        "'. " +
+        "Please edit the file paths on Shinylive " +
+        "and try again."
+    );
+  }
+
+  return bad.length > 0;
 }
 
 /**
@@ -477,7 +498,10 @@ function shinyliveUrlDecode(url: string): ShinyliveBundle | undefined {
   }
 
   const filesJson = lzstring.decompressFromEncodedURIComponent(code);
-  const files = JSON.parse(filesJson);
+  const files = JSON.parse(filesJson).map((file: ShinyliveFile) => {
+    file.name = path.normalize(file.name);
+    return file;
+  });
 
   const pathParts = pathname.split("/");
 

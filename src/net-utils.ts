@@ -72,6 +72,10 @@ export async function openBrowser(url: string): Promise<void> {
     case "none":
       return;
     case "external": {
+      if (url === "about:blank") {
+        // don't need to open a blank page in external browser
+        return;
+      }
       vscode.env.openExternal(vscode.Uri.parse(url));
       return;
     }

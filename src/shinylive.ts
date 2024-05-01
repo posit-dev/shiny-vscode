@@ -350,12 +350,22 @@ async function askUserForAppMode(): Promise<ShinyliveMode | ""> {
     return prefMode as ShinyliveMode;
   }
 
-  // ask the user if they want to run the app or edit the code
-  const mode = await vscode.window.showQuickPick(["app", "editor"], {
-    title: "Which shinylive mode?",
+  const options: vscode.QuickPickItem[] = [
+    {
+      label: "app",
+      detail: "App mode displays only the app on Shinylive.",
+    },
+    {
+      label: "editor",
+      detail: "Editor mode displays the app alongside an editor and console.",
+    },
+  ];
+
+  const mode = await vscode.window.showQuickPick(options, {
+    title: "Which Shinylive mode?",
   });
 
-  return mode ? (mode as ShinyliveMode) : "";
+  return mode ? (mode.label as ShinyliveMode) : "";
 }
 
 /**

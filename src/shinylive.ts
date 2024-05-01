@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import * as lzstring from "lz-string";
 import * as path from "path";
-import * as fs from "fs";
 import { isBinary } from "istextorbinary";
 import { isShinyAppUsername } from "./extension";
 

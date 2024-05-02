@@ -7,6 +7,10 @@
 - Added a new setting, `shiny.previewType`, to control where the Shiny app preview should be opened. (#40)
 - Added a new `shinyexpress` snippet to quickly create a basic Shiny Express app in Python. (#42)
 - The extension now correctly escapes commands on PowerShell 7 where the binary is named `pwsh.exe`. (#48)
+- The extension can now create Shinylive links or save apps from Shinylive links (#44):
+  - **Create ShinyLive Link from Active File** creates a Shinylive link from the active file (Command Palette).
+  - **Create ShinyLive Link from Selected Files** creates a Shinylive link from the selected files or directories in the right-click context menu of the File Explorer.
+  - **Save App from Shinylive Link** saves an app and its files from a Shinylive link (Command Palette).
 
 ## 0.1.6
 

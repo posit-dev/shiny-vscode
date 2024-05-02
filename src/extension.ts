@@ -1,12 +1,29 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { pyRunApp, rRunApp, pyDebugApp, onDidStartDebugSession } from "./run";
+import {
+  shinyliveCreateFromActiveEditor,
+  shinyliveSaveAppFromUrl,
+  shinyliveCreateFromExplorer,
+} from "./shinylive";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
-    vscode.commands.registerCommand("shiny.r.runApp", rRunApp)
+    vscode.commands.registerCommand("shiny.r.runApp", rRunApp),
+    vscode.commands.registerCommand(
+      "shiny.shinylive.createFromActiveEditor",
+      shinyliveCreateFromActiveEditor
+    ),
+    vscode.commands.registerCommand(
+      "shiny.shinylive.saveAppFromUrl",
+      shinyliveSaveAppFromUrl
+    ),
+    vscode.commands.registerCommand(
+      "shiny.shinylive.createFromExplorer",
+      shinyliveCreateFromExplorer
+    )
   );
 
   const throttledUpdateContext = new Throttler(2000, () => {
@@ -119,7 +136,10 @@ class Throttler {
   }
 }
 
-function isShinyAppUsername(filename: string, language: string): boolean {
+export function isShinyAppUsername(
+  filename: string,
+  language: string
+): boolean {
   filename = path.basename(filename);
 
   const extension = { python: "py", r: "R" }[language];

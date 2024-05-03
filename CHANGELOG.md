@@ -1,6 +1,6 @@
 # Change Log
 
-## [Unreleased]
+## 0.2.0
 
 - The extension now supports Shiny for R apps. (#30)
 - The [Python VS Code extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python) is now a soft dependency and is no longer installed by default with the Shiny for VS Code extension. (#30)

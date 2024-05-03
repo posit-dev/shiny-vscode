@@ -14,6 +14,7 @@ It also provides a couple of code snippets in both Python and R:
 
 - `shinyapp` for creating a new Shiny application
 - `shinymod` for creating a new Shiny module
+- `shinyexpress` for creating a new Shiny Express application (Python)
 
 For a complete Shiny for Python experience in VS Code, please [visit our docs for more information](https://shiny.posit.co/py/docs/install-create-run.html#vs-code), including instructions for configuring the type checker and debugger for use with Shiny.
 

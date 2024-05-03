@@ -11,6 +11,7 @@
   - **Create ShinyLive Link from Active File** creates a Shinylive link from the active file (Command Palette).
   - **Create ShinyLive Link from Selected Files** creates a Shinylive link from the selected files or directories in the right-click context menu of the File Explorer.
   - **Save App from Shinylive Link** saves an app and its files from a Shinylive link (Command Palette).
+- Fixed a bug that would doubly-escape paths with spaces when launching Shiny apps on Windows via `cmd.exe`. ([#46](https://github.com/posit-dev/shiny-vscode/issues/46))
 
 ## 0.1.6
 

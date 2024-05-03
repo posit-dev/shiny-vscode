@@ -32,9 +32,17 @@ function escapeStyle(terminal: vscode.Terminal): EscapeStyle {
 export function escapeArg(arg: string, style: EscapeStyle): string {
   switch (style) {
     case "cmd":
-      // For cmd.exe, double quotes are used to handle spaces, and carets (^) are used to escape special characters.
-      const escaped = arg.replace(/([()%!^"<>&|])/g, "^$1");
-      return /\s/.test(escaped) ? `"${escaped}"` : escaped;
+      // For cmd.exe, use double quotes if input includes spaces
+      if (/\s/.test(arg)) {
+        if (!arg.includes('"')) {
+          return `"${arg}"`;
+        }
+        // Escape double quotes by doubling them
+        return `"${arg.replace(/"/g, '"""')}"`;
+      }
+
+      // Carets (^) are used to escape special characters in unquoted strings.
+      return arg.replace(/([()%!^"<>&|])/g, "^$1");
 
     case "ps":
       if (!/[ '"`,;(){}|&<>@#[\]]/.test(arg)) {

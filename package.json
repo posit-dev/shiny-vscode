@@ -31,7 +31,11 @@
     "snippets": [
       {
         "language": "python",
-        "path": "./snippets/shiny.json"
+        "path": "./snippets/shiny-python.json"
+      },
+      {
+        "language": "r",
+        "path": "./snippets/shiny-r.json"
       }
     ],
     "commands": [

@@ -41,6 +41,7 @@
   "Shiny module": {
     "scope": "python",
     "prefix": "shinymod",
+    "description": "Shiny module skeleton",
     "body": [
       "from shiny import module, reactive, render, ui",
       "",

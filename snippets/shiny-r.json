@@ -2,6 +2,7 @@
   "Shiny application (R)": {
     "scope": "r",
     "prefix": "shinyapp",
+    "description": "Basic Shiny app skeleton with {bslib}",
     "body": [
       "library(shiny)",
       "library(bslib)",
@@ -20,6 +21,7 @@
   "Shiny module (R)": {
     "scope": "r",
     "prefix": "shinymod",
+    "description": "Shiny module skeleton",
     "body": [
       "${1:name}UI <- function(id) {",
       "  ns <- NS(id)",

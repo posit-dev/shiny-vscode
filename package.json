@@ -1,6 +1,6 @@
 {
   "name": "shiny-python",
-  "displayName": "Shiny",
+  "displayName": "Shiny (deprecated)",
   "description": "Run and develop Shiny apps in Python or R.",
   "version": "0.2.1-dev",
   "publisher": "Posit",
@@ -20,193 +20,10 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:python",
-    "onCommand:shiny.python.runApp",
-    "onCommand:shiny.python.debugApp",
-    "onLanguage:r",
-    "onCommand:shiny.r.runApp"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
-  "contributes": {
-    "snippets": [
-      {
-        "language": "python",
-        "path": "./snippets/shiny-python.json"
-      },
-      {
-        "language": "r",
-        "path": "./snippets/shiny-r.json"
-      }
-    ],
-    "commands": [
-      {
-        "category": "Shiny",
-        "command": "shiny.python.runApp",
-        "title": "Run Shiny App",
-        "icon": "$(play)",
-        "enablement": "editorLangId == python && shellExecutionSupported"
-      },
-      {
-        "category": "Shiny",
-        "command": "shiny.python.debugApp",
-        "title": "Debug Shiny App",
-        "icon": "$(debug-alt)",
-        "enablement": "editorLangId == python && shellExecutionSupported"
-      },
-      {
-        "category": "Shiny",
-        "command": "shiny.r.runApp",
-        "title": "Run Shiny App",
-        "icon": "$(play)",
-        "enablement": "editorLangId == r && shellExecutionSupported"
-      },
-      {
-        "category": "Shiny",
-        "command": "shiny.shinylive.createFromActiveEditor",
-        "title": "Create ShinyLive Link from Active Editor",
-        "icon": "$(cloud-upload)",
-        "enablement": "editorLangId == python || editorLangId == r"
-      },
-      {
-        "category": "Shiny",
-        "command": "shiny.shinylive.saveAppFromUrl",
-        "title": "Save App from Shinylive Link",
-        "icon": "$(cloud-download)"
-      },
-      {
-        "category": "Shiny",
-        "command": "shiny.shinylive.createFromExplorer",
-        "title": "Create Shinylive Link from Selected Files",
-        "icon": "$(cloud-upload)"
-      }
-    ],
-    "menus": {
-      "explorer/context": [
-        {
-          "command": "shiny.shinylive.createFromExplorer",
-          "group": "shinylive",
-          "when": "true"
-        }
-      ],
-      "commandPalette": [
-        {
-          "command": "shiny.shinylive.createFromExplorer",
-          "when": "false"
-        }
-      ],
-      "editor/title/run": [
-        {
-          "command": "shiny.python.runApp",
-          "group": "navigation@-3",
-          "when": "shiny.python.active && shellExecutionSupported"
-        },
-        {
-          "command": "shiny.python.debugApp",
-          "group": "navigation@-2",
-          "when": "shiny.python.active && shellExecutionSupported"
-        },
-        {
-          "command": "shiny.r.runApp",
-          "group": "navigation@-3",
-          "when": "shiny.r.active && shellExecutionSupported"
-        }
-      ]
-    },
-    "configuration": {
-      "title": "Shiny",
-      "properties": {
-        "shiny.previewType": {
-          "scope": "window",
-          "type": "string",
-          "description": "Where should the Shiny app preview open?",
-          "enum": [
-            "internal",
-            "external",
-            "none"
-          ],
-          "default": "internal",
-          "enumDescriptions": [
-            "Preview using a side-by-side panel inside VS Code",
-            "Preview using an external web browser",
-            "Don't automatically launch the app after starting"
-          ]
-        },
-        "shiny.python.port": {
-          "type": "integer",
-          "default": 0,
-          "description": "The port number Shiny should listen on when running a Shiny for Python app. (Use 0 to choose a random port.)"
-        },
-        "shiny.python.autoreloadPort": {
-          "type": "integer",
-          "default": 0,
-          "description": "The port number Shiny should use for a supplemental WebSocket channel it uses to support reload-on-save. (Use 0 to choose a random port.)"
-        },
-        "shiny.python.debugJustMyCode": {
-          "type": "boolean",
-          "default": true,
-          "description": "When running the \"Debug Shiny App\" command, only step through user-written code. Disable this to allow stepping through library code."
-        },
-        "shiny.r.port": {
-          "type": "integer",
-          "default": 0,
-          "description": "The port number Shiny should listen on when running a Shiny for R app. (Use 0 to choose a random port.)"
-        },
-        "shiny.r.devmode": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
-        },
-        "shiny.shinylive.appMode": {
-          "type": "string",
-          "default": "ask",
-          "description": "Which Shinylive mode to use when creating a Shinylive app.",
-          "enum": [
-            "ask",
-            "app",
-            "editor"
-          ],
-          "enumDescriptions": [
-            "Ask which mode to use.",
-            "App mode displays only the app with an optional header.",
-            "Editor mode displays the app alongside an editor and console."
-          ]
-        },
-        "shiny.shinylive.openAction": {
-          "type": "string",
-          "default": "ask",
-          "description": "Choose the default action upon creating a Shinylive link.",
-          "enum": [
-            "ask",
-            "open",
-            "copy"
-          ],
-          "enumDescriptions": [
-            "Ask which action to take.",
-            "Open the link in the default browser.",
-            "Copy the link to the clipboard."
-          ]
-        },
-        "shiny.shinylive.includeHeader": {
-          "type": "boolean",
-          "default": true,
-          "description": "Include the Shiny header when creating Shinylive app links. Only relevant for app mode Shinylive links."
-        },
-        "shiny.shinylive.host": {
-          "type": "string",
-          "default": "https://shinylive.io",
-          "description": "The default Shinylive host to use when creating Shinylive app links.",
-          "enum": [
-            "https://shinylive.io",
-            "https://posit-dev.github.io/shinylive"
-          ],
-          "enumDescriptions": [
-            "Uses the latest released version of Shiny in Python or R.",
-            "Uses the latest development version of Shiny in Python or R."
-          ]
-        }
-      }
-    }
-  },
+  "contributes": {},
   "scripts": {
     "vscode:prepublish": "yarn run compile",
     "compile": "tsc -p ./",
@@ -217,25 +34,14 @@
     "vsix": "npx @vscode/vsce package"
   },
   "devDependencies": {
-    "@types/glob": "^8.1.0",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "20.11.22",
     "@types/vscode": "^1.66.0",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "@typescript-eslint/parser": "^7.1.0",
-    "@vscode/test-electron": "^2.1.3",
     "eslint": "^8.11.0",
-    "glob": "^10.3.10",
-    "mocha": "^10.3.0",
     "typescript": "^5.3.3"
   },
-  "extensionDependencies": [],
-  "dependencies": {
-    "@types/winreg": "^1.2.36",
-    "@vscode/python-extension": "^1.0.5",
-    "fs": "^0.0.1-security",
-    "istextorbinary": "^9.5.0",
-    "lz-string": "^1.5.0",
-    "winreg": "^1.2.5"
-  }
+  "extensionDependencies": [
+    "Posit.shiny"
+  ],
+  "dependencies": {}
 }

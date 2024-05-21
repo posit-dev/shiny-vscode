@@ -22,10 +22,7 @@
   "activationEvents": [
     "onStartupFinished",
     "onLanguage:python",
-    "onCommand:shiny.python.runApp",
-    "onCommand:shiny.python.debugApp",
-    "onLanguage:r",
-    "onCommand:shiny.r.runApp"
+    "onLanguage:r"
   ],
   "main": "./out/extension.js",
   "contributes": {

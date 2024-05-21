@@ -182,7 +182,8 @@ export function isShinyAppRPart(filename: string): boolean {
 }
 
 async function checkForOutdatedShinyExtension(): Promise<boolean> {
-  if (!vscode.extensions.getExtension("Posit.shiny-python")) {
+  const oldExtension = vscode.extensions.getExtension("Posit.shiny-python");
+  if (!oldExtension || !oldExtension.isActive) {
     return false;
   }
 

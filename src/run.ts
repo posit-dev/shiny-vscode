@@ -333,7 +333,7 @@ function getActiveEditorFile(): string | undefined {
 
 function getExtensionPath(): string | undefined {
   const extensionPath =
-    vscode.extensions.getExtension("Posit.shiny-python")?.extensionPath;
+    vscode.extensions.getExtension("Posit.shiny")?.extensionPath;
   if (!extensionPath) {
     vscode.window.showErrorMessage(
       "Cannot run Shiny app: failed to locate extension directory"

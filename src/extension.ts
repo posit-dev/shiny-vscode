@@ -7,7 +7,9 @@ import {
   shinyliveCreateFromExplorer,
 } from "./shinylive";
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
+  await checkForOutdatedShinyExtension();
+
   context.subscriptions.push(
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
@@ -177,4 +179,31 @@ export function isShinyAppUsername(
 export function isShinyAppRPart(filename: string): boolean {
   filename = path.basename(filename);
   return ["ui.r", "server.r", "global.r"].includes(filename.toLowerCase());
+}
+
+async function checkForOutdatedShinyExtension(): Promise<boolean> {
+  if (!vscode.extensions.getExtension("Posit.shiny-python")) {
+    return false;
+  }
+
+  const response = await vscode.window.showInformationMessage(
+    "You have both the Shiny and Shiny for Python extension, but the Shiny for Python extension is deprecated. Please disable or uninstall it.",
+    "Uninstall old",
+    "Manually disable"
+  );
+
+  if (response === "Manually disable") {
+    vscode.commands.executeCommand(
+      "workbench.extensions.search",
+      "Posit.shiny-python"
+    );
+    return true;
+  }
+
+  vscode.commands.executeCommand(
+    "workbench.extensions.uninstallExtension",
+    "Posit.shiny-python"
+  );
+
+  return false;
 }

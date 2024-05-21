@@ -20,6 +20,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onLanguage:python",
     "onCommand:shiny.python.runApp",
     "onCommand:shiny.python.debugApp",

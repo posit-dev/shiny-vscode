@@ -2,9 +2,9 @@
 
 ## 0.3.0
 
-We've renamed this extension from `Posit.shiny-python` to `Posit.shiny`! New Shiny users should install the [Shiny extension](https://marketplace.visualstudio.com/items?itemName=Posit.shiny) instead of this one.
+We've renamed this extension from `Posit.shiny-python` to `Posit.shiny`! New Shiny users should install the Shiny extension from [the VS Code marketplace](https://marketplace.visualstudio.com/items?itemName=Posit.shiny) or [https://open-vsx.org/extension/posit/shiny](https://open-vsx.org/extension/posit/shiny) instead of this one.
 
-If you previously used the old extension, upgrading to the latest version will automatically install the new extension and prompt you to uninstall the outdated version.
+If you previously used the old extension, upgrading to the latest version will automatically install the new extension and uninstall the outdated version.
 
 Apologies for any inconvenience! We promise this is the last time we'll change the extension's name.
 

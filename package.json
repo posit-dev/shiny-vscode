@@ -20,9 +20,11 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
     "onLanguage:python",
-    "onLanguage:r"
+    "onCommand:shiny.python.runApp",
+    "onCommand:shiny.python.debugApp",
+    "onLanguage:r",
+    "onCommand:shiny.r.runApp"
   ],
   "main": "./out/extension.js",
   "contributes": {

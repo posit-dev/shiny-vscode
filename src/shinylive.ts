@@ -181,7 +181,7 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
 
   const doc = await vscode.workspace.openTextDocument(localFiles[0]);
 
-  await vscode.window.showTextDocument(doc, 2, false);
+  await vscode.window.showTextDocument(doc, undefined, false);
 }
 
 function filesAreNotSingleDir(files: ShinyliveFile[]): boolean {

@@ -32,7 +32,7 @@ jobs:
   publish-open-vsx:
     runs-on: ubuntu-latest
     if: ${{
-      (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
+      (github.event_name == 'push' && github.ref_type == 'tag' && github.repository_owner == 'posit-dev') ||
       github.event.pull_request.head.repo.fork == false
       }}
     needs:
@@ -50,12 +50,11 @@ jobs:
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
           skipDuplicate: true
-          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
 
   publish-vscode-marketplace:
     runs-on: ubuntu-latest
     if: ${{
-      (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
+      (github.event_name == 'push' && github.ref_type == 'tag' && github.repository_owner == 'posit-dev') ||
       github.event.pull_request.head.repo.fork == false
       }}
     needs:
@@ -74,4 +73,3 @@ jobs:
           pat: ${{ secrets.VSCE_PAT }}
           skipDuplicate: true
           registryUrl: https://marketplace.visualstudio.com
-          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}

@@ -10,7 +10,7 @@ on:
 
 name: Deploy Extension
 jobs:
-  deploy:
+  build-vsix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,23 +27,51 @@ jobs:
         with:
           name: shiny-vscode
           path: "shiny*.vsix"
+          
+  publish-open-vsx:
+    runs-on: ubuntu-latest
+    if: ${{
+      (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
+      github.event.pull_request.head.repo.fork == false
+      }}
+    needs:
+      - build-vsix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+      - run: yarn install --immutable --immutable-cache --check-cache
+
+      - name: Build Extension
+        run: yarn vsix
 
       - name: Publish to Open VSX Registry
         uses: HaaLeo/publish-vscode-extension@v1
-        if: ${{
-          (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
-          github.event.pull_request.head.repo.fork == false
-          }}
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
           dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
+  
+  publish-vscode-marketplace:
+    runs-on: ubuntu-latest
+    if: ${{
+      (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
+      github.event.pull_request.head.repo.fork == false
+      }}
+    needs:
+      - build-vsix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+      - run: yarn install --immutable --immutable-cache --check-cache
 
+      - name: Build Extension
+        run: yarn vsix
+        
       - name: Publish to Visual Studio Marketplace
         uses: HaaLeo/publish-vscode-extension@v1
-        if: ${{
-          (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
-          github.event.pull_request.head.repo.fork == false
-          }}
         with:
           pat: ${{ secrets.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com

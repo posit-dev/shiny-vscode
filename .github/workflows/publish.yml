@@ -20,6 +20,9 @@ jobs:
 
       - run: yarn install --immutable --immutable-cache --check-cache
 
+      - name: Lint Extension
+        run: yarn lint
+
       - name: Build Extension
         run: yarn vsix
 

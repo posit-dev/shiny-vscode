@@ -17,7 +17,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "18.x"
+
       - run: yarn install --immutable --immutable-cache --check-cache
+
+      - name: Lint Extension
+        run: yarn lint
 
       - name: Build Extension
         run: yarn vsix
@@ -27,13 +31,13 @@ jobs:
         with:
           name: shiny-vscode
           path: "shiny*.vsix"
-          
+
   publish-open-vsx:
     runs-on: ubuntu-latest
-    if: ${{
-      (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
-      github.event.pull_request.head.repo.fork == false
-      }}
+    if: |
+      github.event_name == 'push' &&
+      github.ref_type == 'tag' &&
+      github.repository_owner == 'posit-dev'
     needs:
       - build-vsix
     steps:
@@ -41,23 +45,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "18.x"
-      - run: yarn install --immutable --immutable-cache --check-cache
 
-      - name: Build Extension
-        run: yarn vsix
+      - run: yarn install --immutable --immutable-cache --check-cache
 
       - name: Publish to Open VSX Registry
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
-          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
-  
+          skipDuplicate: true
+
   publish-vscode-marketplace:
     runs-on: ubuntu-latest
-    if: ${{
-      (github.event_name == 'push' && github.repository_owner == 'posit-dev') ||
-      github.event.pull_request.head.repo.fork == false
-      }}
+    if: |
+      github.event_name == 'push' &&
+      github.ref_type == 'tag' &&
+      github.repository_owner == 'posit-dev'
     needs:
       - build-vsix
     steps:
@@ -65,14 +67,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "18.x"
+
       - run: yarn install --immutable --immutable-cache --check-cache
 
-      - name: Build Extension
-        run: yarn vsix
-        
       - name: Publish to Visual Studio Marketplace
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.VSCE_PAT }}
+          skipDuplicate: true
           registryUrl: https://marketplace.visualstudio.com
-          dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}

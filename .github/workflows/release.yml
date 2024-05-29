@@ -1,0 +1,29 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+
+      - run: yarn install --immutable --immutable-cache --check-cache
+
+      - name: Build Extension
+        id: vsix
+        run: |
+          yarn vsix
+          echo "vsix_path=$(ls *.vsix)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload assets to release
+        uses: Shopify/upload-to-release@v2.0.0
+        with:
+          name: ${{ steps.vsix.outputs.vsix_path }}
+          path: ${{ steps.vsix.outputs.vsix_path }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

@@ -181,7 +181,7 @@ export async function shinyliveSaveAppFromUrl(): Promise<void> {
 
   const doc = await vscode.workspace.openTextDocument(localFiles[0]);
 
-  await vscode.window.showTextDocument(doc, 2, false);
+  await vscode.window.showTextDocument(doc, undefined, false);
 }
 
 function filesAreNotSingleDir(files: ShinyliveFile[]): boolean {
@@ -542,12 +542,10 @@ function shinyliveUrlDecode(url: string): ShinyliveBundle | undefined {
   });
 
   const pathParts = pathname.split("/");
+  const language: ShinyliveLanguage = pathParts.includes("py") ? "py" : "r";
+  const mode: ShinyliveMode = pathParts.includes("editor") ? "editor" : "app";
 
-  return {
-    language: pathParts[1] as ShinyliveLanguage,
-    files: files as ShinyliveFile[],
-    mode: pathParts[2] as ShinyliveMode,
-  };
+  return { language, mode, files: files as ShinyliveFile[] };
 }
 
 /**

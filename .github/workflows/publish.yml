@@ -49,6 +49,7 @@ jobs:
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
+          skipDuplicate: true
           dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}
 
   publish-vscode-marketplace:
@@ -71,5 +72,6 @@ jobs:
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           pat: ${{ secrets.VSCE_PAT }}
+          skipDuplicate: true
           registryUrl: https://marketplace.visualstudio.com
           dryRun: ${{ !(github.event_name == 'push' && github.ref_type == 'tag') }}

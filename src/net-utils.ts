@@ -51,7 +51,7 @@ export async function openBrowserWhenReady(
   ...additionalPorts: number[]
 ): Promise<void> {
   const portsOpen = [port, ...additionalPorts].map((p) =>
-    retryUntilTimeout(10000, () => isPortOpen("127.0.0.1", p))
+    retryUntilTimeout(60000, () => isPortOpen("127.0.0.1", p))
   );
   const portsOpenResult = await Promise.all(portsOpen);
   if (portsOpenResult.filter((p) => !p).length > 0) {

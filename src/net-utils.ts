@@ -4,7 +4,7 @@ import { AddressInfo } from "net";
 import * as vscode from "vscode";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
 import { retryUntilTimeout } from "./retry-utils";
-import { getExtensionHostPreview } from "./extension-api-utils/extensionHostPreview";
+import { getExtensionHostPreview } from "./extension-api-utils/extensionHost";
 
 /**
  * Tests if a port is open on a host, by trying to connect to it with a TCP

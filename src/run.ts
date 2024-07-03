@@ -10,6 +10,7 @@ import {
 } from "./shell-utils";
 import { getAppPort, getAutoreloadPort } from "./port-settings";
 import * as winreg from "winreg";
+import { getPositronPreferredRuntime } from "./extension-api-utils/extensionHost";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -345,11 +346,30 @@ function getExtensionPath(): string | undefined {
 
 async function getRBinPath(bin: string): Promise<string> {
   return (
+    (await getRPathFromPositron(bin)) ||
     getRPathFromConfig(bin) ||
     getRPathFromEnv(bin) ||
     (await getRPathFromWindowsReg(bin)) ||
     ""
   );
+}
+
+async function getRPathFromPositron(bin: string): Promise<string> {
+  const runtimeMetadata = await getPositronPreferredRuntime("r");
+  if (!runtimeMetadata) {
+    return "";
+  }
+
+  console.log(`[shiny] runtimeMetadata: ${JSON.stringify(runtimeMetadata)}`)
+
+  const runtimePath = runtimeMetadata.runtimePath;
+  if (!runtimePath) {
+    return "";
+  }
+
+  const { platform } = process;
+  const fileExt = platform === "win32" ? ".exe" : "";
+  return path_join(path_dirname(runtimePath), bin + fileExt);
 }
 
 function getRPathFromConfig(bin: string): string {

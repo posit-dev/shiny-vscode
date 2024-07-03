@@ -344,7 +344,37 @@ function getExtensionPath(): string | undefined {
 }
 
 async function getRBinPath(bin: string): Promise<string> {
-  return getRPathFromEnv(bin) || (await getRPathFromWindowsReg(bin)) || "";
+  return (
+    getRPathFromConfig(bin) ||
+    getRPathFromEnv(bin) ||
+    (await getRPathFromWindowsReg(bin)) ||
+    ""
+  );
+}
+
+function getRPathFromConfig(bin: string): string {
+  const { platform } = process;
+  const fileExt = platform === "win32" ? ".exe" : "";
+  let osType: string;
+
+  switch (platform) {
+    case "win32":
+      osType = "windows";
+      break;
+    case "darwin":
+      osType = "mac";
+      break;
+    default:
+      osType = "linux";
+  }
+
+  const rPath = vscode.workspace
+    .getConfiguration("r.rpath")
+    .get(osType, undefined);
+
+  console.log(`[shiny] rPath: ${rPath}`);
+
+  return rPath ? path_join(path_dirname(rPath), bin + fileExt) : "";
 }
 
 function getRPathFromEnv(bin: string = "R"): string {

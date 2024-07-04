@@ -81,10 +81,10 @@ export async function pyRunApp(): Promise<void> {
     //
     // So that's what we do on Cloudspaces: send the browser to the autoreload
     // port instead of the main port.
-    await openBrowserWhenReady(autoreloadPort, port);
+    await openBrowserWhenReady(autoreloadPort, [port], terminal);
   } else {
     // For non-Cloudspace environments, simply go to the main port.
-    await openBrowserWhenReady(port, autoreloadPort);
+    await openBrowserWhenReady(port, [autoreloadPort], terminal);
   }
 }
 
@@ -187,7 +187,7 @@ export async function rRunApp(): Promise<void> {
 
   // if (process.env["CODESPACES"] === "true") {
   // TODO: Support Codespaces
-  await openBrowserWhenReady(port);
+  await openBrowserWhenReady(port, [], terminal);
 }
 
 /* Utilities --------------------------------------------------------- */

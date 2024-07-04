@@ -39,6 +39,16 @@ async function isPortOpen(
   });
 }
 
+async function isTerminalClosed(terminal: vscode.Terminal): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    vscode.window.onDidCloseTerminal((term) => {
+      if (term === terminal) {
+        resolve(true);
+      }
+    });
+  });
+}
+
 /**
  * Opens a browser for the specified port, once that port is open. Handles
  * translating http://localhost:<port> into a proxy URL, if necessary.
@@ -48,14 +58,47 @@ async function isPortOpen(
  */
 export async function openBrowserWhenReady(
   port: number,
-  ...additionalPorts: number[]
+  additionalPorts: number[] = [],
+  terminal?: vscode.Terminal
 ): Promise<void> {
-  const portsOpen = [port, ...additionalPorts].map((p) =>
-    retryUntilTimeout(10000, () => isPortOpen("127.0.0.1", p))
-  );
-  const portsOpenResult = await Promise.all(portsOpen);
+  const portsOpenResult = await vscode.window.withProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: "Waiting for Shiny app to start...",
+    cancellable: false,
+  }, async () => {
+    const portsOpen = [port, ...additionalPorts].map((p) =>
+      retryUntilTimeout(10000, () => isPortOpen("127.0.0.1", p))
+    );
+
+    if (terminal) {
+      return Promise.race([isTerminalClosed(terminal), Promise.all(portsOpen)]);
+    } else {
+      return Promise.all(portsOpen);
+    }
+  });
+
+  if (terminal?.exitStatus !== undefined) {
+    console.warn("[shiny] Terminal has been closed, not launching browser");
+    return;
+  }
+
   if (portsOpenResult.filter((p) => !p).length > 0) {
-    console.warn("Failed to connect to Shiny app, not launching browser");
+    const action = await vscode.window.showErrorMessage(
+      "Shiny app took longer than 10s to start, not launching browser.",
+      terminal ? "Show Shiny process" : "",
+      "Keep waiting"
+    );
+    if (action === "Keep waiting") {
+      if (terminal?.exitStatus !== undefined) {
+        vscode.window.showErrorMessage("Shiny terminal was closed, please run the app again.");
+        return;
+      }
+      return openBrowserWhenReady(port, additionalPorts, terminal);
+    }
+    if (action === "Show Shiny process") {
+      terminal?.show();
+    }
+    console.warn("[shiny] Failed to connect to Shiny app, not launching browser");
     return;
   }
 

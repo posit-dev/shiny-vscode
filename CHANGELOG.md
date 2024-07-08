@@ -1,5 +1,9 @@
 # Change Log
 
+## [UNRELEASED]
+
+* Improved feedback when waiting for a slow Shiny app to start up. ([#62](https://github.com/posit-dev/shiny-vscode/issues/62))
+
 ## 1.0.0
 
 The Shiny extension for VS Code now has a new extension ID: `Posit.shiny`! New Shiny users should install the Shiny extension from [the VS Code marketplace](https://marketplace.visualstudio.com/items?itemName=Posit.shiny) or [https://open-vsx.org/extension/posit/shiny](https://open-vsx.org/extension/posit/shiny).

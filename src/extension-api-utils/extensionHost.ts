@@ -45,10 +45,6 @@ export async function getPositronPreferredRuntime(languageId: string): Promise<L
     return await pst.runtime.getPreferredRuntime(languageId);
 }
 
-function getPositronAPI(): void | any {
-    if (!(typeof globalThis === "object")) { return; }
-    if (!("acquirePositronApi" in globalThis)) { return; }
-    if (typeof globalThis.acquirePositronApi !== "function") { return; }
-
-    return globalThis.acquirePositronApi();
+function getPositronAPI(): undefined | any {
+    return globalThis?.acquirePositronApi();
 }

@@ -39,7 +39,7 @@ async function isPortOpen(
   });
 }
 
-async function isTerminalClosed(terminal: vscode.Terminal): Promise<boolean> {
+async function getTerminalClosedPromise(terminal: vscode.Terminal): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     vscode.window.onDidCloseTerminal((term) => {
       if (term === terminal) {
@@ -76,7 +76,7 @@ export async function openBrowserWhenReady(
       if (!terminal) {
         return portsOpenPromise;
       } else {
-        return Promise.race([portsOpenPromise, isTerminalClosed(terminal)]);
+        return Promise.race([portsOpenPromise, getTerminalClosedPromise(terminal)]);
       }
     }
   );

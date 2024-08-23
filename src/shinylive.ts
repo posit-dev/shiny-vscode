@@ -163,18 +163,23 @@ export async function shinyliveSaveAppFromUrl(
     return;
   }
 
-  let outputDir = await askUserForOutputLocation(
-    files.length === 1 ? files[0].name : undefined
-  );
+  const isSingleFileApp = files.length === 1;
+
+  let outputDir: vscode.Uri | undefined;
+
+  if (isSingleFileApp) {
+    const outputFile = await askUserForOutputFile(files[0].name);
+    if (outputFile) {
+      // Rename the file in the app bundle to match the user's requested file name
+      files[0].name = path.basename(outputFile.path);
+      outputDir = outputFile.with({ path: path.dirname(outputFile.path) });
+    }
+  } else {
+    outputDir = await askUserForOutputDirectory();
+  }
 
   if (!outputDir) {
     return;
-  }
-
-  if (files.length === 1 && path.parse(outputDir.path).ext) {
-    // update the `name` of the file in the app to the user's selection
-    files[0].name = path.basename(outputDir.path);
-    outputDir = outputDir.with({ path: path.dirname(outputDir.path) });
   }
 
   const localFiles = await shinyliveWriteFiles(
@@ -427,35 +432,27 @@ async function askUserForUrl(): Promise<string> {
 let lastUsedDir: vscode.Uri;
 
 /**
- * Ask the user for an output location where the Shinylive app will be saved.
- *
- * Single-file apps can be saved as a file, which also lets the user overwrite
- * existing files. Multi-file apps are saved as directories and VSCode will
- * force the user to pick a non-existent directory.
+ * Ask the user for an output location where a single-file Shinylive app will be
+ * saved.
  *
  * @async
- * @param {string} [singleFileName] If the app is a single file, the name of the
+ * @param {string} [defaultName] If the app is a single file, the name of the
  * file to save. This will be used as the default file name in the save dialog.
  * @returns {Promise<vscode.Uri | undefined>} A `vscode.Uri` object of the
  * selected directory, or `undefined` if the user canceled the selection.
  */
-async function askUserForOutputLocation(
-  singleFileName: string | undefined = undefined
+async function askUserForOutputFile(
+  defaultName: string
 ): Promise<vscode.Uri | undefined> {
-  let defaultUri = lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri;
-
-  if (singleFileName) {
-    defaultUri = vscode.Uri.joinPath(defaultUri, singleFileName);
-  }
+  const initDir = lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri;
+  const defaultUri = vscode.Uri.joinPath(initDir, defaultName);
 
   const uri = await vscode.window.showSaveDialog({
     defaultUri: defaultUri,
-    saveLabel: singleFileName ? "App file" : "App directory",
-    title: singleFileName
-      ? "Choose a path for the Shinylive app"
-      : "Choose a directory for the Shinylive app and files",
-    filters: singleFileName
-      ? singleFileName.endsWith(".py")
+    saveLabel: "App file",
+    title: "Choose a path for the Shinylive app",
+    filters: defaultName
+      ? defaultName.endsWith(".py")
         ? // eslint-disable-next-line @typescript-eslint/naming-convention
           { Python: ["py"] }
         : // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -466,15 +463,41 @@ async function askUserForOutputLocation(
   if (!uri) {
     // Reset the last used directory if the user cancels, otherwise they can
     // get stuck in the "local" directory picker on remote vscode instances
-    lastUsedDir =
-      vscode.workspace.workspaceFolders?.[0].uri || vscode.Uri.file(".");
+    lastUsedDir = initDir || vscode.Uri.file(".");
 
     return;
   }
 
-  const uriIsDir = path.parse(uri.path).ext === "";
+  lastUsedDir = uri.with({ path: path.dirname(uri.path) });
+  return uri;
+}
 
-  if (uri.scheme !== "file" && uriIsDir) {
+/**
+ * Ask the user for an output directory where a multi-file Shinylive app will be
+ * saved. VSCode will force the user to pick a non-existent directory.
+ *
+ * @async
+ * @returns {Promise<vscode.Uri | undefined>} A `vscode.Uri` object of the
+ * selected directory, or `undefined` if the user canceled the selection.
+ */
+async function askUserForOutputDirectory(): Promise<vscode.Uri | undefined> {
+  let defaultUri = lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri;
+
+  const uri = await vscode.window.showSaveDialog({
+    defaultUri: defaultUri,
+    saveLabel: "App directory",
+    title: "Choose a directory for the Shinylive app and files",
+  });
+
+  if (!uri) {
+    // Reset the last used directory if the user cancels, otherwise they can
+    // get stuck in the "local" directory picker on remote vscode instances
+    lastUsedDir = defaultUri || vscode.Uri.file(".");
+
+    return;
+  }
+
+  if (uri.scheme !== "file") {
     vscode.window.showErrorMessage(
       "Shinylive: Remote directories are not supported at this time. " +
         "Please save the app locally instead."
@@ -482,18 +505,16 @@ async function askUserForOutputLocation(
     return;
   }
 
-  if (uriIsDir && !singleFileName) {
-    try {
-      await vscode.workspace.fs.createDirectory(uri);
-    } catch (error) {
-      vscode.window.showErrorMessage(
-        `Shinylive failed to create new directory "${uri.toString()}". ${error}`
-      );
-      return;
-    }
+  try {
+    await vscode.workspace.fs.createDirectory(uri);
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Shinylive failed to create new directory "${uri.toString()}". ${error}`
+    );
+    return;
   }
 
-  lastUsedDir = uriIsDir ? uri : uri.with({ path: path.dirname(uri.path) });
+  lastUsedDir = uri;
   return uri;
 }
 

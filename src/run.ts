@@ -372,7 +372,7 @@ async function getRPathFromPositron(bin: string): Promise<string> {
     return "";
   }
 
-  console.log(`[shiny] runtimeMetadata: ${JSON.stringify(runtimeMetadata)}`)
+  console.log(`[shiny] runtimeMetadata: ${JSON.stringify(runtimeMetadata)}`);
 
   const runtimePath = runtimeMetadata.runtimePath;
   if (!runtimePath) {

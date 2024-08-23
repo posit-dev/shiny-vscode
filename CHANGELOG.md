@@ -6,6 +6,8 @@
 
 - Improved feedback when waiting for a slow Shiny app to start up. ([#65](https://github.com/posit-dev/shiny-vscode/pull/65))
 
+- `shiny.previewType` now explicitly includes `"internal"` and `"simple browser"` as distinct options, where `"simple browser"` ensures that the built-in Simple Browser extension is used for previews. In Positron, `"internal"` uses the Viewer pane; in other VS Code instances `"internal"` and `"simple browser"` are equivalent. ([#69](https://github.com/posit-dev/shiny-vscode/pull/69))
+
 ## 1.0.0
 
 The Shiny extension for VS Code now has a new extension ID: `Posit.shiny`! New Shiny users should install the Shiny extension from [the VS Code marketplace](https://marketplace.visualstudio.com/items?itemName=Posit.shiny) or [https://open-vsx.org/extension/posit/shiny](https://open-vsx.org/extension/posit/shiny).

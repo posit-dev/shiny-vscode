@@ -6,6 +6,8 @@
 
 - Improved feedback when waiting for a slow Shiny app to start up. ([#65](https://github.com/posit-dev/shiny-vscode/pull/65))
 
+- The extension can now open Shinylive apps locally from `vscode://posit.shiny/shinylive?url=...` links. ([#70](https://github.com/posit-dev/shiny-vscode/pull/70))
+
 ## 1.0.0
 
 The Shiny extension for VS Code now has a new extension ID: `Posit.shiny`! New Shiny users should install the Shiny extension from [the VS Code marketplace](https://marketplace.visualstudio.com/items?itemName=Posit.shiny) or [https://open-vsx.org/extension/posit/shiny](https://open-vsx.org/extension/posit/shiny).

@@ -504,7 +504,7 @@ async function askUserForOutputLocation(
  * with the language, files, and mode to encode.
  * @returns {string} The encoded Shinylive URL.
  */
-function shinyliveUrlEncode({ language, files, mode }: ShinyliveBundle) {
+export function shinyliveUrlEncode({ language, files, mode }: ShinyliveBundle) {
   const filesJson = JSON.stringify(files);
   const filesLZ = lzstring.compressToEncodedURIComponent(filesJson);
 
@@ -531,7 +531,7 @@ function shinyliveUrlEncode({ language, files, mode }: ShinyliveBundle) {
  * @returns {ShinyliveBundle | undefined} The decoded Shinylive bundle, or
  * `undefined` if the URL could not be decoded.
  */
-function shinyliveUrlDecode(url: string): ShinyliveBundle | undefined {
+export function shinyliveUrlDecode(url: string): ShinyliveBundle | undefined {
   const { hash, pathname } = new URL(url);
   const { searchParams } = new URL(
     "https://shinylive.io/?" + hash.substring(1)

@@ -433,13 +433,13 @@ let lastUsedDir: vscode.Uri;
 
 /**
  * Ask the user for an output location where a single-file Shinylive app will be
- * saved.
+ * saved. VS Code will create non-existent directories and ask the user to
+ * confirm they want to overwrite existing files.
  *
  * @async
- * @param {string} [defaultName] If the app is a single file, the name of the
- * file to save. This will be used as the default file name in the save dialog.
+ * @param {string} [defaultName] The default file name used in the save dialog.
  * @returns {Promise<vscode.Uri | undefined>} A `vscode.Uri` object of the
- * selected directory, or `undefined` if the user canceled the selection.
+ * selected file, or `undefined` if the user canceled the selection.
  */
 async function askUserForOutputFile(
   defaultName: string
@@ -474,7 +474,7 @@ async function askUserForOutputFile(
 
 /**
  * Ask the user for an output directory where a multi-file Shinylive app will be
- * saved. VSCode will force the user to pick a non-existent directory.
+ * saved. VS Code will force the user to pick a non-existent directory.
  *
  * @async
  * @returns {Promise<vscode.Uri | undefined>} A `vscode.Uri` object of the

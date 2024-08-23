@@ -121,12 +121,14 @@
           "description": "Where should the Shiny app preview open?",
           "enum": [
             "internal",
+            "simple browser",
             "external",
             "none"
           ],
           "default": "internal",
           "enumDescriptions": [
-            "Preview using a side-by-side panel inside VS Code",
+            "Preview using the viewer pane in Positron or the Simple Browser in VS Code",
+            "Preview using the Simple Browser (an internal, basic browser preview)",
             "Preview using an external web browser",
             "Don't automatically launch the app after starting"
           ]

@@ -65,11 +65,10 @@ export async function handlePositShinyUri(uri: vscode.Uri): Promise<void> {
     const openAfterReview = await vscode.window.showInformationMessage(
       "After reviewing the Shinylive app, would you like to save it?",
       { modal: true },
-      "No",
       "Yes"
     );
 
-    if (!openAfterReview || openAfterReview === "No") {
+    if (!openAfterReview) {
       return;
     }
     action = "save";

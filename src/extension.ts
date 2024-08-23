@@ -6,6 +6,7 @@ import {
   shinyliveSaveAppFromUrl,
   shinyliveCreateFromExplorer,
 } from "./shinylive";
+import { handlePositShinyUri } from "./extension-onUri";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -23,7 +24,12 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "shiny.shinylive.createFromExplorer",
       shinyliveCreateFromExplorer
-    )
+    ),
+    vscode.window.registerUriHandler({
+      handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
+        handlePositShinyUri(uri);
+      },
+    })
   );
 
   const throttledUpdateContext = new Throttler(2000, () => {

@@ -123,11 +123,19 @@ async function createAndOpenShinyliveLink(
  * files will be saved. The link is decoded and the files are saved into the
  * directory.
  *
+ * @param {string} [url] The Shinylive URL to save the app from. If not provided
+ * the user will be prompted to enter a URL.
+ *
  * @export
  * @async
  */
-export async function shinyliveSaveAppFromUrl(): Promise<void> {
-  const url = await askUserForUrl();
+export async function shinyliveSaveAppFromUrl(
+  url: string | undefined
+): Promise<void> {
+  if (typeof url === "undefined") {
+    url = await askUserForUrl();
+  }
+
   if (!url) {
     return;
   }

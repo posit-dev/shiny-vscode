@@ -6,6 +6,8 @@
 
 - Improved feedback when waiting for a slow Shiny app to start up. ([#65](https://github.com/posit-dev/shiny-vscode/pull/65))
 
+- The "Run Shiny app" command now saves the active file before running the app. ([#68](https://github.com/posit-dev/shiny-vscode/pull/68))
+
 - The extension can now open Shinylive apps locally from `vscode://posit.shiny/shinylive?url=...` links. ([#70](https://github.com/posit-dev/shiny-vscode/pull/70))
 
 ## 1.0.0

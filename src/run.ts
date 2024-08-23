@@ -26,6 +26,8 @@ export async function pyRunApp(): Promise<void> {
     return;
   }
 
+  await saveActiveEditorFile();
+
   const python = await getSelectedPythonInterpreter();
   if (!python) {
     return;
@@ -103,6 +105,8 @@ export async function pyDebugApp(): Promise<void> {
     return;
   }
 
+  await saveActiveEditorFile();
+
   const python = await getSelectedPythonInterpreter();
   if (!python) {
     return;
@@ -136,6 +140,8 @@ export async function rRunApp(): Promise<void> {
   if (!pathFile) {
     return;
   }
+
+  await saveActiveEditorFile();
 
   const path = isShinyAppRPart(pathFile) ? path_dirname(pathFile) : pathFile;
 
@@ -330,6 +336,12 @@ function getActiveEditorFile(): string | undefined {
     return;
   }
   return appPath;
+}
+
+async function saveActiveEditorFile(): Promise<void> {
+  if (vscode.window.activeTextEditor?.document.isDirty) {
+    await vscode.window.activeTextEditor?.document.save();
+  }
 }
 
 function getExtensionPath(): string | undefined {

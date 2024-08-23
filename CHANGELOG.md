@@ -1,5 +1,9 @@
 # Change Log
 
+## [UNRELEASED]
+
+* In Positron, the extension now uses the selected R runtime for Shiny for R apps. In VS Code, the extension also now consults the `r.rpath.mac`, `r.rpath.windows` or `r.rpath.linux` settings to find the R executable, before falling back to system settings. These settings are part of the [R Debugger extension](https://marketplace.visualstudio.com/items?itemName=RDebugger.r-debugger) ([#64](https://github.com/posit-dev/shiny-vscode/pull/64))
+
 ## 1.0.0
 
 The Shiny extension for VS Code now has a new extension ID: `Posit.shiny`! New Shiny users should install the Shiny extension from [the VS Code marketplace](https://marketplace.visualstudio.com/items?itemName=Posit.shiny) or [https://open-vsx.org/extension/posit/shiny](https://open-vsx.org/extension/posit/shiny).

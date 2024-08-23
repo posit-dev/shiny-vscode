@@ -159,7 +159,7 @@ export async function shinyliveSaveAppFromUrl(
     return;
   }
 
-  if (filesAreNotSingleDir(files)) {
+  if (filesAreNotContainedSingleDir(files)) {
     return;
   }
 
@@ -192,7 +192,7 @@ export async function shinyliveSaveAppFromUrl(
   await vscode.window.showTextDocument(doc, undefined, false);
 }
 
-function filesAreNotSingleDir(files: ShinyliveFile[]): boolean {
+function filesAreNotContainedSingleDir(files: ShinyliveFile[]): boolean {
   const bad = files.map((f) => f.name).filter((nm) => nm.startsWith(".."));
 
   if (bad.length) {

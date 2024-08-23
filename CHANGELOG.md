@@ -4,7 +4,7 @@
 
 - In Positron, the extension now uses the selected R runtime for Shiny for R apps. In VS Code, the extension also now consults the `r.rpath.mac`, `r.rpath.windows` or `r.rpath.linux` settings to find the R executable, before falling back to system settings. These settings are part of the [R Debugger extension](https://marketplace.visualstudio.com/items?itemName=RDebugger.r-debugger) ([#64](https://github.com/posit-dev/shiny-vscode/pull/64))
 
-- Improved feedback when waiting for a slow Shiny app to start up. ([#62](https://github.com/posit-dev/shiny-vscode/issues/62))
+- Improved feedback when waiting for a slow Shiny app to start up. ([#65](https://github.com/posit-dev/shiny-vscode/pull/65))
 
 ## 1.0.0
 

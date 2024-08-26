@@ -43,7 +43,6 @@ export async function handlePositShinyUri(uri: vscode.Uri): Promise<void> {
   const reviewAction = await vscode.window.showWarningMessage(
     `You are about to save a Shinylive app with ${filesText} to your workspace. Would you like to...`,
     { modal: true },
-    { title: "Cancel", action: "cancel" },
     { title: "Review the app on shinylive.io", action: "review" },
     {
       title: `Save app ${bundle.files.length === 1 ? "file" : "files"} locally`,

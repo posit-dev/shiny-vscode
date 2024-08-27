@@ -39,7 +39,9 @@ async function isPortOpen(
   });
 }
 
-async function getTerminalClosedPromise(terminal: vscode.Terminal): Promise<boolean> {
+async function getTerminalClosedPromise(
+  terminal: vscode.Terminal
+): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     vscode.window.onDidCloseTerminal((term) => {
       if (term === terminal) {
@@ -55,11 +57,16 @@ async function getTerminalClosedPromise(terminal: vscode.Terminal): Promise<bool
  * @param port The port to open the browser for.
  * @param additionalPorts Additional ports to wait for before opening the
  * browser.
+ * @param timeout Milliseconds to wait for the port to open before letting the
+ * user know something is wrong and asking if they'd like to check on the Shiny
+ * process or keep waiting. We start with a low 10s wait because some apps might
+ * fail quickly, but we increase to 30s if the user chooses to keep waiting.
  */
 export async function openBrowserWhenReady(
   port: number,
   additionalPorts: number[] = [],
-  terminal?: vscode.Terminal
+  terminal?: vscode.Terminal,
+  timeout: number = 10000
 ): Promise<void> {
   const portsOpenResult = await vscode.window.withProgress(
     {
@@ -69,14 +76,17 @@ export async function openBrowserWhenReady(
     },
     async () => {
       const portsOpen = [port, ...additionalPorts].map((p) =>
-        retryUntilTimeout(20000, () => isPortOpen("127.0.0.1", p))
+        retryUntilTimeout(timeout, () => isPortOpen("127.0.0.1", p))
       );
 
       const portsOpenPromise = Promise.all(portsOpen);
       if (!terminal) {
         return portsOpenPromise;
       } else {
-        return Promise.race([portsOpenPromise, getTerminalClosedPromise(terminal)]);
+        return Promise.race([
+          portsOpenPromise,
+          getTerminalClosedPromise(terminal),
+        ]);
       }
     }
   );
@@ -87,8 +97,9 @@ export async function openBrowserWhenReady(
   }
 
   if (portsOpenResult.filter((p) => !p).length > 0) {
+    const timeoutStr = Math.floor(timeout / 1000);
     const action = await vscode.window.showErrorMessage(
-      "Shiny app took longer than 10s to start, not launching browser.",
+      `Shiny app took longer than ${timeoutStr}s to start, not launching browser.`,
       terminal ? "Show Shiny process" : "",
       "Keep waiting"
     );
@@ -99,7 +110,7 @@ export async function openBrowserWhenReady(
         );
         return;
       }
-      return openBrowserWhenReady(port, additionalPorts, terminal);
+      return openBrowserWhenReady(port, additionalPorts, terminal, 30000);
     }
     if (action === "Show Shiny process") {
       terminal?.show();

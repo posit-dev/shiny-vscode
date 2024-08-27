@@ -69,7 +69,7 @@ export async function openBrowserWhenReady(
     },
     async () => {
       const portsOpen = [port, ...additionalPorts].map((p) =>
-        retryUntilTimeout(20000, () => isPortOpen("127.0.0.1", p))
+        retryUntilTimeout(10000, () => isPortOpen("127.0.0.1", p))
       );
 
       const portsOpenPromise = Promise.all(portsOpen);

@@ -57,6 +57,10 @@ async function getTerminalClosedPromise(
  * @param port The port to open the browser for.
  * @param additionalPorts Additional ports to wait for before opening the
  * browser.
+ * @param timeout Milliseconds to wait for the port to open before letting the
+ * user know something is wrong and asking if they'd like to check on the Shiny
+ * process or keep waiting. We start with a low 10s wait because some apps might
+ * fail quickly, but we increase to 30s if the user chooses to keep waiting.
  */
 export async function openBrowserWhenReady(
   port: number,

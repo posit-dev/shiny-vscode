@@ -61,7 +61,8 @@ async function getTerminalClosedPromise(
 export async function openBrowserWhenReady(
   port: number,
   additionalPorts: number[] = [],
-  terminal?: vscode.Terminal
+  terminal?: vscode.Terminal,
+  timeout: number = 10000
 ): Promise<void> {
   const portsOpenResult = await vscode.window.withProgress(
     {
@@ -71,7 +72,7 @@ export async function openBrowserWhenReady(
     },
     async () => {
       const portsOpen = [port, ...additionalPorts].map((p) =>
-        retryUntilTimeout(10000, () => isPortOpen("127.0.0.1", p))
+        retryUntilTimeout(timeout, () => isPortOpen("127.0.0.1", p))
       );
 
       const portsOpenPromise = Promise.all(portsOpen);
@@ -92,8 +93,9 @@ export async function openBrowserWhenReady(
   }
 
   if (portsOpenResult.filter((p) => !p).length > 0) {
+    const timeoutStr = Math.floor(timeout / 1000);
     const action = await vscode.window.showErrorMessage(
-      "Shiny app took longer than 10s to start, not launching browser.",
+      `Shiny app took longer than ${timeoutStr}s to start, not launching browser.`,
       terminal ? "Show Shiny process" : "",
       "Keep waiting"
     );
@@ -104,7 +106,7 @@ export async function openBrowserWhenReady(
         );
         return;
       }
-      return openBrowserWhenReady(port, additionalPorts, terminal);
+      return openBrowserWhenReady(port, additionalPorts, terminal, 30000);
     }
     if (action === "Show Shiny process") {
       terminal?.show();

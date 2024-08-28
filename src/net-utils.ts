@@ -68,6 +68,11 @@ export async function openBrowserWhenReady(
   terminal?: vscode.Terminal,
   timeout: number = 10000
 ): Promise<void> {
+  if (configShinyPreviewType() === "none") {
+    // No need to wait for Shiny app to start or open the browser
+    return;
+  }
+
   const portsOpenResult = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
@@ -92,14 +97,14 @@ export async function openBrowserWhenReady(
   );
 
   if (!Array.isArray(portsOpenResult) || terminal?.exitStatus !== undefined) {
-    console.warn("[shiny] Terminal has been closed, not launching browser");
+    console.warn("[shiny] Terminal has been closed will not launching browser");
     return;
   }
 
   if (portsOpenResult.filter((p) => !p).length > 0) {
     const timeoutStr = Math.floor(timeout / 1000);
     const action = await vscode.window.showErrorMessage(
-      `Shiny app took longer than ${timeoutStr}s to start, not launching browser.`,
+      `Shiny app took longer than ${timeoutStr}s to start so we have not opened the preview.`,
       terminal ? "Show Shiny process" : "",
       "Keep waiting"
     );
@@ -125,10 +130,14 @@ export async function openBrowserWhenReady(
   await openBrowser(previewUrl);
 }
 
+function configShinyPreviewType(): string {
+  return (
+    vscode.workspace.getConfiguration().get("shiny.previewType") || "internal"
+  );
+}
+
 export async function openBrowser(url: string): Promise<void> {
-  const previewType = vscode.workspace
-    .getConfiguration()
-    .get("shiny.previewType");
+  const previewType = configShinyPreviewType();
 
   switch (previewType) {
     case "none":

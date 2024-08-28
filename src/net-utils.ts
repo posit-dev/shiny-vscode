@@ -79,9 +79,21 @@ export async function openBrowserWhenReady(
       title: "Waiting for Shiny app to start...",
       cancellable: false,
     },
-    async () => {
+    async (progress: vscode.Progress<{ increment: number }>) => {
+      let lastProgressReport = Date.now();
+
+      const reportProgress = () => {
+        const now = Date.now();
+        const increment = ((now - lastProgressReport) / timeout) * 100;
+        progress.report({ increment });
+        lastProgressReport = now;
+      };
+
       const portsOpen = [port, ...additionalPorts].map((p) =>
-        retryUntilTimeout(timeout, () => isPortOpen("127.0.0.1", p))
+        retryUntilTimeout(timeout, () => {
+          reportProgress();
+          return isPortOpen("127.0.0.1", p);
+        })
       );
 
       const portsOpenPromise = Promise.all(portsOpen);
@@ -97,7 +109,7 @@ export async function openBrowserWhenReady(
   );
 
   if (!Array.isArray(portsOpenResult) || terminal?.exitStatus !== undefined) {
-    console.warn("[shiny] Terminal has been closed will not launching browser");
+    console.warn("[shiny] Terminal has been closed, will not launch browser");
     return;
   }
 

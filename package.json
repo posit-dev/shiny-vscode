@@ -227,15 +227,17 @@
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "20.11.22",
-    "@types/vscode": "^1.66.0",
-    "@typescript-eslint/eslint-plugin": "^7.1.0",
-    "@typescript-eslint/parser": "^7.1.0",
+    "@types/vscode": "^1.95.0",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
     "@vscode/test-electron": "^2.1.3",
     "esbuild": "^0.24.0",
-    "eslint": "^8.11.0",
+    "eslint": "^9.15.0",
     "glob": "^10.3.10",
     "mocha": "^10.3.0",
-    "typescript": "^5.3.3"
+    "prettier": "^3.3.3",
+    "prettier-plugin-organize-imports": "^4.1.0",
+    "typescript": "^5.7.2"
   },
   "extensionDependencies": [],
   "dependencies": {

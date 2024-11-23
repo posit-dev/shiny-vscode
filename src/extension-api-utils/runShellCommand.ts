@@ -8,17 +8,16 @@ type ProcOutput = {
   stdout: string[];
   stderr: string[];
 };
-type CommandOutput =
-  | (
-      | {
-          status: "success";
-        }
-      | {
-          status: "error";
-          errorMsgs: string;
-        }
-    ) &
-      ProcOutput;
+type CommandOutput = (
+  | {
+      status: "success";
+    }
+  | {
+      status: "error";
+      errorMsgs: string;
+    }
+) &
+  ProcOutput;
 
 type CommandExecOptions = {
   cmd: string;

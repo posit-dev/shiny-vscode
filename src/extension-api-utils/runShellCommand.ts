@@ -1,4 +1,3 @@
-/* eslint-disable curly */
 /* eslint-disable @typescript-eslint/naming-convention */
 // From https://github.com/rstudio/shinyuieditor/blob/392659a0d936e4e38ac99660e89b0327db45b3a9/inst/vscode-extension/src/extension-api-utils/runShellCommand.ts
 
@@ -50,10 +49,12 @@ export async function runShellCommand({
       cleanup();
       resolve({ status: "success", ...output });
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function onStdout(d: any) {
       logger(`stdout: ${d.toString()}`);
       output.stdout.push(d.toString());
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function onStderr(d: any) {
       logger(`stderr: ${d.toString()}`);
       output.stderr.push(d.toString());
@@ -90,7 +91,6 @@ export async function runShellCommand({
 function makeLogger(verbose: boolean, prefix: string) {
   return (msg: string) => {
     if (verbose) {
-      // eslint-disable-next-line no-console
       console.log(prefix + msg);
     }
   };

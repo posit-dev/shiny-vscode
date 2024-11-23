@@ -26,8 +26,8 @@ export function activate(context: vscode.ExtensionContext) {
       shinyliveCreateFromExplorer
     ),
     vscode.window.registerUriHandler({
-      handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
-        handlePositShinyUri(uri);
+      async handleUri(uri: vscode.Uri): Promise<void> {
+        await handlePositShinyUri(uri);
       },
     })
   );

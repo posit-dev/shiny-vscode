@@ -481,7 +481,7 @@ async function askUserForOutputFile(
  * selected directory, or `undefined` if the user canceled the selection.
  */
 async function askUserForOutputDirectory(): Promise<vscode.Uri | undefined> {
-  let defaultUri = lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri;
+  const defaultUri = lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri;
 
   const uri = await vscode.window.showSaveDialog({
     defaultUri: defaultUri,
@@ -664,6 +664,7 @@ async function askUserToConfirmOverwrite(filePath: vscode.Uri) {
 
 async function pathExists(file: vscode.Uri): Promise<boolean> {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     typeof (await vscode.workspace.fs.stat(file)).type !== "undefined";
     return true;
   } catch (error) {

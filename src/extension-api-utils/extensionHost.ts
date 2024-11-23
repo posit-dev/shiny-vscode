@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 declare const globalThis: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 };
 
@@ -8,6 +9,7 @@ export interface HostWebviewPanel extends vscode.Disposable {
   readonly webview: vscode.Webview;
   readonly visible: boolean;
   reveal(viewColumn?: vscode.ViewColumn, preserveFocus?: boolean): void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly onDidChangeViewState: vscode.Event<any>;
   readonly onDidDispose: vscode.Event<void>;
 }
@@ -53,6 +55,7 @@ export async function getPositronPreferredRuntime(
   return await pst.runtime.getPreferredRuntime(languageId);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getPositronAPI(): undefined | any {
   if (typeof globalThis?.acquirePositronApi !== "function") {
     return;

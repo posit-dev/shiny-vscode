@@ -62,7 +62,7 @@ export async function pyRunApp(): Promise<void> {
 
   // Clear out the browser. Without this it can be a little confusing as to
   // whether the app is trying to load or not.
-  openBrowser("about:blank");
+  await openBrowser("about:blank");
   // If we start too quickly, openBrowserWhenReady may detect the old Shiny
   // process (in the process of shutting down), not the new one. Give it a
   // second. It's a shame to wait an extra second, but it's only when the Play
@@ -185,7 +185,7 @@ export async function rRunApp(): Promise<void> {
 
   // Clear out the browser. Without this it can be a little confusing as to
   // whether the app is trying to load or not.
-  openBrowser("about:blank");
+  await openBrowser("about:blank");
   // If we start too quickly, openBrowserWhenReady may detect the old Shiny
   // process (in the process of shutting down), not the new one. Give it a
   // second. It's a shame to wait an extra second, but it's only when the Play

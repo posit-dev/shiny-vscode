@@ -13,12 +13,7 @@ const esbuildProblemMatcherPlugin = {
 
   setup(build) {
     build.onStart(() => {
-      console.log(build);
-      console.log(
-        `[${watch ? "watch " : ""}${new Date().toISOString()}] build ${
-          build.initialOptions.entryPoints
-        }`
-      );
+      console.log("[watch] build started");
     });
     build.onEnd((result) => {
       result.errors.forEach(({ text, location }) => {
@@ -27,13 +22,7 @@ const esbuildProblemMatcherPlugin = {
           `    ${location.file}:${location.line}:${location.column}:`
         );
       });
-
-      // Log output files
-      if (result.metafile) {
-        Object.keys(result.metafile.outputs).forEach((output) => {
-          console.log(`built: ${output}`);
-        });
-      }
+      console.log("[watch] build finished");
     });
   },
 };

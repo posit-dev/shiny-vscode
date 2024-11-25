@@ -221,13 +221,13 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "node ./out/test/runTest.js",
-    "vsix": "npx @vscode/vsce package"
+    "vsix": "npx --yes @vscode/vsce package"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "20.11.22",
-    "@types/vscode": "^1.95.0",
+    "@types/vscode": "1.66.0",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
     "@vscode/test-electron": "^2.1.3",

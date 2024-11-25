@@ -1,10 +1,10 @@
 import * as http from "http";
+import type { AddressInfo } from "net";
 import * as net from "net";
-import { AddressInfo } from "net";
 import * as vscode from "vscode";
+import { getExtensionHostPreview } from "./extension-api-utils/extensionHost";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
 import { retryUntilTimeout } from "./retry-utils";
-import { getExtensionHostPreview } from "./extension-api-utils/extensionHost";
 
 /**
  * Tests if a port is open on a host, by trying to connect to it with a TCP
@@ -138,7 +138,7 @@ export async function openBrowserWhenReady(
     return;
   }
 
-  let previewUrl = await getRemoteSafeUrl(port);
+  const previewUrl = await getRemoteSafeUrl(port);
   await openBrowser(previewUrl);
 }
 
@@ -162,7 +162,7 @@ export async function openBrowser(url: string): Promise<void> {
       vscode.env.openExternal(vscode.Uri.parse(url));
       return;
     }
-    // @ts-ignore-next-line
+    // @ts-expect-error Fallthrough case in switch
     case "internal": {
       const hostPreview = getExtensionHostPreview();
       if (hostPreview) {
@@ -200,7 +200,7 @@ export async function suggestPort(): Promise<number> {
     if (!UNSAFE_PORTS.includes(port)) {
       return port;
     }
-  } while (true);
+  } while (true); // eslint-disable-line no-constant-condition
 }
 
 async function closeServer(server: http.Server): Promise<void> {

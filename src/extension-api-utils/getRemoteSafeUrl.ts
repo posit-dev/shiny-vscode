@@ -1,4 +1,3 @@
-/* eslint-disable curly */
 /* eslint-disable @typescript-eslint/naming-convention */
 // From https://github.com/rstudio/shinyuieditor/blob/392659a0d936e4e38ac99660e89b0327db45b3a9/inst/vscode-extension/src/extension-api-utils/getRemoteSafeUrl.ts
 

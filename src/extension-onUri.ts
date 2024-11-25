@@ -1,5 +1,5 @@
-import * as vscode from "vscode";
 import { URLSearchParams } from "url";
+import * as vscode from "vscode";
 import {
   shinyliveSaveAppFromUrl,
   shinyliveUrlDecode,

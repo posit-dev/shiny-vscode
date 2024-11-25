@@ -18,13 +18,13 @@ jobs:
         with:
           node-version: "18.x"
 
-      - run: yarn install --immutable --immutable-cache --check-cache
+      - run: npm ci
 
       - name: Lint Extension
-        run: yarn lint
+        run: npm run lint
 
       - name: Build Extension
-        run: yarn vsix
+        run: npm run vsix
 
       - name: Upload extension to Actions Artifact
         uses: actions/upload-artifact@v4
@@ -46,7 +46,7 @@ jobs:
         with:
           node-version: "18.x"
 
-      - run: yarn install --immutable --immutable-cache --check-cache
+      - run: npm ci
 
       - name: Publish to Open VSX Registry
         uses: HaaLeo/publish-vscode-extension@v1
@@ -68,7 +68,7 @@ jobs:
         with:
           node-version: "18.x"
 
-      - run: yarn install --immutable --immutable-cache --check-cache
+      - run: npm ci
 
       - name: Publish to Visual Studio Marketplace
         uses: HaaLeo/publish-vscode-extension@v1

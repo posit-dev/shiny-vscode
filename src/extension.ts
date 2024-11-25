@@ -1,12 +1,12 @@
-import * as vscode from "vscode";
 import * as path from "path";
-import { pyRunApp, rRunApp, pyDebugApp, onDidStartDebugSession } from "./run";
+import * as vscode from "vscode";
+import { handlePositShinyUri } from "./extension-onUri";
+import { onDidStartDebugSession, pyDebugApp, pyRunApp, rRunApp } from "./run";
 import {
   shinyliveCreateFromActiveEditor,
-  shinyliveSaveAppFromUrl,
   shinyliveCreateFromExplorer,
+  shinyliveSaveAppFromUrl,
 } from "./shinylive";
-import { handlePositShinyUri } from "./extension-onUri";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -26,8 +26,8 @@ export function activate(context: vscode.ExtensionContext) {
       shinyliveCreateFromExplorer
     ),
     vscode.window.registerUriHandler({
-      handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
-        handlePositShinyUri(uri);
+      async handleUri(uri: vscode.Uri): Promise<void> {
+        await handlePositShinyUri(uri);
       },
     })
   );

@@ -3,7 +3,7 @@ export default {
   darkMode: ["class"],
   content: {
     relative: true,
-    files: ["./src/**/*.{html,ts,tsx}"],
+    files: ["./**/*.{html,ts,tsx}"],
   },
   theme: {
     container: {

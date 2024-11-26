@@ -149,13 +149,13 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
   private getHtmlForWebview(webview: vscode.Webview) {
     const scriptPathOnDisk = vscode.Uri.joinPath(
       this.extensionUri,
-      "dist",
+      "out",
       "webview",
       "main.js"
     );
     const stylePathOnDisk = vscode.Uri.joinPath(
       this.extensionUri,
-      "dist",
+      "out",
       "webview",
       "main.css"
     );

@@ -36,23 +36,6 @@
           "title": "Shiny Assistant",
           "icon": "images/assistant-icon.svg"
         }
-      ],
-      "problemMatchers": [
-        {
-          "name": "esbuild-watch",
-          "base": "$esbuild",
-          "label": "esbuild --watch problem matcher",
-          "severity": "error",
-          "applyTo": "closedDocuments",
-          "source": "esbuild",
-          "fileLocation": "relative",
-          "background": {
-            "activeOnStart": true,
-            "endsPattern": {
-              "regexp": "\\[watch\\] build finished"
-            }
-          }
-        }
       ]
     },
     "views": {
@@ -148,6 +131,26 @@
         }
       ]
     },
+    "problemMatchers": [
+      {
+        "name": "esbuild-watch",
+        "base": "$esbuild",
+        "label": "esbuild --watch problem matcher",
+        "severity": "error",
+        "applyTo": "closedDocuments",
+        "source": "esbuild",
+        "fileLocation": "relative",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "\\[watch\\] build started"
+          },
+          "endsPattern": {
+            "regexp": "\\[watch\\] build finished"
+          }
+        }
+      }
+    ],
     "configuration": {
       "title": "Shiny",
       "properties": {
@@ -289,10 +292,13 @@
     "@types/react-dom": "^18.3.1",
     "@types/vscode": "1.66.0",
     "@types/vscode-webview": "^1.57.5",
+    "@types/winreg": "^1.2.36",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
+    "@vscode/python-extension": "^1.0.5",
     "@vscode/test-electron": "^2.1.3",
     "clsx": "^2.1.1",
+    "fs": "^0.0.1-security",
     "concurrently": "^9.1.0",
     "esbuild": "^0.24.0",
     "eslint": "^9.15.0",
@@ -300,6 +306,8 @@
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.14",
     "glob": "^10.3.10",
+    "istextorbinary": "^9.5.0",
+    "lz-string": "^1.5.0",
     "mocha": "^10.3.0",
     "postcss": "^8.4.49",
     "prettier": "^3.3.3",
@@ -311,15 +319,9 @@
     "tailwindcss": "^3.4.15",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.6.3",
-    "typescript-eslint": "^8.15.0"
+    "typescript-eslint": "^8.15.0",
+    "winreg": "^1.2.5"
   },
   "extensionDependencies": [],
-  "dependencies": {
-    "@types/winreg": "^1.2.36",
-    "@vscode/python-extension": "^1.0.5",
-    "fs": "^0.0.1-security",
-    "istextorbinary": "^9.5.0",
-    "lz-string": "^1.5.0",
-    "winreg": "^1.2.5"
-  }
+  "dependencies": {}
 }

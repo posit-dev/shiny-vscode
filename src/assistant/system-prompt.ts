@@ -3,7 +3,7 @@ import * as path from "path";
 import type * as vscode from "vscode";
 
 // The system prompt directory relative to the extension
-const SYSTEM_PROMPT_DIR = ".";
+const SYSTEM_PROMPT_DIR = "assistant-prompts";
 
 interface PromptVariables {
   language: string;
@@ -16,6 +16,7 @@ async function loadLanguageSpecificPrompt(
   language: "r" | "python"
 ): Promise<string> {
   try {
+    console.log(context.extensionPath);
     const promptPath = path.join(
       context.extensionPath,
       SYSTEM_PROMPT_DIR,
@@ -32,6 +33,7 @@ export async function loadSystemPrompt(
   context: vscode.ExtensionContext
 ): Promise<string> {
   try {
+    console.log(context.extensionPath);
     const promptPath = path.join(
       context.extensionPath,
       SYSTEM_PROMPT_DIR,

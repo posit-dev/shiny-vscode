@@ -58,7 +58,7 @@ export default tseslint.config(
   },
   {
     // Browser/React TypeScript files for the webview
-    files: ["webview/src/**/*.{ts,tsx}"],
+    files: ["src/webview/**/*.{ts,tsx}"],
     plugins: {
       react: reactEslint,
       "react-hooks": reactHooks,
@@ -69,7 +69,7 @@ export default tseslint.config(
       globals: globals.browser,
       parserOptions: {
         ...commonTsConfig.parserOptions,
-        project: "./webview/tsconfig.json",
+        project: "src/webview/tsconfig.json",
       },
     },
     settings: {

@@ -46,8 +46,8 @@ const tailwindPlugin = {
       const css = await fs.promises.readFile(args.path, "utf8");
       const result = await postcss([
         tailwindcss({
-          config: "./webview/tailwind.config.js",
-          content: ["./webview/src/**/*.{html,js,jsx,ts,tsx}"],
+          config: "src/webview/tailwind.config.js",
+          content: ["src/webview/src/**/*.{html,js,jsx,ts,tsx}"],
         }),
       ]).process(css, { from: args.path });
       return {
@@ -103,14 +103,14 @@ async function main() {
       plugins: [metafilePlugin, esbuildProblemMatcherPlugin],
     }),
     webview: esbuild.context({
-      entryPoints: ["webview/src/main.tsx"],
+      entryPoints: ["src/webview/main.tsx"],
       outdir: "out/webview/",
       bundle: true,
       format: "esm",
       minify: production,
       sourcemap: !production,
       sourcesContent: false,
-      tsconfig: "webview/tsconfig.json",
+      tsconfig: "src/webview/tsconfig.json",
       external: ["vscode", "vscode-webview"],
       logLevel: "silent",
       metafile: metafile,

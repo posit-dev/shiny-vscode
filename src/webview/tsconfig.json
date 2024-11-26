@@ -22,9 +22,9 @@
     "noUncheckedSideEffectImports": true
   },
   "include": [
-    "src/**/*",
+    "**/*",
     // Need to include these files because we reference some of them from the
     // webview for types.
-    "../src/assistant/**/*"
+    "../assistant/**/*"
   ]
 }

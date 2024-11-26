@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    .msg-assistant {
+      background-color: var(--vscode-editorWidget-background);
+      color: var(--vscode-editorWidget-foreground);
+    }
+    .msg-user {
+      background-color: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border);
+    }
+    .input-textbox {
+      background-color: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border);
+      max-height: 200px;
+      resize: none;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .input-textbox:focus {
+      outline-color: var(--vscode-focusBorder);
+    }
+    .input-send-button {
+      color: var(--vscode-button-secondaryForeground);
+    }
+    .input-send-button:hover {
+      background-color: var(--vscode-button-secondaryHoverBackground);
+    }
+  }
+  pre {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    color: var(--vscode-textPreformat-foreground);
+    background-color: var(--vscode-textPreformat-background);
+    margin: 5px 0;
+    padding: 3px 6px;
+    border: 1px solid var(--vscode-input-border);
+    text-wrap: wrap;
+  }
+  code {
+    font-family: var(--vscode-editor-font-family);
+    background-color: unset; /* Need to override the default background color */
+  }
+  li,
+  ul {
+    list-style: inside;
+  }
+}

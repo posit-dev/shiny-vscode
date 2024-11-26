@@ -4,12 +4,13 @@
     "target": "ES2022",
     "lib": ["ES2022"],
     "sourceMap": true,
-    "rootDir": "src",
     "strict": true,
+    "noEmit": true,
     "skipLibCheck": true,
     "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true
-    // "noUnusedParameters": true
+    "noFallthroughCasesInSwitch": true,
+    "composite": true
   },
-  "exclude": []
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "webview"]
 }

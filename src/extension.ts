@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import { activateAssistant } from "./assistant/extension";
 import { handlePositShinyUri } from "./extension-onUri";
 import { onDidStartDebugSession, pyDebugApp, pyRunApp, rRunApp } from "./run";
 import {
@@ -8,7 +9,8 @@ import {
   shinyliveSaveAppFromUrl,
 } from "./shinylive";
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
+  console.log("Activating Shiny extension");
   context.subscriptions.push(
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
@@ -31,6 +33,8 @@ export function activate(context: vscode.ExtensionContext) {
       },
     })
   );
+
+  await activateAssistant(context);
 
   const throttledUpdateContext = new Throttler(2000, () => {
     updateContext("python");

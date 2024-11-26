@@ -1,4 +1,6 @@
 const esbuild = require("esbuild");
+const postcss = require("postcss");
+const tailwindcss = require("tailwindcss");
 const fs = require("fs");
 
 const production = process.argv.includes("--production");
@@ -27,12 +29,28 @@ const esbuildProblemMatcherPlugin = {
   },
 };
 
+const tailwindPlugin = {
+  name: "tailwind",
+  setup(build) {
+    build.onLoad({ filter: /\.css$/ }, async (args) => {
+      const css = await fs.promises.readFile(args.path, "utf8");
+      const result = await postcss([
+        tailwindcss({
+          config: "./webview/tailwind.config.js",
+          content: ["./webview/src/**/*.{html,js,jsx,ts,tsx}"],
+        }),
+      ]).process(css, { from: args.path });
+      return {
+        contents: result.css,
+        loader: "css",
+      };
+    });
+  },
+};
+
 const metafilePlugin = {
   name: "metafile",
   setup(build) {
-    // const outfile = build.initialOptions.outfile;
-    // const entryPoints = build.initialOptions.entryPoints;
-
     build.onEnd((result) => {
       if (result.metafile) {
         // For each output in the metafile
@@ -74,6 +92,20 @@ async function main() {
       logLevel: "silent",
       metafile: metafile,
       plugins: [metafilePlugin, esbuildProblemMatcherPlugin],
+    }),
+    webview: esbuild.context({
+      entryPoints: ["webview/src/main.tsx"],
+      outdir: "out/webview/",
+      bundle: true,
+      format: "esm",
+      minify: production,
+      sourcemap: !production,
+      sourcesContent: false,
+      tsconfig: "webview/tsconfig.json",
+      external: ["vscode", "vscode-webview"],
+      logLevel: "silent",
+      metafile: metafile,
+      plugins: [tailwindPlugin, metafilePlugin, esbuildProblemMatcherPlugin],
     }),
   };
 

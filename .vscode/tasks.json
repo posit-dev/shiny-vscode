@@ -5,10 +5,7 @@
   "tasks": [
     {
       "label": "watch",
-      "dependsOn": [
-        "npm: watch:esbuild",
-        "npm: watch:tsc"
-      ],
+      "dependsOn": ["npm: watch:esbuild", "npm: watch:tsc"],
       "presentation": {
         "reveal": "never"
       },
@@ -18,12 +15,12 @@
       }
     },
     {
+      "label": "npm: watch:esbuild",
       "type": "npm",
       "script": "watch:esbuild",
       "group": "build",
       "problemMatcher": "$esbuild-watch",
       "isBackground": true,
-      "label": "npm: watch:esbuild",
       "presentation": {
         "group": "watch",
         "reveal": "never"
@@ -33,12 +30,12 @@
       }
     },
     {
+      "label": "npm: watch:tsc",
       "type": "npm",
       "script": "watch:tsc",
       "group": "build",
       "problemMatcher": "$tsc-watch",
       "isBackground": true,
-      "label": "npm: watch:tsc",
       "presentation": {
         "group": "watch",
         "reveal": "never"

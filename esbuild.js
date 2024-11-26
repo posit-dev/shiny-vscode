@@ -14,9 +14,19 @@ const esbuildProblemMatcherPlugin = {
   name: "esbuild-problem-matcher",
 
   setup(build) {
+    let entryPoints = build.initialOptions.entryPoints;
+    if (!Array.isArray(entryPoints)) {
+      entryPoints = [entryPoints];
+    }
+
     build.onStart(() => {
-      console.log("[watch] build started");
+      console.log(
+        `[${watch ? "watch " : ""}${new Date().toISOString()}] build ${entryPoints.join(
+          ", "
+        )}`
+      );
     });
+
     build.onEnd((result) => {
       result.errors.forEach(({ text, location }) => {
         console.error(`✘ [ERROR] ${text}`);
@@ -63,7 +73,6 @@ const metafilePlugin = {
               const bundleName = entryPoint
                 .replace(/^.*[\\/]/, "")
                 .replace(/\.[^/.]+$/, "");
-              console.log(`meta.${bundleName}.json`);
 
               fs.writeFileSync(
                 `${bundleName}.esbuild-meta.json`,

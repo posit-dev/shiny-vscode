@@ -5,7 +5,11 @@
   "tasks": [
     {
       "label": "watch",
-      "dependsOn": ["npm: watch:esbuild", "npm: watch:tsc"],
+      "dependsOn": [
+        "npm: watch:esbuild",
+        "npm: watch:tsc-backend",
+        "npm: watch:tsc-webview"
+      ],
       "presentation": {
         "reveal": "never"
       },
@@ -30,9 +34,24 @@
       }
     },
     {
-      "label": "npm: watch:tsc",
+      "label": "npm: watch:tsc-backend",
       "type": "npm",
-      "script": "watch:tsc",
+      "script": "watch:tsc-backend",
+      "group": "build",
+      "problemMatcher": "$tsc-watch",
+      "isBackground": true,
+      "presentation": {
+        "group": "watch",
+        "reveal": "never"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "npm: watch:tsc-webview",
+      "type": "npm",
+      "script": "watch:tsc-webview",
       "group": "build",
       "problemMatcher": "$tsc-watch",
       "isBackground": true,

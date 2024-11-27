@@ -80,6 +80,13 @@ export default tseslint.config(
     rules: {
       ...commonRules,
       ...reactHooks.configs.recommended.rules,
+      "@typescript-eslint/naming-convention": [
+        "warn",
+        {
+          selector: "function",
+          format: ["camelCase", "PascalCase"],
+        },
+      ],
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       "react-refresh/only-export-components": [

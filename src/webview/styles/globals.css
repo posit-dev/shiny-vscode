@@ -13,19 +13,27 @@
       color: var(--vscode-input-foreground);
       border: 1px solid var(--vscode-input-border);
     }
-    .input-textbox {
+    .input-textbox-container {
       background-color: var(--vscode-input-background);
-      color: var(--vscode-input-foreground);
       border: 1px solid var(--vscode-input-border);
-      max-height: 200px;
+    }
+    .input-textbox-container:has(.input-textbox:focus) {
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: -1px;
+    }
+    .input-textbox {
+      display: block;
+      outline: none;
       resize: none;
-      overflow-y: auto;
-      box-sizing: border-box;
+      background-color: transparent;
+      width: 100%;
+      overflow: hidden;
     }
     .input-textbox:focus {
-      outline-color: var(--vscode-focusBorder);
+      outline: none;
     }
     .input-send-button {
+      display: block;
       color: var(--vscode-button-secondaryForeground);
     }
     .input-send-button:hover {

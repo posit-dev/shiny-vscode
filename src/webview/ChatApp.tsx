@@ -8,8 +8,8 @@ import type {
 const SendIcon = () => (
   <svg
     viewBox='0 0 24 24'
-    width='20'
-    height='20'
+    width='1em'
+    height='1em'
     stroke='currentColor'
     fill='none'
     strokeWidth='2'
@@ -197,21 +197,21 @@ const ChatApp = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className={`flex gap-1`}>
-            <textarea
-              ref={textareaRef}
-              value={inputText}
-              onChange={handleTextareaChange}
-              onKeyDown={handleKeyDown}
-              placeholder='Type your message...'
-              className='flex-1 px-2 py-1 rounded-sm input-textbox'
-              rows={1}
-            />
-            <div className='flex items-end'>
+          <form onSubmit={handleSubmit} className={`flex`}>
+            <div className='input-textbox-container flex-1 relative rounded-sm'>
+              <textarea
+                ref={textareaRef}
+                value={inputText}
+                onChange={handleTextareaChange}
+                onKeyDown={handleKeyDown}
+                placeholder='Type your message...'
+                className='input-textbox w-full px-2 py-1 pr-8'
+                rows={1}
+              />
               <button
                 type='button'
                 onClick={sendMessage}
-                className='p-1 input-send-button rounded-sm'
+                className='input-send-button p-1 rounded-sm absolute m-1 right-0 bottom-0'
                 disabled={!inputText.trim()}
               >
                 <SendIcon />

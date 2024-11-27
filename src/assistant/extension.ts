@@ -232,6 +232,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
         model: vscode.workspace
           .getConfiguration("shiny.assistant")
           .get("anthropicModel") as Model,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         max_tokens: 1024,
         system: systemPrompt,
         messages: state.messages,

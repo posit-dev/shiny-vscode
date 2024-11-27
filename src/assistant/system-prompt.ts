@@ -7,6 +7,7 @@ const SYSTEM_PROMPT_DIR = "assistant-prompts";
 
 interface PromptVariables {
   language: string;
+  // eslint-disable-next-line @typescript-eslint/naming-convention
   language_specific_prompt: string;
   verbosity: string;
 }
@@ -16,7 +17,6 @@ async function loadLanguageSpecificPrompt(
   language: "r" | "python"
 ): Promise<string> {
   try {
-    console.log(context.extensionPath);
     const promptPath = path.join(
       context.extensionPath,
       SYSTEM_PROMPT_DIR,
@@ -33,7 +33,6 @@ export async function loadSystemPrompt(
   context: vscode.ExtensionContext
 ): Promise<string> {
   try {
-    console.log(context.extensionPath);
     const promptPath = path.join(
       context.extensionPath,
       SYSTEM_PROMPT_DIR,
@@ -53,6 +52,7 @@ export async function loadSystemPrompt(
     // Substitute variables
     const variables: PromptVariables = {
       language,
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       language_specific_prompt: languageSpecificPrompt,
       verbosity: "Be very concise in the text.",
     };

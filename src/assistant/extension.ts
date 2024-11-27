@@ -70,11 +70,11 @@ export async function activateAssistant(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider("shiny-assistant.view", provider)
+    vscode.window.registerWebviewViewProvider("shiny.assistant.view", provider)
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("shiny-assistant.clearChat", () => {
+    vscode.commands.registerCommand("shiny.assistant.clearChat", () => {
       provider.clearChat();
     })
   );
@@ -93,7 +93,7 @@ function saveState(context: vscode.ExtensionContext) {
 }
 
 class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = "shiny-assistant.view";
+  public static readonly viewType = "shiny.assistant.view";
   public _view?: vscode.WebviewView;
 
   constructor(

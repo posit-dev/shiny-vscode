@@ -42,7 +42,7 @@
       "shiny-assistant": [
         {
           "type": "webview",
-          "id": "shiny-assistant.view",
+          "id": "shiny.assistant.view",
           "name": ""
         }
       ]
@@ -97,6 +97,12 @@
         "command": "shiny.shinylive.createFromExplorer",
         "title": "Create Shinylive Link from Selected Files",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "category": "Shiny Assistant",
+        "command": "shiny.assistant.clearChat",
+        "title": "Clear Chat",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -128,6 +134,13 @@
           "command": "shiny.r.runApp",
           "group": "navigation@-3",
           "when": "shiny.r.active && shellExecutionSupported"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "shiny.assistant.clearChat",
+          "when": "view == shiny.assistant.view",
+          "group": "navigation"
         }
       ]
     },

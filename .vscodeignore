@@ -12,3 +12,5 @@ vsc-extension-quickstart.md
 snippets/README.txt
 *.tsbuildinfo
 *.esbuild-meta.json
+esbuild.js
+eslint.config.mjs

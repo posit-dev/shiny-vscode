@@ -1,6 +1,4 @@
 const esbuild = require("esbuild");
-const postcss = require("postcss");
-const tailwindcss = require("tailwindcss");
 const fs = require("fs");
 
 const production = process.argv.includes("--production");
@@ -39,25 +37,6 @@ const esbuildProblemMatcherPlugin = {
   },
 };
 
-const tailwindPlugin = {
-  name: "tailwind",
-  setup(build) {
-    build.onLoad({ filter: /\.css$/ }, async (args) => {
-      const css = await fs.promises.readFile(args.path, "utf8");
-      const result = await postcss([
-        tailwindcss({
-          config: "src/webview/tailwind.config.js",
-          content: ["src/webview/src/**/*.{html,js,jsx,ts,tsx}"],
-        }),
-      ]).process(css, { from: args.path });
-      return {
-        contents: result.css,
-        loader: "css",
-      };
-    });
-  },
-};
-
 const metafilePlugin = {
   name: "metafile",
   setup(build) {
@@ -65,6 +44,7 @@ const metafilePlugin = {
       if (result.metafile) {
         // For each output in the metafile
         Object.entries(result.metafile.outputs).forEach(
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           ([outputPath, output]) => {
             // Get the entry point for this output
             const entryPoint = output.entryPoint;
@@ -114,7 +94,7 @@ async function main() {
       external: ["vscode", "vscode-webview"],
       logLevel: "silent",
       metafile: metafile,
-      plugins: [tailwindPlugin, metafilePlugin, esbuildProblemMatcherPlugin],
+      plugins: [metafilePlugin, esbuildProblemMatcherPlugin],
     }),
   };
 

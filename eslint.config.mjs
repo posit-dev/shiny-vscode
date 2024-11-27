@@ -39,7 +39,7 @@ export default tseslint.config(
   },
   {
     // Build scripts config - these are run by nodejs, and use commonjs syntax.
-    files: ["esbuild.js", "**/tailwind.config.js"],
+    files: ["esbuild.js"],
     languageOptions: {
       globals: globals.node,
     },

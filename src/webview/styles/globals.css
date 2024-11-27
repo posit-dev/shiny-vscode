@@ -1,6 +1,53 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.25rem;
+  padding-top: 0.5rem;
+}
+
+.chat-message {
+  display: flex;
+  margin-bottom: 0.5rem;
+}
+
+.chat-message-user {
+  justify-content: flex-end;
+}
+
+.chat-message-assistant {
+  justify-content: flex-start;
+}
+
+.message-content {
+  padding: 0.25rem;
+  margin: 0 0.5rem;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.chat-form {
+  display: flex;
+}
+
+.api-key-message {
+  text-align: center;
+  padding: 1rem;
+}
+
+.api-key-instructions {
+  font-size: 0.875rem;
+  color: var(--vscode-descriptionForeground);
+  margin-top: 0.5rem;
+}
+
+.thinking-message {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
 
 @layer base {
   :root {

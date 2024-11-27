@@ -40,10 +40,8 @@ const ChatMessage = ({
 }) => {
   const isUser = role === "user";
   return (
-    <div className={`${isUser ? "justify-end" : "justify-start"} mb-2`}>
-      <div
-        className={`py-1 mx-2 ${isUser ? "msg-user px-2 rounded-sm" : "msg-assistant"}`}
-      >
+    <div className={`chat-message ${isUser ? "chat-message-user" : "chat-message-assistant"}`}>
+      <div className={`message-content ${isUser ? "msg-user" : "msg-assistant"}`}>
         {role === "assistant" ? (
           <ReactMarkdown>{message}</ReactMarkdown>
         ) : (
@@ -158,23 +156,21 @@ const ChatApp = () => {
   };
 
   return (
-    <div
-      className={`flex flex-col h-full p-1 pt-2 ${hasUserMessages ? "" : "justify-start"}`}
-    >
+    <div className={`chat-container ${hasUserMessages ? "" : "justify-start"}`}>
       {!hasApiKey ? (
-        <div className='text-center p-4'>
+        <div className='api-key-message'>
           <p>
             To use Shiny Assistant, please set your Anthropic API key in VS Code
             settings:
           </p>
-          <p className='text-sm text-gray-500 mt-2'>
+          <p className='api-key-instructions'>
             Settings → Extensions → Shiny → Assistant → Anthropic API Key
           </p>
         </div>
       ) : (
         <>
           {hasUserMessages && (
-            <div className={"flex-1 overflow-y-auto"}>
+            <div className="chat-messages">
               {messages
                 .filter((message) => {
                   return (
@@ -191,14 +187,14 @@ const ChatApp = () => {
                   );
                 })}
               {isThinking && (
-                <div className='text-gray-500 italic'>Bot is thinking...</div>
+                <div className='thinking-message'>Bot is thinking...</div>
               )}
               <div ref={messagesEndRef} />
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className={`flex`}>
-            <div className='input-textbox-container flex-1 relative rounded-sm'>
+          <form onSubmit={handleSubmit} className="chat-form">
+            <div className='input-textbox-container relative rounded-sm'>
               <textarea
                 ref={textareaRef}
                 value={inputText}

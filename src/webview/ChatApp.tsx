@@ -7,7 +7,7 @@ import type {
 
 const SendIcon = () => (
   <svg
-    viewBox='0 0 24 24'
+    viewBox='0 0 24 22'
     width='1em'
     height='1em'
     stroke='currentColor'
@@ -16,8 +16,8 @@ const SendIcon = () => (
     strokeLinecap='round'
     strokeLinejoin='round'
   >
-    <path d='M22 2L11 13' />
-    <path d='M22 2L15 22L11 13L2 9L22 2Z' />
+    <path d='M23 1L12 12' />
+    <path d='M23 1L16 21L12 12L3 8L23 1Z' />
   </svg>
 );
 
@@ -40,8 +40,12 @@ const ChatMessage = ({
 }) => {
   const isUser = role === "user";
   return (
-    <div className={`chat-message ${isUser ? "chat-message-user" : "chat-message-assistant"}`}>
-      <div className={`message-content ${isUser ? "msg-user" : "msg-assistant"}`}>
+    <div
+      className={`chat-message ${isUser ? "chat-message-user" : "chat-message-assistant"}`}
+    >
+      <div
+        className={`message-content ${isUser ? "msg-user" : "msg-assistant"}`}
+      >
         {role === "assistant" ? (
           <ReactMarkdown>{message}</ReactMarkdown>
         ) : (
@@ -170,7 +174,7 @@ const ChatApp = () => {
       ) : (
         <>
           {hasUserMessages && (
-            <div className="chat-messages">
+            <div className='chat-messages'>
               {messages
                 .filter((message) => {
                   return (
@@ -193,21 +197,21 @@ const ChatApp = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="chat-form">
-            <div className='input-textbox-container relative rounded-sm'>
+          <form onSubmit={handleSubmit} className='chat-form'>
+            <div className='input-textbox-container '>
               <textarea
                 ref={textareaRef}
                 value={inputText}
                 onChange={handleTextareaChange}
                 onKeyDown={handleKeyDown}
                 placeholder='Type your message...'
-                className='input-textbox w-full px-2 py-1 pr-8'
+                className='input-textbox'
                 rows={1}
               />
               <button
                 type='button'
                 onClick={sendMessage}
-                className='input-send-button p-1 rounded-sm absolute m-1 right-0 bottom-0'
+                className='input-send-button'
                 disabled={!inputText.trim()}
               >
                 <SendIcon />

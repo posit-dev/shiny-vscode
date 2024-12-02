@@ -1,8 +1,8 @@
 .chat-container {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   height: 100%;
-  padding: 0.25rem;
   padding-top: 0.5rem;
 }
 
@@ -20,8 +20,13 @@
 }
 
 .message-content {
-  padding: 0.25rem;
+  width: 100%;
+  padding: 0.5rem;
   margin: 0 0.5rem;
+  outline: none;
+  font-family: var(--vscode-font-family);
+  font-weight: var(--vscode-font-weight);
+  font-size: var(--vscode-font-size);
 }
 
 .chat-messages {
@@ -49,60 +54,85 @@
   font-style: italic;
 }
 
-@layer base {
-  :root {
-    .msg-assistant {
-      background-color: var(--vscode-editorWidget-background);
-      color: var(--vscode-editorWidget-foreground);
-    }
-    .msg-user {
-      background-color: var(--vscode-input-background);
-      color: var(--vscode-input-foreground);
-      border: 1px solid var(--vscode-input-border);
-    }
-    .input-textbox-container {
-      background-color: var(--vscode-input-background);
-      border: 1px solid var(--vscode-input-border);
-    }
-    .input-textbox-container:has(.input-textbox:focus) {
-      outline: 1px solid var(--vscode-focusBorder);
-      outline-offset: -1px;
-    }
-    .input-textbox {
-      display: block;
-      outline: none;
-      resize: none;
-      background-color: transparent;
-      width: 100%;
-      overflow: hidden;
-    }
-    .input-textbox:focus {
-      outline: none;
-    }
-    .input-send-button {
-      display: block;
-      color: var(--vscode-button-secondaryForeground);
-    }
-    .input-send-button:hover {
-      background-color: var(--vscode-button-secondaryHoverBackground);
-    }
-  }
-  pre {
-    font-family: var(--vscode-editor-font-family);
-    font-size: var(--vscode-editor-font-size);
-    color: var(--vscode-textPreformat-foreground);
-    background-color: var(--vscode-textPreformat-background);
-    margin: 5px 0;
-    padding: 3px 6px;
-    border: 1px solid var(--vscode-input-border);
-    text-wrap: wrap;
-  }
-  code {
-    font-family: var(--vscode-editor-font-family);
-    background-color: unset; /* Need to override the default background color */
-  }
-  li,
-  ul {
-    list-style: inside;
-  }
+.msg-assistant {
+  background-color: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground);
+}
+.msg-user {
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+}
+.msg-user > p {
+  margin: 0;
+}
+
+.input-textbox-container {
+  box-sizing: border-box;
+  position: relative;
+  flex: 1 1 auto;
+  margin: 0 0.5rem;
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 0.125rem;
+  outline: none;
+}
+.input-textbox-container:has(.input-textbox:focus) {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+.input-textbox {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 0.5rem;
+  outline: none;
+  resize: none;
+  font-family: var(--vscode-font-family);
+  font-weight: var(--vscode-font-weight);
+  font-size: var(--vscode-font-size);
+  background-color: transparent;
+  overflow: hidden;
+  border: none;
+  outline: none;
+}
+.input-textbox:focus {
+  outline: none;
+}
+.input-send-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  padding: 0.25rem;
+  margin: 0.25rem;
+  width: 1.55rem;
+  height: 1.55rem;
+  right: 0px;
+  bottom: 0px;
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  border-radius: 0.125rem;
+}
+.input-send-button:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+pre {
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  color: var(--vscode-textPreformat-foreground);
+  background-color: var(--vscode-textPreformat-background);
+  margin: 5px 0;
+  padding: 3px 6px;
+  border: 1px solid var(--vscode-input-border);
+  text-wrap: wrap;
+}
+code {
+  font-family: var(--vscode-editor-font-family);
+  background-color: unset; /* Need to override the default background color */
+}
+li,
+ul {
+  list-style: inside;
 }

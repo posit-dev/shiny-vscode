@@ -285,9 +285,7 @@ const ChatApp = () => {
                     />
                   );
                 })}
-              {isThinking && (
-                <div className='thinking-message'>Bot is thinking...</div>
-              )}
+              {isThinking && <div className='thinking-message'>...</div>}
               <div ref={messagesEndRef} />
             </div>
           )}

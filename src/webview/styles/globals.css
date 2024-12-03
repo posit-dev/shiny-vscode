@@ -50,6 +50,7 @@
 
 .thinking-message {
   color: var(--vscode-descriptionForeground);
+  margin: var(--shiny-assistant-margin-y) var(--shiny-assistant-margin-x);
   font-style: italic;
 }
 
@@ -119,7 +120,7 @@
 }
 
 .code-block {
-  background-color: var(--vscode-editor-background);
+  background-color: var(--vscode-editorWidget-background);
   border: 1px solid var(--vscode-input-border);
   border-radius: 0.125rem;
   overflow: hidden;
@@ -128,27 +129,30 @@
 }
 
 .code-block .filename {
-  border: 1px solid var(--vscode-input-border);
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-editorWidget-border);
   border-radius: 0.125rem;
   margin: 0.5rem 0.5rem 0 0.5rem;
-  padding: 0.25rem 0.25rem;
+  padding: 0.25rem 0.5rem;
   font-family: var(--vscode-editor-font-family);
   width: fit-content;
 }
 
 .code-block pre {
+  background-color: var(--vscode-editorWidget-background);
   width: calc(100vw - 2 * var(--shiny-assistant-margin-x));
   box-sizing: border-box;
+  scrollbar-color: auto;
 }
 
 pre {
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
   color: var(--vscode-textPreformat-foreground);
-  /* background-color: var(--vscode-textPreformat-background); */
   margin: 5px 0;
   padding: 3px 6px;
   text-wrap: wrap;
+  scrollbar-color: inherit;
 }
 code {
   font-family: var(--vscode-editor-font-family);

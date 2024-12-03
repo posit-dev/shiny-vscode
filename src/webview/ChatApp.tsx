@@ -4,6 +4,8 @@ import type {
   Message,
   ToWebviewStateMessage,
 } from "../../src/assistant/extension";
+import { inferFileType } from "../assistant/utils";
+import CodeBlock from "./CodeBlock";
 
 const SendIcon = () => (
   <svg
@@ -31,6 +33,103 @@ const sendMessageToExtension = (message: string) => {
   vscode.postMessage({ type: "userInput", content: message });
 };
 
+/**
+ * Processes Shiny app code blocks in the content and converts them to markdown
+ * format. Handles unmatched tags during streaming by adding missing closing
+ * tags (the tags may be unmatched during streaming).
+ *
+ * Input format:
+ * ```
+ * <SHINYAPP AUTORUN="1">
+ * <FILE NAME="app.py">
+ * code content
+ * </FILE>
+ * </SHINYAPP>
+ * ```
+ *
+ * Output format:
+ * ```
+ * **app.py**
+ * ```python
+ * code content
+ * ```
+ * ```
+ *
+ * @param content - The text content containing Shiny app code blocks
+ * @returns The processed content with Shiny app blocks converted to markdown
+ */
+const processShinyAppBlocks = (content: string): Array<JSX.Element> => {
+  // Add missing closing tags if needed
+  let contentWithClosingTags = content;
+
+  // Count opening and closing SHINYAPP tags
+  const shinyAppOpenCount = (content.match(/<SHINYAPP AUTORUN="[01]">/g) || [])
+    .length;
+  const shinyAppCloseCount = (content.match(/<\/SHINYAPP>/g) || []).length;
+
+  // Count opening and closing FILE tags
+  const fileOpenCount = (content.match(/<FILE NAME="[^"]+?">/g) || []).length;
+  const fileCloseCount = (content.match(/<\/FILE>/g) || []).length;
+
+  // Add missing FILE closing tags
+  if (fileOpenCount > fileCloseCount) {
+    const missingCloseTags = fileOpenCount - fileCloseCount;
+    for (let i = 0; i < missingCloseTags; i++) {
+      contentWithClosingTags += "</FILE>";
+    }
+  }
+
+  // Add missing SHINYAPP closing tags
+  if (shinyAppOpenCount > shinyAppCloseCount) {
+    const missingCloseTags = shinyAppOpenCount - shinyAppCloseCount;
+    for (let i = 0; i < missingCloseTags; i++) {
+      contentWithClosingTags += "</SHINYAPP>";
+    }
+  }
+
+  const ShinyappTagRegex = /(<SHINYAPP AUTORUN="[01]">.*?<\/SHINYAPP>)/s;
+
+  const chunksStrings = contentWithClosingTags.split(ShinyappTagRegex);
+  const chunksJsxElements: Array<JSX.Element> = [];
+
+  let keyIndex = 0;
+  for (const chunk of chunksStrings) {
+    if (ShinyappTagRegex.test(chunk)) {
+      // If we're here, it's a <SHINYAPP> tag, with <FILE NAME="..."> tags
+      // inside of it.
+      const fileMatches = chunk.matchAll(/<FILE NAME="[^"]+">.*?<\/FILE>/gs);
+      const files = Array.from(fileMatches).map((match) => match[0]);
+
+      for (const file of files) {
+        const nameMatch = file.match(/<FILE NAME="([^"]+)">/);
+        const fileName = nameMatch ? nameMatch[1] : "file.txt";
+        const fileContent = file.replace(
+          /<FILE NAME="[^"]+">\n?(.*?)<\/FILE>/s,
+          "$1"
+        );
+
+        chunksJsxElements.push(
+          <CodeBlock
+            key={keyIndex}
+            filename={fileName}
+            code={fileContent}
+            language={inferFileType(fileName)}
+          />
+        );
+        keyIndex++;
+      }
+    } else {
+      // Plain string; process it as Markdown.
+      chunksJsxElements.push(
+        <ReactMarkdown key={keyIndex}>{chunk}</ReactMarkdown>
+      );
+      keyIndex++;
+    }
+  }
+
+  return chunksJsxElements;
+};
+
 const ChatMessage = ({
   message,
   role,
@@ -46,11 +145,7 @@ const ChatMessage = ({
       <div
         className={`message-content ${isUser ? "msg-user" : "msg-assistant"}`}
       >
-        {role === "assistant" ? (
-          <ReactMarkdown>{message}</ReactMarkdown>
-        ) : (
-          <p>{message}</p>
-        )}
+        {processShinyAppBlocks(message)}
       </div>
     </div>
   );

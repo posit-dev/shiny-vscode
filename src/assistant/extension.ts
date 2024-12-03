@@ -252,7 +252,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
           type: "streamContent",
           data: {
             messageIndex: state.messages.length,
-            content: processShinyAppBlocks(assistantMessage.content),
+            content: assistantMessage.content,
           },
         });
       }
@@ -260,10 +260,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
       // Check for and write any files in shinyapp blocks
       await writeShinyAppFiles(assistantMessage.content);
 
-      state.messages.push({
-        ...assistantMessage,
-        content: processShinyAppBlocks(assistantMessage.content),
-      });
+      state.messages.push(assistantMessage);
       saveState(this.context);
     } catch (error) {
       console.error("Error:", error);
@@ -329,78 +326,4 @@ async function writeShinyAppFiles(content: string): Promise<boolean> {
   }
 
   return filesWritten;
-}
-
-/**
- * Processes Shiny app code blocks in the content and converts them to markdown
- * format. Handles unmatched tags during streaming by adding missing closing
- * tags (the tags may be unmatched during streaming).
- *
- * Input format:
- * ```
- * <SHINYAPP AUTORUN="1">
- * <FILE NAME="app.py">
- * code content
- * </FILE>
- * </SHINYAPP>
- * ```
- *
- * Output format:
- * ```
- * **app.py**
- * ```python
- * code content
- * ```
- * ```
- *
- * @param content - The text content containing Shiny app code blocks
- * @returns The processed content with Shiny app blocks converted to markdown
- */
-function processShinyAppBlocks(content: string): string {
-  // Add missing closing tags if needed
-  let processedContent = content;
-
-  // Count opening and closing SHINYAPP tags
-  const shinyAppOpenCount = (content.match(/<SHINYAPP AUTORUN="[01]">/g) || [])
-    .length;
-  const shinyAppCloseCount = (content.match(/<\/SHINYAPP>/g) || []).length;
-
-  // Count opening and closing FILE tags
-  const fileOpenCount = (content.match(/<FILE NAME="[^"]+?">/g) || []).length;
-  const fileCloseCount = (content.match(/<\/FILE>/g) || []).length;
-
-  // Add missing FILE closing tags
-  if (fileOpenCount > fileCloseCount) {
-    const missingCloseTags = fileOpenCount - fileCloseCount;
-    for (let i = 0; i < missingCloseTags; i++) {
-      processedContent += "</FILE>";
-    }
-  }
-
-  // Add missing SHINYAPP closing tags
-  if (shinyAppOpenCount > shinyAppCloseCount) {
-    const missingCloseTags = shinyAppOpenCount - shinyAppCloseCount;
-    for (let i = 0; i < missingCloseTags; i++) {
-      processedContent += "</SHINYAPP>";
-    }
-  }
-
-  return processedContent.replace(
-    /<SHINYAPP AUTORUN="[01]">([\s\S]*?)<\/SHINYAPP>/g,
-    (_match, appContent) => {
-      const files =
-        appContent.match(/<FILE NAME="[^"]+">[\s\S]*?<\/FILE>/g) || [];
-      return files
-        .map((file: string) => {
-          const nameMatch = file.match(/<FILE NAME="([^"]+)">/);
-          const fileName = nameMatch ? nameMatch[1] : "file";
-          const fileContent = file
-            .replace(/<FILE NAME="[^"]+">|<\/FILE>/g, "")
-            .trim();
-
-          return `**${fileName}**\n\`\`\`python\n${fileContent}\n\`\`\``;
-        })
-        .join("\n\n");
-    }
-  );
 }

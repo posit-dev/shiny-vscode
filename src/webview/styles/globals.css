@@ -3,12 +3,12 @@
   flex-direction: column;
   box-sizing: border-box;
   height: 100%;
-  padding-top: 0.5rem;
+  padding-top: var(--shiny-assistant-margin-y);
 }
 
 .chat-message {
   display: flex;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--shiny-assistant-margin-y);
 }
 
 .chat-message-user {
@@ -20,9 +20,8 @@
 }
 
 .message-content {
-  width: 100%;
-  padding: 0.5rem;
-  margin: 0 0.5rem;
+  flex: 1 1 auto;
+  margin: 0 var(--shiny-assistant-margin-x);
   outline: none;
   font-family: var(--vscode-font-family);
   font-weight: var(--vscode-font-weight);
@@ -61,6 +60,7 @@
 .msg-user {
   background-color: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
+  padding: 0.5rem;
   border: 1px solid var(--vscode-input-border);
 }
 .msg-user > p {
@@ -118,14 +118,36 @@
   background-color: var(--vscode-button-secondaryHoverBackground);
 }
 
+.code-block {
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 0.125rem;
+  overflow: hidden;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.code-block .filename {
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 0.125rem;
+  margin: 0.5rem 0.5rem 0 0.5rem;
+  padding: 0.25rem 0.25rem;
+  font-family: var(--vscode-editor-font-family);
+  width: fit-content;
+}
+
+.code-block pre {
+  width: calc(100vw - 2 * var(--shiny-assistant-margin-x));
+  box-sizing: border-box;
+}
+
 pre {
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
   color: var(--vscode-textPreformat-foreground);
-  background-color: var(--vscode-textPreformat-background);
+  /* background-color: var(--vscode-textPreformat-background); */
   margin: 5px 0;
   padding: 3px 6px;
-  border: 1px solid var(--vscode-input-border);
   text-wrap: wrap;
 }
 code {
@@ -135,4 +157,9 @@ code {
 li,
 ul {
   list-style: inside;
+}
+
+:root {
+  --shiny-assistant-margin-x: 0.5rem;
+  --shiny-assistant-margin-y: 0.5rem;
 }

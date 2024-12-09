@@ -1,6 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
-import type { Model } from "@anthropic-ai/sdk/resources/messages";
 import * as vscode from "vscode";
+import { LLM } from "./llm";
 import { loadSystemPrompt } from "./system-prompt";
 
 export type Message = {
@@ -8,10 +7,10 @@ export type Message = {
   content: string;
 };
 
+// TODO: Convert the state to a class which can be serialized to JSON
 // The state of the extension
 type ExtensionState = {
   messages: Array<Message>;
-  anthropicApiKey: string;
 };
 
 // The state that is persisted across restarts.
@@ -35,8 +34,10 @@ const initialChatMessages: Array<Message> = [];
 
 let state: ExtensionState = {
   messages: structuredClone(initialChatMessages),
-  anthropicApiKey: "",
 };
+
+// TODO: Don't hard code these starting values
+const llm = new LLM("", "anthropic", "claude-3-5-sonnet-20241022");
 
 export async function activateAssistant(context: vscode.ExtensionContext) {
   console.log("Activating Shiny Assistant extension");
@@ -44,10 +45,16 @@ export async function activateAssistant(context: vscode.ExtensionContext) {
   state = context.globalState.get<ExtensionState>("savedState") || state;
 
   // Load API key from configuration
-  state.anthropicApiKey =
-    vscode.workspace
+  const apiKey =
+    (vscode.workspace
       .getConfiguration("shiny.assistant")
-      .get("anthropicApiKey") || "";
+      .get("anthropicApiKey") as string) || "";
+  llm.setApiKey(apiKey);
+
+  const llmModel = vscode.workspace
+    .getConfiguration("shiny.assistant")
+    .get("anthropicModel") as string;
+  llm.setModel(llmModel);
 
   systemPrompt = await loadSystemPrompt(context);
 
@@ -60,10 +67,21 @@ export async function activateAssistant(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("shiny.assistant.anthropicApiKey")) {
-        state.anthropicApiKey =
-          vscode.workspace
+        const apiKey =
+          (vscode.workspace
             .getConfiguration("shiny.assistant")
-            .get("anthropicApiKey") || "";
+            .get("anthropicApiKey") as string) || "";
+        llm.setApiKey(apiKey);
+
+        provider.sendCurrentStateToWebView();
+      }
+
+      if (event.affectsConfiguration("shiny.assistant.anthropicModel")) {
+        const llmModel = vscode.workspace
+          .getConfiguration("shiny.assistant")
+          .get("anthropicModel") as string;
+        llm.setModel(llmModel);
+
         provider.sendCurrentStateToWebView();
       }
     })
@@ -209,7 +227,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
   public sendCurrentStateToWebView() {
     const webviewState: ToWebviewStateMessage = {
       messages: state.messages,
-      hasApiKey: state.anthropicApiKey !== "",
+      hasApiKey: llm.apiKey !== "",
     };
 
     this._view?.webview.postMessage({
@@ -219,35 +237,18 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleUserInput(message: string) {
-    const anthropic = new Anthropic({
-      apiKey: state.anthropicApiKey,
-    });
-
     state.messages.push({ role: "user", content: message });
     // Create a placeholder for the assistant's message
     const assistantMessage: Message = { role: "assistant", content: "" };
 
     try {
-      const stream = await anthropic.messages.create({
-        model: vscode.workspace
-          .getConfiguration("shiny.assistant")
-          .get("anthropicModel") as Model,
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: state.messages,
-        stream: true,
-      });
+      const { textStream } = llm.streamText(message);
 
-      for await (const chunk of stream) {
-        // if chunk is a message delta, update the assistant's message
-        if (chunk.type === "content_block_delta") {
-          if (chunk.delta.type === "text_delta") {
-            assistantMessage.content += chunk.delta.text;
-          }
-        }
+      for await (const textPart of textStream) {
+        assistantMessage.content += textPart;
 
         // Send the streaming update to the webview
+        // TODO: Stream changes instead of sending whole message
         this._view?.webview.postMessage({
           type: "streamContent",
           data: {

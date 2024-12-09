@@ -297,6 +297,7 @@
     "vsix": "npx --yes @vscode/vsce package"
   },
   "devDependencies": {
+    "@ai-sdk/anthropic": "^1.0.4",
     "@anthropic-ai/sdk": "^0.32.1",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
@@ -311,6 +312,7 @@
     "@typescript-eslint/parser": "^8.15.0",
     "@vscode/python-extension": "^1.0.5",
     "@vscode/test-electron": "^2.1.3",
+    "ai": "^4.0.13",
     "concurrently": "^9.1.0",
     "esbuild": "^0.24.0",
     "eslint": "^9.15.0",

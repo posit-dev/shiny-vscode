@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { LLM } from "./llm";
+import { LLM, providerNameFromModelName } from "./llm";
 import { loadSystemPrompt } from "./system-prompt";
 
 export type Message = {
@@ -37,24 +37,26 @@ let state: ExtensionState = {
 };
 
 // TODO: Don't hard code these starting values
-const llm = new LLM("", "anthropic", "claude-3-5-sonnet-20241022");
+let llm: LLM | null = null;
 
 export async function activateAssistant(context: vscode.ExtensionContext) {
   console.log("Activating Shiny Assistant extension");
   // Load saved state or use default
   state = context.globalState.get<ExtensionState>("savedState") || state;
 
+  const llmModel = vscode.workspace
+    .getConfiguration("shiny.assistant")
+    .get("model") as string;
+
+  const llmProvider = providerNameFromModelName(llmModel);
+
   // Load API key from configuration
   const apiKey =
     (vscode.workspace
       .getConfiguration("shiny.assistant")
-      .get("anthropicApiKey") as string) || "";
-  llm.setApiKey(apiKey);
+      .get(llmProvider + "ApiKey") as string) || "";
 
-  const llmModel = vscode.workspace
-    .getConfiguration("shiny.assistant")
-    .get("anthropicModel") as string;
-  llm.setModel(llmModel);
+  llm = new LLM(apiKey, llmProvider, llmModel);
 
   systemPrompt = await loadSystemPrompt(context);
 
@@ -66,21 +68,22 @@ export async function activateAssistant(context: vscode.ExtensionContext) {
   // Add configuration change listener
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("shiny.assistant.anthropicApiKey")) {
+      if (event.affectsConfiguration("shiny.assistant")) {
+        const llmModel = vscode.workspace
+          .getConfiguration("shiny.assistant")
+          .get("model") as string;
+
+        const llmProvider = providerNameFromModelName(llmModel);
+        console.log(llmProvider);
+
+        // Load API key from configuration
         const apiKey =
           (vscode.workspace
             .getConfiguration("shiny.assistant")
-            .get("anthropicApiKey") as string) || "";
-        llm.setApiKey(apiKey);
+            .get(llmProvider + "ApiKey") as string) || "";
+        console.log(apiKey);
 
-        provider.sendCurrentStateToWebView();
-      }
-
-      if (event.affectsConfiguration("shiny.assistant.anthropicModel")) {
-        const llmModel = vscode.workspace
-          .getConfiguration("shiny.assistant")
-          .get("anthropicModel") as string;
-        llm.setModel(llmModel);
+        llm = new LLM(apiKey, llmProvider, llmModel);
 
         provider.sendCurrentStateToWebView();
       }
@@ -227,7 +230,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
   public sendCurrentStateToWebView() {
     const webviewState: ToWebviewStateMessage = {
       messages: state.messages,
-      hasApiKey: llm.apiKey !== "",
+      hasApiKey: llm?.apiKey !== "",
     };
 
     this._view?.webview.postMessage({
@@ -237,6 +240,10 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleUserInput(message: string) {
+    if (!llm) {
+      console.error("LLM is not initialized!");
+      return;
+    }
     state.messages.push({ role: "user", content: message });
     // Create a placeholder for the assistant's message
     const assistantMessage: Message = { role: "assistant", content: "" };

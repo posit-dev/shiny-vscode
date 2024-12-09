@@ -265,18 +265,28 @@
           "scope": "application",
           "password": true
         },
-        "shiny.assistant.anthropicModel": {
+        "shiny.assistant.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API key",
+          "scope": "application",
+          "password": true
+        },
+        "shiny.assistant.model": {
           "type": "string",
           "enum": [
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022"
+            "claude-3-5-sonnet-latest",
+            "claude-3-5-haiku-latest",
+            "gpt-4o",
+            "gpt-4o-mini"
           ],
-          "default": "claude-3-5-sonnet-20241022",
+          "default": "claude-3-5-sonnet-latest",
           "description": "Anthropic model to use",
           "scope": "application",
           "enumItemLabels": [
-            "Claude 3.5 Sonnet (2024-10-22)",
-            "Claude 3.5 Haiku (2024-10-22)"
+            "Claude 3.5 Sonnet",
+            "Claude 3.5 Haiku",
+            "GPT-4o"
           ]
         }
       }
@@ -298,6 +308,7 @@
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^1.0.4",
+    "@ai-sdk/openai": "^1.0.7",
     "@anthropic-ai/sdk": "^0.32.1",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",

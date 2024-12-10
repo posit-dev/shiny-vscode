@@ -4,6 +4,10 @@ import type {
   Message,
   ToWebviewStateMessage,
 } from "../../src/assistant/extension";
+import {
+  getProperProviderName,
+  providerNameFromModelName,
+} from "../assistant/llm";
 import { inferFileType } from "../assistant/utils";
 import CodeBlock from "./CodeBlock";
 
@@ -153,9 +157,10 @@ const ChatMessage = ({
 
 const ChatApp = () => {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [modelName, setModelName] = useState("");
+  const [hasApiKey, setHasApiKey] = useState(true);
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
-  const [hasApiKey, setHasApiKey] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasUserMessages = messages.some((message) => message.role === "user");
@@ -182,6 +187,7 @@ const ChatApp = () => {
       if (msg.type === "currentState") {
         const data = msg.data as ToWebviewStateMessage;
         setMessages(data.messages);
+        setModelName(data.model);
         setHasApiKey(data.hasApiKey);
         if (
           data.messages.length > 0 &&
@@ -254,16 +260,22 @@ const ChatApp = () => {
     adjustTextareaHeight(e.target);
   };
 
+  const llmProviderName = getProperProviderName(
+    providerNameFromModelName(modelName)
+  );
+
   return (
     <div className={`chat-container ${hasUserMessages ? "" : "justify-start"}`}>
       {!hasApiKey ? (
         <div className='api-key-message'>
           <p>
-            To use Shiny Assistant, please set your Anthropic API key in VS Code
-            settings:
+            To use Shiny Assistant with {modelName}, please set your{" "}
+            {llmProviderName}
+            API key in VS Code settings:
           </p>
           <p className='api-key-instructions'>
-            Settings → Extensions → Shiny → Assistant → Anthropic API Key
+            Settings → Extensions → Shiny → Assistant → {llmProviderName} API
+            Key
           </p>
         </div>
       ) : (

@@ -23,6 +23,7 @@ type ExtensionSaveState = {
 // different information, like if the user's view of the messages is different
 // from the actual messages sent to the LLM.
 export type ToWebviewStateMessage = {
+  model: string;
   messages: Array<Message>;
   hasApiKey: boolean;
 };
@@ -44,19 +45,7 @@ export async function activateAssistant(context: vscode.ExtensionContext) {
   // Load saved state or use default
   state = context.globalState.get<ExtensionState>("savedState") || state;
 
-  const llmModel = vscode.workspace
-    .getConfiguration("shiny.assistant")
-    .get("model") as string;
-
-  const llmProvider = providerNameFromModelName(llmModel);
-
-  // Load API key from configuration
-  const apiKey =
-    (vscode.workspace
-      .getConfiguration("shiny.assistant")
-      .get(llmProvider + "ApiKey") as string) || "";
-
-  llm = new LLM(apiKey, llmProvider, llmModel);
+  updateLLMConfigFromSettings();
 
   systemPrompt = await loadSystemPrompt(context);
 
@@ -69,22 +58,7 @@ export async function activateAssistant(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("shiny.assistant")) {
-        const llmModel = vscode.workspace
-          .getConfiguration("shiny.assistant")
-          .get("model") as string;
-
-        const llmProvider = providerNameFromModelName(llmModel);
-        console.log(llmProvider);
-
-        // Load API key from configuration
-        const apiKey =
-          (vscode.workspace
-            .getConfiguration("shiny.assistant")
-            .get(llmProvider + "ApiKey") as string) || "";
-        console.log(apiKey);
-
-        llm = new LLM(apiKey, llmProvider, llmModel);
-
+        updateLLMConfigFromSettings();
         provider.sendCurrentStateToWebView();
       }
     })
@@ -103,6 +77,25 @@ export async function activateAssistant(context: vscode.ExtensionContext) {
 
 export function deactivate(context: vscode.ExtensionContext) {
   saveState(context);
+}
+
+function updateLLMConfigFromSettings() {
+  const llmModel = vscode.workspace
+    .getConfiguration("shiny.assistant")
+    .get("model") as string;
+
+  const llmProvider = providerNameFromModelName(llmModel);
+
+  const apiKey =
+    (vscode.workspace
+      .getConfiguration("shiny.assistant")
+      .get(llmProvider + "ApiKey") as string) || "";
+
+  if (llmProvider === null || llmModel === "") {
+    llm = null;
+  } else {
+    llm = new LLM(llmProvider, llmModel, apiKey);
+  }
 }
 
 function saveState(context: vscode.ExtensionContext) {
@@ -229,6 +222,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
 
   public sendCurrentStateToWebView() {
     const webviewState: ToWebviewStateMessage = {
+      model: llm?.modelName || "",
       messages: state.messages,
       hasApiKey: llm?.apiKey !== "",
     };

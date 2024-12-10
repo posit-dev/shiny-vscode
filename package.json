@@ -286,7 +286,8 @@
           "enumItemLabels": [
             "Claude 3.5 Sonnet",
             "Claude 3.5 Haiku",
-            "GPT-4o"
+            "GPT-4o",
+            "GPT-4o mini"
           ]
         }
       }

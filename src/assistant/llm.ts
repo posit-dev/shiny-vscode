@@ -12,10 +12,10 @@ export class LLM {
   provider: AnthropicProvider | OpenAIProvider;
   modelName: string;
 
-  constructor(apiKey: string, providerName: ProviderName, modelName: string) {
-    this.apiKey = apiKey;
+  constructor(providerName: ProviderName, modelName: string, apiKey: string) {
     this.providerName = providerName;
     this.modelName = modelName;
+    this.apiKey = apiKey;
 
     if (providerName === "anthropic") {
       this.provider = createAnthropic({ apiKey: this.apiKey });
@@ -39,15 +39,36 @@ export class LLM {
  * Determines the provider name based on the model name.
  *
  * @param modelName - The name of the model.
- * @returns The provider name that corresponds to the given model name.
- * @throws {Error} If the model name does not match any known providers.
+ * @returns The provider name that corresponds to the given model name, or null
+ * if the model name is not supported.
  */
-export function providerNameFromModelName(modelName: string): ProviderName {
+export function providerNameFromModelName(
+  modelName: string
+): ProviderName | null {
   if (modelName.startsWith("gpt-")) {
     return "openai";
   } else if (modelName.startsWith("claude-")) {
     return "anthropic";
   } else {
-    throw new Error(`Unknown model: ${modelName}`);
+    return null;
+  }
+}
+/**
+ * Returns the proper name for the given provider.
+ *
+ * @param providerName - The provider name to convert. If the provider name is
+ * unknown or not supported, it will be returned as is.
+ * @returns A string representation of the provider name.
+ */
+
+export function getProperProviderName(
+  providerName: ProviderName | null
+): string {
+  if (providerName === "openai") {
+    return "OpenAI";
+  } else if (providerName === "anthropic") {
+    return "Anthropic";
+  } else {
+    return "Unknown LLM provider";
   }
 }

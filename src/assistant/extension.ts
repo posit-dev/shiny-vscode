@@ -1,20 +1,16 @@
+import type { CoreAssistantMessage, CoreMessage } from "ai";
 import * as vscode from "vscode";
 import { LLM, providerNameFromModelName } from "./llm";
 import { loadSystemPrompt } from "./system-prompt";
 
-export type Message = {
-  role: "assistant" | "user";
-  content: string;
-};
-
 // The state of the extension
 type ExtensionState = {
-  messages: Array<Message>;
+  messages: Array<CoreMessage>;
 };
 
 // The state that is persisted across restarts.
 type ExtensionSaveState = {
-  messages: Array<Message>;
+  messages: Array<CoreMessage>;
 };
 
 // The state that is sent to the webview. This is a subset of the extension
@@ -23,14 +19,14 @@ type ExtensionSaveState = {
 // from the actual messages sent to the LLM.
 export type ToWebviewStateMessage = {
   model: string;
-  messages: Array<Message>;
+  messages: Array<CoreMessage>;
   hasApiKey: boolean;
 };
 
 let systemPrompt = "";
 
 // The chat messages that are shown with a new chat.
-const initialChatMessages: Array<Message> = [];
+const initialChatMessages: Array<CoreMessage> = [];
 
 let state: ExtensionState = {
   messages: structuredClone(initialChatMessages),
@@ -244,10 +240,16 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
     }
     state.messages.push({ role: "user", content: message });
     // Create a placeholder for the assistant's message
-    const assistantMessage: Message = { role: "assistant", content: "" };
+    const assistantMessage: CoreAssistantMessage = {
+      role: "assistant",
+      content: "",
+    };
 
     try {
-      const { textStream } = llm.streamText(message);
+      const { textStream } = llm.streamText({
+        system: systemPrompt,
+        messages: state.messages,
+      });
 
       for await (const textPart of textStream) {
         assistantMessage.content += textPart;
@@ -264,7 +266,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Check for and write any files in shinyapp blocks
-      await writeShinyAppFiles(assistantMessage.content);
+      await writeShinyAppFiles(assistantMessage.content as string);
 
       state.messages.push(assistantMessage);
       saveState(this.context);

@@ -1,6 +1,6 @@
 import { type AnthropicProvider, createAnthropic } from "@ai-sdk/anthropic";
 import { type OpenAIProvider, createOpenAI } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { type CoreMessage, streamText } from "ai";
 
 const MAX_TOKENS = 2048;
 
@@ -26,10 +26,17 @@ export class LLM {
     }
   }
 
-  streamText(prompt: string) {
+  streamText({
+    system,
+    messages,
+  }: {
+    system: string;
+    messages: Array<CoreMessage>;
+  }) {
     return streamText({
       model: this.provider(this.modelName),
-      prompt,
+      system,
+      messages,
       maxTokens: MAX_TOKENS,
     });
   }

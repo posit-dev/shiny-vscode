@@ -1,9 +1,7 @@
+import type { CoreMessage, CoreUserMessage } from "ai";
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import type {
-  Message,
-  ToWebviewStateMessage,
-} from "../../src/assistant/extension";
+import type { ToWebviewStateMessage } from "../../src/assistant/extension";
 import {
   getProperProviderName,
   providerNameFromModelName,
@@ -156,7 +154,7 @@ const ChatMessage = ({
 };
 
 const ChatApp = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [modelName, setModelName] = useState("");
   const [hasApiKey, setHasApiKey] = useState(true);
   const [inputText, setInputText] = useState("");
@@ -224,13 +222,13 @@ const ChatApp = () => {
   const sendMessage = () => {
     if (!inputText.trim()) return;
 
-    const userInputMessage: Message = {
+    const userInputMessage: CoreUserMessage = {
       content: inputText,
       role: "user",
     };
 
     // Add user message
-    const newMessages: Array<Message> = [...messages, userInputMessage];
+    const newMessages: Array<CoreMessage> = [...messages, userInputMessage];
     setMessages(newMessages);
     setInputText("");
     setIsThinking(true);
@@ -292,7 +290,7 @@ const ChatApp = () => {
                   return (
                     <ChatMessage
                       key={index}
-                      message={message.content}
+                      message={message.content as string}
                       role={message.role as "assistant" | "user"}
                     />
                   );

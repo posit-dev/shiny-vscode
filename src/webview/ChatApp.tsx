@@ -159,6 +159,7 @@ const ChatApp = () => {
   const [hasApiKey, setHasApiKey] = useState(true);
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [shouldInstantScroll, setShouldInstantScroll] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasUserMessages = messages.some((message) => message.role === "user");
@@ -170,13 +171,16 @@ const ChatApp = () => {
     }
   }, []);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  function scrollToBottom(behavior: ScrollBehavior = "smooth") {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  }
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    scrollToBottom(shouldInstantScroll ? "instant" : "smooth");
+    if (shouldInstantScroll) {
+      setShouldInstantScroll(false);
+    }
+  }, [messages, shouldInstantScroll]);
 
   useEffect(() => {
     const messageHandler = (event: MessageEvent) => {
@@ -184,6 +188,7 @@ const ChatApp = () => {
 
       if (msg.type === "currentState") {
         const data = msg.data as ToWebviewStateMessage;
+        setShouldInstantScroll(true);
         setMessages(data.messages);
         setModelName(data.model);
         setHasApiKey(data.hasApiKey);

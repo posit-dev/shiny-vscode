@@ -7,7 +7,6 @@ export type Message = {
   content: string;
 };
 
-// TODO: Convert the state to a class which can be serialized to JSON
 // The state of the extension
 type ExtensionState = {
   messages: Array<Message>;
@@ -37,11 +36,9 @@ let state: ExtensionState = {
   messages: structuredClone(initialChatMessages),
 };
 
-// TODO: Don't hard code these starting values
 let llm: LLM | null = null;
 
 export async function activateAssistant(context: vscode.ExtensionContext) {
-  console.log("Activating Shiny Assistant extension");
   // Load saved state or use default
   state = context.globalState.get<ExtensionState>("savedState") || state;
 
@@ -79,6 +76,13 @@ export function deactivate(context: vscode.ExtensionContext) {
   saveState(context);
 }
 
+/**
+ * Updates the LLM configuration based on the current VS Code settings. This
+ * function retrieves the LLM model and API key from the workspace
+ * configuration, determines the appropriate provider, and updates the state
+ * with a new LLM instance. If the provider or model is not set, the LLM in the
+ * state is set to null.
+ */
 function updateLLMConfigFromSettings() {
   const llmModel = vscode.workspace
     .getConfiguration("shiny.assistant")
@@ -283,8 +287,6 @@ async function writeShinyAppFiles(content: string): Promise<boolean> {
   const shinyAppBlocks =
     content.match(/<SHINYAPP AUTORUN="[01]">[\s\S]*?<\/SHINYAPP>/g) || [];
   let filesWritten = false;
-
-  console.log(shinyAppBlocks);
 
   for (const block of shinyAppBlocks) {
     const files = block.match(/<FILE NAME="[^"]+">[\s\S]*?<\/FILE>/g) || [];

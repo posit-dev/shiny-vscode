@@ -2,7 +2,12 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022",
+      // This part of the extension doesn't have a DOM, but DOM is needed here
+      // for type inference for the ai-sdk.
+      "DOM"
+    ],
     "sourceMap": true,
     "strict": true,
     "noEmit": true,

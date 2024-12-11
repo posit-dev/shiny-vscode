@@ -1,5 +1,11 @@
-import { tool, type CoreAssistantMessage, type CoreMessage } from "ai";
-import { Allow, parse } from "partial-json";
+import {
+  tool,
+  type CoreAssistantMessage,
+  type CoreMessage,
+  type CoreTool,
+  type StreamTextResult,
+} from "ai";
+import { parse } from "partial-json";
 import * as vscode from "vscode";
 import { z } from "zod";
 import { LLM, providerNameFromModelName } from "./llm";
@@ -271,33 +277,43 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
                 .describe("Array of files to write"),
             }),
             execute: async ({ files }: { files: FileContentJson[] }) => {
-              // console.log("WOULD WRITE SHINY APP FILES: ", files);
               return await writeShinyAppFiles(files);
             },
           }),
         },
       });
 
-      const toolCallResponsesRaw: Array<string> = [];
-      const toolCallResponsesParsed: Array<Array<FileContentJson>> = [];
-      let toolCallIdx = 0;
+      const toolCallResponsesRaw: Record<string, string> = {};
+      const toolCallResponsesParsed: Record<
+        string,
+        Array<FileContentJson>
+      > = {};
 
       for await (const part of fullStream) {
         if (part.type === "text-delta") {
           assistantMessage.content += part.textDelta;
         } else if (part.type === "tool-call-streaming-start") {
-          toolCallResponsesRaw.push("");
-          toolCallResponsesParsed.push([]);
-          toolCallIdx = toolCallResponsesParsed.length - 1;
-          // TODO: Handle multiple args?
-          // TODO: Check for tool name
+          if (part.toolName !== "writeShinyAppFiles") {
+            // At some point in the future, we can add a registry for handling
+            // tool calls as they stream in. For now, we only handle
+            // writeShinyAppFiles.
+            console.error(
+              "Don't know how to handle streaming tool call: " + part.toolName
+            );
+            continue;
+          }
+          toolCallResponsesRaw[part.toolCallId] = "";
+          toolCallResponsesParsed[part.toolCallId] = [];
         } else if (part.type === "tool-call-delta") {
-          toolCallResponsesRaw[toolCallIdx] += part.argsTextDelta;
+          if (part.toolName !== "writeShinyAppFiles") {
+            continue;
+          }
+          toolCallResponsesRaw[part.toolCallId] += part.argsTextDelta;
 
-          if (toolCallResponsesRaw[toolCallIdx] !== "") {
-            const parsed = parse(toolCallResponsesRaw[toolCallIdx]);
+          if (toolCallResponsesRaw[part.toolCallId] !== "") {
+            const parsed = parse(toolCallResponsesRaw[part.toolCallId]);
             if (parsed.files !== undefined) {
-              toolCallResponsesParsed[toolCallIdx] = parsed.files;
+              toolCallResponsesParsed[part.toolCallId] = parsed.files;
             }
           }
         } else if (part.type === "tool-call") {
@@ -305,7 +321,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
         }
 
         let fileContent = "";
-        for (const toolCallResponse of toolCallResponsesParsed) {
+        for (const toolCallResponse of Object.values(toolCallResponsesParsed)) {
           fileContent += fileContentsJsonToShinyAppString(toolCallResponse);
         }
         // Send the streaming update to the webview

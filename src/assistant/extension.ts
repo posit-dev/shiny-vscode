@@ -1,7 +1,15 @@
-import type { CoreAssistantMessage, CoreMessage } from "ai";
+import { tool, type CoreAssistantMessage, type CoreMessage } from "ai";
+import { Allow, parse } from "partial-json";
 import * as vscode from "vscode";
+import { z } from "zod";
 import { LLM, providerNameFromModelName } from "./llm";
 import { loadSystemPrompt } from "./system-prompt";
+
+export type FileContentJson = {
+  name: string;
+  content: string;
+  type?: "text" | "binary";
+};
 
 // The state of the extension
 type ExtensionState = {
@@ -246,27 +254,70 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
     };
 
     try {
-      const { textStream } = llm.streamText({
+      const { fullStream } = llm.streamText({
         system: systemPrompt,
         messages: state.messages,
+        tools: {
+          writeShinyAppFiles: tool({
+            description: "Write Shiny app files to disk",
+            parameters: z.object({
+              files: z
+                .array(
+                  z.object({
+                    name: z.string().describe("File name"),
+                    content: z.string().describe("File content"),
+                  })
+                )
+                .describe("Array of files to write"),
+            }),
+            execute: async ({ files }: { files: FileContentJson[] }) => {
+              // console.log("WOULD WRITE SHINY APP FILES: ", files);
+              return await writeShinyAppFiles(files);
+            },
+          }),
+        },
       });
 
-      for await (const textPart of textStream) {
-        assistantMessage.content += textPart;
+      const toolCallResponsesRaw: Array<string> = [];
+      const toolCallResponsesParsed: Array<Array<FileContentJson>> = [];
+      let toolCallIdx = 0;
 
+      for await (const part of fullStream) {
+        if (part.type === "text-delta") {
+          assistantMessage.content += part.textDelta;
+        } else if (part.type === "tool-call-streaming-start") {
+          toolCallResponsesRaw.push("");
+          toolCallResponsesParsed.push([]);
+          toolCallIdx = toolCallResponsesParsed.length - 1;
+          // TODO: Handle multiple args?
+          // TODO: Check for tool name
+        } else if (part.type === "tool-call-delta") {
+          toolCallResponsesRaw[toolCallIdx] += part.argsTextDelta;
+
+          if (toolCallResponsesRaw[toolCallIdx] !== "") {
+            const parsed = parse(toolCallResponsesRaw[toolCallIdx]);
+            if (parsed.files !== undefined) {
+              toolCallResponsesParsed[toolCallIdx] = parsed.files;
+            }
+          }
+        } else if (part.type === "tool-call") {
+          // End of tool call streaming
+        }
+
+        let fileContent = "";
+        for (const toolCallResponse of toolCallResponsesParsed) {
+          fileContent += fileContentsJsonToShinyAppString(toolCallResponse);
+        }
         // Send the streaming update to the webview
         // TODO: Stream changes instead of sending whole message
         this._view?.webview.postMessage({
           type: "streamContent",
           data: {
             messageIndex: state.messages.length,
-            content: assistantMessage.content,
+            content: assistantMessage.content + fileContent,
           },
         });
       }
-
-      // Check for and write any files in shinyapp blocks
-      await writeShinyAppFiles(assistantMessage.content as string);
 
       state.messages.push(assistantMessage);
       saveState(this.context);
@@ -277,59 +328,53 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
-/**
- * Extracts files from shinyapp blocks and writes them to disk.
- * Returns true if any files were written, false otherwise.
- *
- * @param content - The text content containing Shiny app code blocks
- * @returns boolean indicating if any files were written
- */
-async function writeShinyAppFiles(content: string): Promise<boolean> {
-  console.log("writeShinyAppFiles called");
-  const shinyAppBlocks =
-    content.match(/<SHINYAPP AUTORUN="[01]">[\s\S]*?<\/SHINYAPP>/g) || [];
-  let filesWritten = false;
-
-  for (const block of shinyAppBlocks) {
-    const files = block.match(/<FILE NAME="[^"]+">[\s\S]*?<\/FILE>/g) || [];
-
-    console.log("files: ", files);
-    for (const file of files) {
-      console.log("FILE: ", file);
-      const nameMatch = file.match(/<FILE NAME="([^"]+)">/);
-      if (!nameMatch) continue;
-
-      const fileName = nameMatch[1];
-      const fileContent = file
-        .replace(/<FILE NAME="[^"]+">|<\/FILE>/g, "")
-        .trim();
-
-      console.log("fileContent: ", fileContent);
-
-      // Create the file
-      console.log("workspace: ", vscode.workspace);
-      console.log("workspaceFolders: ", vscode.workspace.workspaceFolders);
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      console.log("workspaceFolder: ", workspaceFolder);
-      if (!workspaceFolder) continue;
-
-      const filePath = vscode.Uri.joinPath(workspaceFolder.uri, fileName);
-      console.log("filePath: ", filePath);
-
-      try {
-        await vscode.workspace.fs.writeFile(filePath, Buffer.from(fileContent));
-        filesWritten = true;
-
-        // Open the file in the editor
-        const document = await vscode.workspace.openTextDocument(filePath);
-        console.log("document: ", document);
-        await vscode.window.showTextDocument(document, { preview: false });
-      } catch (error) {
-        console.error(`Error writing file ${fileName}:`, error);
-        vscode.window.showErrorMessage(`Failed to write file ${fileName}`);
-      }
-    }
+// Function to convert FileContentJson objects into a string with format:
+// <SHINYAPP AUTORUN="1"><FILE NAME="app.py">content</FILE></SHINYAPP>
+function fileContentsJsonToShinyAppString(files: FileContentJson[]): string {
+  if (files.length === 0) {
+    return "";
   }
 
-  return filesWritten;
+  let result = '<SHINYAPP AUTORUN="1">\n';
+  for (const file of files) {
+    if (!file.name || !file.content) {
+      continue;
+    }
+    result += `<FILE NAME="${file.name}">${file.content}</FILE>\n`;
+  }
+  result += "</SHINYAPP>\n";
+  return result;
+}
+
+/**
+ * Extracts files from shinyapp blocks and writes them to disk.
+ * Returns true if all files are written successfully, false otherwise.
+ *
+ * @param files - The files to write
+ * @returns boolean indicating if all files were written
+ */
+async function writeShinyAppFiles(files: FileContentJson[]): Promise<boolean> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) return false;
+
+  try {
+    for (const file of files) {
+      const filePath = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
+
+      await vscode.workspace.fs.writeFile(filePath, Buffer.from(file.content));
+
+      const document = await vscode.workspace.openTextDocument(filePath);
+      await vscode.window.showTextDocument(document, { preview: false });
+    }
+    return true;
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("Error writing files:", error.message);
+      vscode.window.showErrorMessage(`Failed to write files: ${error.message}`);
+    } else {
+      console.error("Error writing files:", error);
+      vscode.window.showErrorMessage("Failed to write files");
+    }
+    return false;
+  }
 }

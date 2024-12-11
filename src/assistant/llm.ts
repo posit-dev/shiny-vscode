@@ -1,6 +1,6 @@
 import { type AnthropicProvider, createAnthropic } from "@ai-sdk/anthropic";
 import { type OpenAIProvider, createOpenAI } from "@ai-sdk/openai";
-import { type CoreMessage, streamText } from "ai";
+import { type CoreMessage, type CoreTool, streamText } from "ai";
 
 const MAX_TOKENS = 2048;
 
@@ -29,14 +29,19 @@ export class LLM {
   streamText({
     system,
     messages,
+    tools,
   }: {
     system: string;
     messages: Array<CoreMessage>;
+    tools?: Record<string, CoreTool>;
   }) {
     return streamText({
       model: this.provider(this.modelName),
       system,
       messages,
+      tools,
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      experimental_toolCallStreaming: true,
       maxTokens: MAX_TOKENS,
     });
   }

@@ -336,6 +336,7 @@
     "istextorbinary": "^9.5.0",
     "lz-string": "^1.5.0",
     "mocha": "^10.3.0",
+    "partial-json": "^0.1.7",
     "prettier": "^3.3.3",
     "prettier-plugin-organize-imports": "^4.1.0",
     "react": "^18.3.1",
@@ -344,7 +345,8 @@
     "react-syntax-highlighter": "^15.6.1",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.15.0",
-    "winreg": "^1.2.5"
+    "winreg": "^1.2.5",
+    "zod": "^3.23.8"
   },
   "extensionDependencies": []
 }

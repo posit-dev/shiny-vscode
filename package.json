@@ -144,26 +144,6 @@
         }
       ]
     },
-    "problemMatchers": [
-      {
-        "name": "esbuild-watch",
-        "base": "$esbuild",
-        "label": "esbuild --watch problem matcher",
-        "severity": "error",
-        "applyTo": "closedDocuments",
-        "source": "esbuild",
-        "fileLocation": "relative",
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": {
-            "regexp": "\\[watch\\] build started"
-          },
-          "endsPattern": {
-            "regexp": "\\[watch\\] build finished"
-          }
-        }
-      }
-    ],
     "configuration": {
       "title": "Shiny",
       "properties": {

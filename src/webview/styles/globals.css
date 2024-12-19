@@ -1,5 +1,6 @@
 * {
   scrollbar-color: auto;
+  box-sizing: border-box;
 }
 
 .chat-container {
@@ -8,10 +9,10 @@
   box-sizing: border-box;
   height: 100%;
   padding-top: var(--shiny-assistant-margin-y);
+  gap: 0.5rem;
 }
 
 .chat-message {
-  display: flex;
   margin-bottom: var(--shiny-assistant-margin-y);
 }
 

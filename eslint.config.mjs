@@ -6,6 +6,9 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
+const __filename = url.fileURLToPath(new URL(import.meta.url));
+const __dirname = path.dirname(__filename);
+
 const commonRules = {
   "@typescript-eslint/naming-convention": "warn",
   curly: ["warn", "multi-line"],
@@ -22,6 +25,7 @@ const commonTsConfig = {
   ecmaVersion: 2022,
   sourceType: "module",
   parserOptions: {
+    tsconfigRootDir: __dirname,
     ecmaVersion: 2022,
     sourceType: "module",
     project: "./tsconfig.json",

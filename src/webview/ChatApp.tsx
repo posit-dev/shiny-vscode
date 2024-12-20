@@ -1,11 +1,14 @@
 import type { CoreMessage, CoreUserMessage } from "ai";
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import type { ToWebviewStateMessage } from "../../src/assistant/extension";
 import {
   getProperProviderName,
   providerNameFromModelName,
 } from "../assistant/llm";
+import {
+  ExtensionToWebviewMessageState,
+  WebviewToExtensionMessage,
+} from "../assistant/types";
 import { inferFileType } from "../assistant/utils";
 import CodeBlock from "./CodeBlock";
 
@@ -27,13 +30,12 @@ const SendIcon = () => (
 
 const vscode = acquireVsCodeApi();
 
-// When the webview loads, ask the extension for the current state
-vscode.postMessage({ type: "getState" });
+function postMessageToExtension(message: WebviewToExtensionMessage) {
+  vscode.postMessage(message);
+}
 
-// Send messages to the extension
-const sendMessageToExtension = (message: string) => {
-  vscode.postMessage({ type: "userInput", content: message });
-};
+// When the webview loads, ask the extension for the current state
+postMessageToExtension({ type: "getState" });
 
 /**
  * Processes Shiny app code blocks in the content and converts them to markdown
@@ -186,15 +188,15 @@ const ChatApp = () => {
     const messageHandler = (event: MessageEvent) => {
       const msg = event.data;
 
-      if (msg.type === "currentState") {
-        const data = msg.data as ToWebviewStateMessage;
+      if (msg.type === "state") {
+        const { state } = msg as ExtensionToWebviewMessageState;
         setShouldInstantScroll(true);
-        setMessages(data.messages);
-        setModelName(data.model);
-        setHasApiKey(data.hasApiKey);
+        setMessages(state.messages);
+        setModelName(state.model);
+        setHasApiKey(state.hasApiKey);
         if (
-          data.messages.length > 0 &&
-          data.messages[data.messages.length - 1].role !== "user"
+          state.messages.length > 0 &&
+          state.messages[state.messages.length - 1].role !== "user"
         ) {
           setIsThinking(false);
         }
@@ -238,7 +240,7 @@ const ChatApp = () => {
     setInputText("");
     setIsThinking(true);
 
-    sendMessageToExtension(inputText);
+    postMessageToExtension({ type: "userInput", content: inputText });
   };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {

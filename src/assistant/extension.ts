@@ -1,21 +1,10 @@
-import {
-  tool,
-  type CoreAssistantMessage,
-  type CoreMessage,
-  type CoreTool,
-  type StreamTextResult,
-} from "ai";
+import { tool, type CoreAssistantMessage, type CoreMessage } from "ai";
 import { parse } from "partial-json";
 import * as vscode from "vscode";
 import { z } from "zod";
 import { LLM, providerNameFromModelName } from "./llm";
 import { loadSystemPrompt } from "./system-prompt";
-
-export type FileContentJson = {
-  name: string;
-  content: string;
-  type?: "text" | "binary";
-};
+import { ExtensionToWebviewMessage, FileContentJson } from "./types";
 
 // The state of the extension
 type ExtensionState = {
@@ -25,16 +14,6 @@ type ExtensionState = {
 // The state that is persisted across restarts.
 type ExtensionSaveState = {
   messages: Array<CoreMessage>;
-};
-
-// The state that is sent to the webview. This is a subset of the extension
-// state. In the future it might not be a strict subset; it might have some
-// different information, like if the user's view of the messages is different
-// from the actual messages sent to the LLM.
-export type ToWebviewStateMessage = {
-  model: string;
-  messages: Array<CoreMessage>;
-  hasApiKey: boolean;
 };
 
 let systemPrompt = "";
@@ -170,7 +149,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  public sendMessage(message: string) {
+  public postMessageToWebview(message: ExtensionToWebviewMessage) {
     this._view?.webview.postMessage(message);
   }
 
@@ -235,16 +214,16 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
   }
 
   public sendCurrentStateToWebView() {
-    const webviewState: ToWebviewStateMessage = {
-      model: llm?.modelName || "",
-      messages: state.messages,
-      hasApiKey: llm?.apiKey !== "",
+    const webviewStateMessage: ExtensionToWebviewMessage = {
+      type: "state",
+      state: {
+        model: llm?.modelName || "",
+        messages: state.messages,
+        hasApiKey: llm?.apiKey !== "",
+      },
     };
 
-    this._view?.webview.postMessage({
-      type: "currentState",
-      data: webviewState,
-    });
+    this.postMessageToWebview(webviewStateMessage);
   }
 
   private async handleUserInput(message: string) {
@@ -326,7 +305,7 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
         }
         // Send the streaming update to the webview
         // TODO: Stream changes instead of sending whole message
-        this._view?.webview.postMessage({
+        this.postMessageToWebview({
           type: "streamContent",
           data: {
             messageIndex: state.messages.length,

@@ -97,6 +97,7 @@
   font-family: var(--vscode-font-family);
   font-weight: var(--vscode-font-weight);
   font-size: var(--vscode-font-size);
+  color: inherit;
   background-color: transparent;
   overflow: hidden;
   border: none;
@@ -116,7 +117,6 @@
   height: 1.55rem;
   right: 0px;
   bottom: 0px;
-  color: var(--vscode-button-secondaryForeground);
   border: none;
   border-radius: 0.125rem;
 }
@@ -164,6 +164,14 @@ code {
 li,
 ul {
   list-style: inside;
+}
+button {
+  background-color: var(--vscode-button-secondary-background);
+  color: var(--vscode-button-secondaryForeground);
+}
+button:disabled {
+  background-color: var(--vscode-button-secondary-background);
+  color: var(--vscode-disabledForeground);
 }
 
 :root {

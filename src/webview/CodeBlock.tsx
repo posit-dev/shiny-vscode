@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   vs,
@@ -16,15 +16,37 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
   code,
   language = "text",
 }) => {
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    const updateTheme = () => {
+      const isDark = document.body.classList.contains("vscode-dark");
+      setIsDarkMode(isDark);
+    };
+
+    updateTheme();
+
+    // Watch for changes to body class
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className='code-block'>
       <div className='filename'>{filename}</div>
       <SyntaxHighlighter
         language={language}
-        style={vs}
+        style={isDarkMode ? vscDarkPlus : vs}
         customStyle={{
           backgroundColor: undefined,
           margin: 0,
+          fontSize: undefined,
+          lineHeight: undefined,
           fontFamily: undefined,
           border: "none",
         }}

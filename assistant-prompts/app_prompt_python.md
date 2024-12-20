@@ -4,7 +4,7 @@
 
 - Don't mix Shiny Core and Shiny Express syntax. Just use one. Use Core by default, and if the user asks for Express, then use Express.
 
-- Do not use the captilized functions `reactive.Calc`, `reactive.Value`, or `reactive.Effect`. Instead, use the lowercase versions: `reactive.calc`, `reactive.value`, and `reactive.effect`.
+- Do not use the capitalized functions `reactive.Calc`, `reactive.Value`, or `reactive.Effect`. Instead, use the lowercase versions: `reactive.calc`, `reactive.value`, and `reactive.effect`.
 
 - Do not use `ui.panel_sidebar()` because it no longer exists. Instead ,use `ui.sidebar()`.
 

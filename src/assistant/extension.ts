@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import { z } from "zod";
 import { LLM, providerNameFromModelName } from "./llm";
 import { loadSystemPrompt } from "./system-prompt";
-import { ExtensionToWebviewMessage, FileContentJson } from "./types";
+import type { ExtensionToWebviewMessage, FileContentJson } from "./types";
 
 // The state of the extension
 type ExtensionState = {
@@ -268,9 +268,15 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
         Array<FileContentJson>
       > = {};
 
+      this.postMessageToWebview({
+        type: "streamStart",
+      });
+
       for await (const part of fullStream) {
+        let delta = "";
         if (part.type === "text-delta") {
-          assistantMessage.content += part.textDelta;
+          delta = part.textDelta;
+          assistantMessage.content += delta;
         } else if (part.type === "tool-call-streaming-start") {
           if (part.toolName !== "writeShinyAppFiles") {
             // At some point in the future, we can add a registry for handling
@@ -303,16 +309,16 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
         for (const toolCallResponse of Object.values(toolCallResponsesParsed)) {
           fileContent += fileContentsJsonToShinyAppString(toolCallResponse);
         }
-        // Send the streaming update to the webview
-        // TODO: Stream changes instead of sending whole message
+
         this.postMessageToWebview({
-          type: "streamContent",
-          data: {
-            messageIndex: state.messages.length,
-            content: assistantMessage.content + fileContent,
-          },
+          type: "streamTextDelta",
+          textDelta: delta,
         });
       }
+
+      this.postMessageToWebview({
+        type: "streamEnd",
+      });
 
       state.messages.push(assistantMessage);
       saveState(this.context);

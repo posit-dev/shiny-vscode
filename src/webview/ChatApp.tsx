@@ -5,7 +5,8 @@ import {
   getProperProviderName,
   providerNameFromModelName,
 } from "../assistant/llm";
-import {
+import type {
+  ExtensionToWebviewMessage,
   ExtensionToWebviewMessageState,
   WebviewToExtensionMessage,
 } from "../assistant/types";
@@ -186,7 +187,7 @@ const ChatApp = () => {
 
   useEffect(() => {
     const messageHandler = (event: MessageEvent) => {
-      const msg = event.data;
+      const msg = event.data as ExtensionToWebviewMessage;
 
       if (msg.type === "state") {
         const { state } = msg as ExtensionToWebviewMessageState;
@@ -200,19 +201,24 @@ const ChatApp = () => {
         ) {
           setIsThinking(false);
         }
-      } else if (msg.type === "streamContent") {
+      } else if (msg.type === "streamStart") {
         setMessages((prevMessages) => {
-          const newMessages = [...prevMessages];
-          if (newMessages.length < msg.data.messageIndex + 1) {
-            newMessages.push({
-              content: "",
-              role: "assistant",
-            });
-          }
-          newMessages[msg.data.messageIndex].content = msg.data.content;
+          const newMessages = structuredClone(prevMessages);
+          newMessages.push({
+            content: "",
+            role: "assistant",
+          });
+          return newMessages;
+        });
+      } else if (msg.type === "streamTextDelta") {
+        setMessages((prevMessages) => {
+          const newMessages = structuredClone(prevMessages);
+          newMessages[newMessages.length - 1].content += msg.textDelta;
           return newMessages;
         });
         setIsThinking(false);
+      } else if (msg.type === "streamEnd") {
+        // Do nothing
       } else {
         console.log("Webview received unknown message: ", msg);
       }
@@ -224,7 +230,7 @@ const ChatApp = () => {
     return () => {
       window.removeEventListener("message", messageHandler);
     };
-  }, [messages]);
+  }, []);
 
   const sendMessage = () => {
     if (!inputText.trim()) return;

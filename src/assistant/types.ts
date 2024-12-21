@@ -11,7 +11,9 @@ export type FileContentJson = {
 // =============================================================================
 export type ExtensionToWebviewMessage =
   | ExtensionToWebviewMessageState
-  | ExtensionToWebviewMessageStreamContent;
+  | ExtensionToWebviewMessageStreamStart
+  | ExtensionToWebviewMessageStreamTextDelta
+  | ExtensionToWebviewMessageStreamEnd;
 
 // The state that is sent to the webview. This is a subset of the extension
 // state. In the future it might not be a strict subset; it might have some
@@ -25,12 +27,15 @@ export type ExtensionToWebviewMessageState = {
     hasApiKey: boolean;
   };
 };
-export type ExtensionToWebviewMessageStreamContent = {
-  type: "streamContent";
-  data: {
-    messageIndex: number;
-    content: string;
-  };
+export type ExtensionToWebviewMessageStreamStart = {
+  type: "streamStart";
+};
+export type ExtensionToWebviewMessageStreamTextDelta = {
+  type: "streamTextDelta";
+  textDelta: string;
+};
+export type ExtensionToWebviewMessageStreamEnd = {
+  type: "streamEnd";
 };
 
 // =============================================================================

@@ -4,7 +4,9 @@ import reactEslint from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import globals from "globals";
+import path from "path";
 import tseslint from "typescript-eslint";
+import url from "url";
 
 const __filename = url.fileURLToPath(new URL(import.meta.url));
 const __dirname = path.dirname(__filename);
@@ -42,8 +44,8 @@ export default tseslint.config(
     ignores: ["out", "**/*.d.ts"],
   },
   {
-    // Build scripts config - these are run by nodejs, and use commonjs syntax.
-    files: ["esbuild.js"],
+    // Build scripts config - these are run by nodejs.
+    files: ["esbuild.js", "eslint.config.mjs"],
     languageOptions: {
       globals: globals.node,
     },

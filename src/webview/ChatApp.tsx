@@ -1,4 +1,4 @@
-import type { CoreMessage, CoreUserMessage } from "ai";
+import type { CoreAssistantMessage, CoreMessage, CoreUserMessage } from "ai";
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
@@ -10,7 +10,7 @@ import type {
   ExtensionToWebviewMessageState,
   WebviewToExtensionMessage,
 } from "../assistant/types";
-import { inferFileType } from "../assistant/utils";
+import { applyTextDelta, inferFileType } from "../assistant/utils";
 import CodeBlock from "./CodeBlock";
 
 const SendIcon = () => (
@@ -213,7 +213,11 @@ const ChatApp = () => {
       } else if (msg.type === "streamTextDelta") {
         setMessages((prevMessages) => {
           const newMessages = structuredClone(prevMessages);
-          newMessages[newMessages.length - 1].content += msg.textDelta;
+          const lastMessage = newMessages[newMessages.length - 1];
+          lastMessage.content = applyTextDelta(
+            lastMessage.content as string,
+            msg.textDelta
+          );
           return newMessages;
         });
         setIsThinking(false);

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { LLM, providerNameFromModelName } from "./llm";
 import { loadSystemPrompt } from "./system-prompt";
 import type { ExtensionToWebviewMessage, FileContentJson } from "./types";
+import { applyTextDelta, calculateTextDelta } from "./utils";
 
 // The state of the extension
 type ExtensionState = {
@@ -272,6 +273,11 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
         type: "streamStart",
       });
 
+      // Use these for calculating text deltas of file content - the delta isn't
+      // always append-only; it can also include backspaces.
+      let lastFileContent = "";
+      let currentFileContent = "";
+
       for await (const part of fullStream) {
         let delta = "";
         if (part.type === "text-delta") {
@@ -301,19 +307,32 @@ class ShinyAssistantViewProvider implements vscode.WebviewViewProvider {
               toolCallResponsesParsed[part.toolCallId] = parsed.files;
             }
           }
+
+          lastFileContent = currentFileContent;
+          currentFileContent = "";
+          for (const toolCallResponse of Object.values(
+            toolCallResponsesParsed
+          )) {
+            currentFileContent +=
+              fileContentsJsonToShinyAppString(toolCallResponse);
+          }
+
+          delta = calculateTextDelta(lastFileContent, currentFileContent);
+
+          assistantMessage.content = applyTextDelta(
+            assistantMessage.content as string,
+            delta
+          );
         } else if (part.type === "tool-call") {
           // End of tool call streaming
         }
 
-        let fileContent = "";
-        for (const toolCallResponse of Object.values(toolCallResponsesParsed)) {
-          fileContent += fileContentsJsonToShinyAppString(toolCallResponse);
+        if (delta !== "") {
+          this.postMessageToWebview({
+            type: "streamTextDelta",
+            textDelta: delta,
+          });
         }
-
-        this.postMessageToWebview({
-          type: "streamTextDelta",
-          textDelta: delta,
-        });
       }
 
       this.postMessageToWebview({

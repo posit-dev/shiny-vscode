@@ -5,7 +5,7 @@ import { z } from "zod";
 import { LLM, providerNameFromModelName } from "./llm";
 import { loadSystemPrompt } from "./system-prompt";
 import type { ExtensionToWebviewMessage, FileContentJson } from "./types";
-import { applyTextDelta, calculateTextDelta } from "./utils";
+import { applyTextDelta, calculateTextDelta, inferFileType } from "./utils";
 
 // The state of the extension
 type ExtensionState = {
@@ -367,33 +367,45 @@ function fileContentsJsonToShinyAppString(files: FileContentJson[]): string {
 }
 
 /**
- * Extracts files from shinyapp blocks and writes them to disk.
- * Returns true if all files are written successfully, false otherwise.
+ * Handles Shiny app files by either saving them to the workspace (if available)
+ * or creating untitled editors (if no workspace).
+ * Returns true if all operations are successful, false otherwise.
  *
- * @param files - The files to write
- * @returns boolean indicating if all files were written
+ * @param files - The files to handle
+ * @returns boolean indicating if all operations were successful
  */
 async function writeShinyAppFiles(files: FileContentJson[]): Promise<boolean> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (!workspaceFolder) return false;
 
   try {
-    for (const file of files) {
-      const filePath = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
-
-      await vscode.workspace.fs.writeFile(filePath, Buffer.from(file.content));
-
-      const document = await vscode.workspace.openTextDocument(filePath);
-      await vscode.window.showTextDocument(document, { preview: false });
+    if (workspaceFolder) {
+      // If we have a workspace, save files to disk
+      for (const file of files) {
+        const filePath = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
+        await vscode.workspace.fs.writeFile(
+          filePath,
+          Buffer.from(file.content)
+        );
+        const document = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(document, { preview: false });
+      }
+    } else {
+      // If no workspace, create untitled editors
+      for (const file of files) {
+        const document = await vscode.workspace.openTextDocument({
+          content: file.content,
+          language: inferFileType(file.name),
+        });
+        await vscode.window.showTextDocument(document, { preview: false });
+      }
     }
     return true;
   } catch (error) {
+    console.error("Error handling files:", error);
     if (error instanceof Error) {
-      console.error("Error writing files:", error.message);
-      vscode.window.showErrorMessage(`Failed to write files: ${error.message}`);
-    } else {
-      console.error("Error writing files:", error);
-      vscode.window.showErrorMessage("Failed to write files");
+      vscode.window.showErrorMessage(
+        `Failed to handle files: ${error.message}`
+      );
     }
     return false;
   }

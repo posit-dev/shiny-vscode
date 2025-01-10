@@ -1,6 +1,6 @@
 # Change Log
 
-New `shiny.timeout` option to increase default timeout.
+New `shiny.timeoutOpenBrowser` option to increase default timeout.
 
 ## 1.1.0
 

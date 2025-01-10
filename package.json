@@ -134,6 +134,11 @@
             "Don't automatically launch the app after starting"
           ]
         },
+        "shiny.timeout": {
+          "type": "integer",
+          "default": 10000,
+          "description": "The default timeout (in milliseconds) to launch a Shiny App."
+        },
         "shiny.python.port": {
           "type": "integer",
           "default": 0,

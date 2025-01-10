@@ -136,8 +136,8 @@
         },
         "shiny.timeoutOpenBrowser": {
           "type": "integer",
-          "default": 10000,
-          "description": "Maximum wait time for the Shiny app to be ready before opening the browser."
+          "default": 10,
+          "description": "Maximum wait time (in seconds) for the Shiny app to be ready before opening the browser."
         },
         "shiny.python.port": {
           "type": "integer",

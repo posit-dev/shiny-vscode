@@ -51,9 +51,13 @@ async function getTerminalClosedPromise(
   });
 }
 
+/**
+ * Reads `shiny.timeoutOpenBrowser`, which is provided in seconds.
+ * @returns Open browser timeout in milliseconds.
+ */
 function configShinyTimeoutOpenBrowser(): number {
   return (
-    vscode.workspace.getConfiguration().get("shiny.timeoutOpenBrowser") || 10000
+    vscode.workspace.getConfiguration().get("shiny.timeoutOpenBrowser", 10) * 1000
   );
 }
 

@@ -2,7 +2,7 @@
 
 ## [UNRELEASED]
 
-New `shiny.timeoutOpenBrowser` option sets the maximum time to wait for a Shiny app to be ready before attempting to open it in the browser. (@olivroy #82)
+New `shiny.timeoutOpenBrowser` option sets the maximum time to wait (in seconds) for a Shiny app to be ready before attempting to open it in the browser. (@olivroy #82)
 
 ## 1.1.0
 

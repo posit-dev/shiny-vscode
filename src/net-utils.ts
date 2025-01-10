@@ -52,6 +52,16 @@ async function getTerminalClosedPromise(
 }
 
 /**
+ * Reads `shiny.timeoutOpenBrowser`, which is provided in seconds.
+ * @returns Open browser timeout in milliseconds.
+ */
+function configShinyTimeoutOpenBrowser(): number {
+  return (
+    vscode.workspace.getConfiguration().get("shiny.timeoutOpenBrowser", 10) * 1000
+  );
+}
+
+/**
  * Opens a browser for the specified port, once that port is open. Handles
  * translating http://localhost:<port> into a proxy URL, if necessary.
  * @param port The port to open the browser for.
@@ -59,14 +69,15 @@ async function getTerminalClosedPromise(
  * browser.
  * @param timeout Milliseconds to wait for the port to open before letting the
  * user know something is wrong and asking if they'd like to check on the Shiny
- * process or keep waiting. We start with a low 10s wait because some apps might
- * fail quickly, but we increase to 30s if the user chooses to keep waiting.
+ * process or keep waiting. We start with a low 10s (or the shiny.timeoutOpenBrowser option)
+ *  wait because some apps might fail quickly, but we increase to 30s
+ *  if the user chooses to keep waiting.
  */
 export async function openBrowserWhenReady(
   port: number,
   additionalPorts: number[] = [],
   terminal?: vscode.Terminal,
-  timeout: number = 10000
+  timeout: number = configShinyTimeoutOpenBrowser()
 ): Promise<void> {
   if (configShinyPreviewType() === "none") {
     // No need to wait for Shiny app to start or open the browser

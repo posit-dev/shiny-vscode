@@ -17,5 +17,5 @@
     "composite": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/webview"]
+  "exclude": ["node_modules"]
 }

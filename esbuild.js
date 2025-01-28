@@ -82,20 +82,6 @@ async function main() {
       metafile: metafile,
       plugins: [metafilePlugin, esbuildProblemMatcherPlugin],
     }),
-    webview: esbuild.context({
-      entryPoints: ["src/webview/main.tsx"],
-      outdir: "out/webview/",
-      bundle: true,
-      format: "esm",
-      minify: production,
-      sourcemap: !production,
-      sourcesContent: false,
-      tsconfig: "src/webview/tsconfig.json",
-      external: ["vscode", "vscode-webview"],
-      logLevel: "silent",
-      metafile: metafile,
-      plugins: [metafilePlugin, esbuildProblemMatcherPlugin],
-    }),
   };
 
   Object.values(buildmap).forEach((build) =>

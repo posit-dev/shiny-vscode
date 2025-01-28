@@ -61,44 +61,5 @@ export default tseslint.config(
       globals: globals.node,
     },
     rules: commonRules,
-  },
-  {
-    // Browser/React TypeScript files for the webview
-    files: ["src/webview/**/*.{ts,tsx}"],
-    plugins: {
-      react: reactEslint,
-      "react-hooks": reactHooks,
-      "react-refresh": reactRefresh,
-    },
-    languageOptions: {
-      ...commonTsConfig,
-      globals: globals.browser,
-      parserOptions: {
-        ...commonTsConfig.parserOptions,
-        project: "src/webview/tsconfig.json",
-      },
-    },
-    settings: {
-      react: {
-        version: "detect",
-      },
-    },
-    rules: {
-      ...commonRules,
-      ...reactHooks.configs.recommended.rules,
-      "@typescript-eslint/naming-convention": [
-        "warn",
-        {
-          selector: "function",
-          format: ["camelCase", "PascalCase"],
-        },
-      ],
-      "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
-      "react-refresh/only-export-components": [
-        "warn",
-        { allowConstantExport: true },
-      ],
-    },
   }
 );

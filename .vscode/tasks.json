@@ -7,8 +7,7 @@
       "label": "watch",
       "dependsOn": [
         "npm: watch:esbuild",
-        "npm: watch:tsc-backend",
-        "npm: watch:tsc-webview"
+        "npm: watch:tsc",
       ],
       "presentation": {
         "reveal": "never"
@@ -61,24 +60,9 @@
       }
     },
     {
-      "label": "npm: watch:tsc-backend",
+      "label": "npm: watch:tsc",
       "type": "npm",
-      "script": "watch:tsc-backend",
-      "group": "build",
-      "problemMatcher": "$tsc-watch",
-      "isBackground": true,
-      "presentation": {
-        "group": "watch",
-        "reveal": "never"
-      },
-      "options": {
-        "cwd": "${workspaceFolder}"
-      }
-    },
-    {
-      "label": "npm: watch:tsc-webview",
-      "type": "npm",
-      "script": "watch:tsc-webview",
+      "script": "watch:tsc",
       "group": "build",
       "problemMatcher": "$tsc-watch",
       "isBackground": true,

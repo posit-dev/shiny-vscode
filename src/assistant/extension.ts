@@ -1,4 +1,6 @@
+import * as path from "path";
 import * as vscode from "vscode";
+import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { loadSystemPrompt } from "./system-prompt";
 
 export type FileContentJson = {
@@ -7,25 +9,51 @@ export type FileContentJson = {
   type?: "text" | "binary";
 };
 
+let proposedFilePreviewProvider: ProposedFilePreviewProvider | null = null;
+
+// Each set of proposed files gets a unique counter value.
+let proposedFilePreviewCounter = 0;
+
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   registerShinyChatParticipant(extensionContext);
 
   // Register the openCodeInEditor command
-  const openCodeDisposable = vscode.commands.registerCommand(
-    "shiny-chat-extension.openCodeInEditor",
-    async (text: string) => {
-      // Create a new document with the text
-      const document = await vscode.workspace.openTextDocument({
-        content: text,
-        language: "python", // assuming Python for now
-      });
+  const openCodeInEditorDisposable = vscode.commands.registerCommand(
+    "shiny.assistant.openCodeInEditor",
+    openCodeInEditor
+  );
 
-      // Show the document in an editor
-      await vscode.window.showTextDocument(document);
+  const writeFilesToDiskDisposable = vscode.commands.registerCommand(
+    "shiny.assistant.writeFilesToDisk",
+    async (files: FileContentJson[]) => {
+      for (const file of files) {
+        if (file.type === "binary") {
+          vscode.window.showErrorMessage(
+            `File ${file.name} is binary and cannot be opened.`
+          );
+          return;
+        }
+        // Create a new document with the text
+        const document = await vscode.workspace.openTextDocument({
+          content: file.content,
+          language: "python", // assuming Python for now
+        });
+
+        // Show the document in an editor
+        await vscode.window.showTextDocument(document);
+      }
     }
   );
 
-  extensionContext.subscriptions.push(openCodeDisposable);
+  // Register the provider for "proposed-files://" URIs
+  proposedFilePreviewProvider = new ProposedFilePreviewProvider();
+  vscode.workspace.registerTextDocumentContentProvider(
+    "proposed-files",
+    proposedFilePreviewProvider
+  );
+
+  extensionContext.subscriptions.push(openCodeInEditorDisposable);
+  extensionContext.subscriptions.push(writeFilesToDiskDisposable);
 }
 
 export function deactivate() {}
@@ -126,21 +154,44 @@ export function registerShinyChatParticipant(
             } else if (part.kind === "close") {
               if (part.name === "SHINYAPP") {
                 if (shinyAppFiles) {
+                  // Render the file tree control at a base location
+                  // const workspaceFolder = vscode.workspace.workspaceFolders![0];
+
+                  proposedFilePreviewCounter++;
+                  const proposedFilesPrefixDir =
+                    "/app-preview-" + proposedFilePreviewCounter;
+                  proposedFilePreviewProvider?.addFiles(
+                    shinyAppFiles,
+                    proposedFilesPrefixDir
+                  );
+
+                  var tree: vscode.ChatResponseFileTree[] = [
+                    {
+                      name: proposedFilesPrefixDir,
+                      children: shinyAppFiles.map((f) => {
+                        return { name: f.name };
+                      }),
+                    },
+                  ];
+
+                  stream.filetree(tree, vscode.Uri.parse("proposed-files:///"));
+
                   // const document = await vscode.workspace.openTextDocument({
                   //   content: codeBlockContent,
                   //   language: "python",
                   // });
                   // await vscode.window.showTextDocument(document, { preview: false });
                   // stream.button({
-                  //   title: "Show code in editor",
-                  //   command: "shiny-chat-extension.openCodeInEditor",
-                  //   arguments: [codeBlockContent],
+                  //   title: "Open code in editor",
+                  //   command: "shiny.assistant.openCodeInEditor",
+                  //   arguments: [shinyAppFiles],
                   // });
-                  // stream.button({
-                  //   title: "Write files to disk",
-                  //   command: "shiny-chat-extension-write-files-to-disk",
-                  //   arguments: [{ files: shinyAppFiles }],
-                  // });
+
+                  stream.button({
+                    title: "Write files to disk",
+                    command: "shiny.assistant.writeFilesToDisk",
+                    arguments: [shinyAppFiles],
+                  });
                 }
                 state = "TEXT";
               } else {
@@ -384,6 +435,25 @@ class StreamingTagProcessor {
   }
 }
 
+async function openCodeInEditor(files: FileContentJson[]): Promise<void> {
+  for (const file of files) {
+    if (file.type === "binary") {
+      vscode.window.showErrorMessage(
+        `File ${file.name} is binary and cannot be opened.`
+      );
+      return;
+    }
+    // Create a new document with the text
+    const document = await vscode.workspace.openTextDocument({
+      content: file.content,
+      language: "python", // assuming Python for now
+    });
+
+    // Show the document in an editor
+    await vscode.window.showTextDocument(document);
+  }
+}
+
 /**
  * Handles Shiny app files by either saving them to the workspace (if available)
  * or creating untitled editors (if no workspace).
@@ -392,7 +462,7 @@ class StreamingTagProcessor {
  * @param files - The files to handle
  * @returns boolean indicating if all operations were successful
  */
-async function writeShinyAppFiles(files: FileContentJson[]): Promise<boolean> {
+async function writeFilesToDisk(files: FileContentJson[]): Promise<boolean> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
   try {

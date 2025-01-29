@@ -123,6 +123,7 @@ export function registerShinyChatParticipant(
                   name: part.attributes["NAME"],
                   content: "",
                 });
+                stream.markdown("**`" + part.attributes["NAME"] + "`**\n");
                 // TODO: Get filetype
                 stream.markdown("```python\n");
               }
@@ -149,7 +150,7 @@ export function registerShinyChatParticipant(
                     },
                   ];
 
-                  stream.markdown("Preview files in editor:\n");
+                  stream.markdown("Preview in editor:\n");
 
                   stream.filetree(tree, vscode.Uri.parse("proposed-files:///"));
 

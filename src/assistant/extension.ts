@@ -1,4 +1,3 @@
-import * as path from "path";
 import * as vscode from "vscode";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { loadSystemPrompt } from "./system-prompt";
@@ -17,32 +16,9 @@ let proposedFilePreviewCounter = 0;
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   registerShinyChatParticipant(extensionContext);
 
-  // Register the openCodeInEditor command
-  const openCodeInEditorDisposable = vscode.commands.registerCommand(
-    "shiny.assistant.openCodeInEditor",
-    openCodeInEditor
-  );
-
   const writeFilesToDiskDisposable = vscode.commands.registerCommand(
     "shiny.assistant.writeFilesToDisk",
-    async (files: FileContentJson[]) => {
-      for (const file of files) {
-        if (file.type === "binary") {
-          vscode.window.showErrorMessage(
-            `File ${file.name} is binary and cannot be opened.`
-          );
-          return;
-        }
-        // Create a new document with the text
-        const document = await vscode.workspace.openTextDocument({
-          content: file.content,
-          language: "python", // assuming Python for now
-        });
-
-        // Show the document in an editor
-        await vscode.window.showTextDocument(document);
-      }
-    }
+    writeFilesToDisk
   );
 
   // Register the provider for "proposed-files://" URIs
@@ -52,7 +28,6 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
     proposedFilePreviewProvider
   );
 
-  extensionContext.subscriptions.push(openCodeInEditorDisposable);
   extensionContext.subscriptions.push(writeFilesToDiskDisposable);
 }
 
@@ -174,18 +149,9 @@ export function registerShinyChatParticipant(
                     },
                   ];
 
-                  stream.filetree(tree, vscode.Uri.parse("proposed-files:///"));
+                  stream.markdown("Preview files in editor:\n");
 
-                  // const document = await vscode.workspace.openTextDocument({
-                  //   content: codeBlockContent,
-                  //   language: "python",
-                  // });
-                  // await vscode.window.showTextDocument(document, { preview: false });
-                  // stream.button({
-                  //   title: "Open code in editor",
-                  //   command: "shiny.assistant.openCodeInEditor",
-                  //   arguments: [shinyAppFiles],
-                  // });
+                  stream.filetree(tree, vscode.Uri.parse("proposed-files:///"));
 
                   stream.button({
                     title: "Write files to disk",
@@ -435,25 +401,6 @@ class StreamingTagProcessor {
   }
 }
 
-async function openCodeInEditor(files: FileContentJson[]): Promise<void> {
-  for (const file of files) {
-    if (file.type === "binary") {
-      vscode.window.showErrorMessage(
-        `File ${file.name} is binary and cannot be opened.`
-      );
-      return;
-    }
-    // Create a new document with the text
-    const document = await vscode.workspace.openTextDocument({
-      content: file.content,
-      language: "python", // assuming Python for now
-    });
-
-    // Show the document in an editor
-    await vscode.window.showTextDocument(document);
-  }
-}
-
 /**
  * Handles Shiny app files by either saving them to the workspace (if available)
  * or creating untitled editors (if no workspace).
@@ -465,8 +412,8 @@ async function openCodeInEditor(files: FileContentJson[]): Promise<void> {
 async function writeFilesToDisk(files: FileContentJson[]): Promise<boolean> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
-  try {
-    if (workspaceFolder) {
+  if (workspaceFolder) {
+    try {
       // If we have a workspace, save files to disk
       for (const file of files) {
         const filePath = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
@@ -477,24 +424,20 @@ async function writeFilesToDisk(files: FileContentJson[]): Promise<boolean> {
         const document = await vscode.workspace.openTextDocument(filePath);
         await vscode.window.showTextDocument(document, { preview: false });
       }
-    } else {
-      // If no workspace, create untitled editors
-      for (const file of files) {
-        const document = await vscode.workspace.openTextDocument({
-          content: file.content,
-          language: inferFileType(file.name),
-        });
-        await vscode.window.showTextDocument(document, { preview: false });
+      return true;
+    } catch (error) {
+      if (error instanceof Error) {
+        vscode.window.showErrorMessage(
+          `Failed to handle files: ${error.message}`
+        );
       }
+      return false;
     }
-    return true;
-  } catch (error) {
-    console.error("Error handling files:", error);
-    if (error instanceof Error) {
-      vscode.window.showErrorMessage(
-        `Failed to handle files: ${error.message}`
-      );
-    }
-    return false;
+  } else {
+    // If no workspace, create untitled editors
+    vscode.window.showErrorMessage(
+      "You currently do not have an active workspace folder. Please open a workspace folder and try again."
+    );
   }
+  return false;
 }

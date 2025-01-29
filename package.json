@@ -81,10 +81,6 @@
         "icon": "$(cloud-upload)"
       },
       {
-        "command": "shiny-chat-extension.openCodeInEditor",
-        "title": "Open code in editor"
-      },
-      {
         "command": "shiny.assistant.writeFilesToDisk",
         "title": "Write files to disk"
       }

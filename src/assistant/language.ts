@@ -1,8 +1,72 @@
 import * as vscode from "vscode";
 
 /**
+ * Counts the number of R and Python files in all workspace folders
+ * @returns An object containing the count of .r/.R and .py files
+ */
+export async function countLanguageFiles(): Promise<{
+  r: number;
+  python: number;
+}> {
+  const result = { r: 0, python: 0 };
+
+  try {
+    // Search for .r/.R and .py files in the workspace, up to 20 of each
+    const rFiles = await vscode.workspace.findFiles("**/*.[rR]", undefined, 20);
+    const pyFiles = await vscode.workspace.findFiles("**/*.py", undefined, 20);
+
+    result.r = rFiles.length;
+    result.python = pyFiles.length;
+  } catch (error) {
+    console.error("Error counting language files:", error);
+  }
+
+  return result;
+}
+
+export type ProjectType =
+  | "definitely_r"
+  | "definitely_python"
+  | "probably_r"
+  | "probably_python"
+  | "unsure";
+
+/**
+ * Guess the likely project type based on the count of R and Python files.
+ *
+ * @param counts Object containing counts of R and Python files
+ * @returns ProjectType indicating whether the project is definitely/probably
+ * R/Python or unsure
+ * - "definitely_r": Only R files present
+ * - "definitely_python": Only Python files present
+ * - "probably_r": R files outnumber Python files by at least 3:1
+ * - "probably_python": Python files outnumber R files by at least 3:1
+ * - "unsure": No clear majority or no files found
+ */
+export function guessProjectType(counts: {
+  r: number;
+  python: number;
+}): ProjectType {
+  // If only one type exists, it's definitely that type
+  if (counts.r > 0 && counts.python === 0) return "definitely_r";
+  if (counts.python > 0 && counts.r === 0) return "definitely_python";
+
+  // If neither exists, we're unsure
+  if (counts.r === 0 && counts.python === 0) return "unsure";
+
+  // Calculate ratio to determine "probably" cases
+  const ratio = counts.r / counts.python;
+  if (ratio >= 3) return "probably_r";
+  if (ratio <= 1 / 3) return "probably_python";
+
+  // If ratio is between 1/3 and 3, we're unsure
+  return "unsure";
+}
+
+/**
  * Checks if a valid Python environment is available
- * @returns Promise that resolves to true if a valid Python environment is found, false otherwise
+ * @returns Promise that resolves to true if a valid Python environment is
+ * found, false otherwise
  */
 export async function checkPythonEnvironment(): Promise<boolean> {
   // First check if Python extension is installed

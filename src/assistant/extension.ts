@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { checkPythonEnvironment } from "./lang-python";
+import { checkPythonEnvironment } from "./language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";

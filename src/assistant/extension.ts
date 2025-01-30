@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { checkPythonEnvironment } from "./lang-python";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { loadSystemPrompt } from "./system-prompt";
 
@@ -29,6 +30,9 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   );
 
   extensionContext.subscriptions.push(writeFilesToDiskDisposable);
+
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  checkPythonEnvironment();
 }
 
 export function deactivate() {}

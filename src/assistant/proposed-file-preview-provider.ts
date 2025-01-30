@@ -1,6 +1,6 @@
 import * as path from "path";
-import * as vscode from "vscode";
-import { FileContentJson } from "./extension";
+import type * as vscode from "vscode";
+import { type FileContentJson } from "./extension";
 
 /**
  * A VSCode TextDocumentContentProvider that manages a virtual file system for file previews.

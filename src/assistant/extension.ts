@@ -141,7 +141,7 @@ export function registerShinyChatParticipant(
                     proposedFilesPrefixDir
                   );
 
-                  var tree: vscode.ChatResponseFileTree[] = [
+                  const tree: vscode.ChatResponseFileTree[] = [
                     {
                       name: "/",
                       children: shinyAppFiles.map((f) => {

@@ -31,7 +31,7 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   checkPythonEnvironment();
 }
 
-export function deactivate() {}
+export function deactivateAssistant() {}
 
 export function registerShinyChatParticipant(
   extensionContext: vscode.ExtensionContext

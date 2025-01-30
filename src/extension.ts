@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { activateAssistant } from "./assistant/extension";
+import { activateAssistant, deactivateAssistant } from "./assistant/extension";
 import { handlePositShinyUri } from "./extension-onUri";
 import { onDidStartDebugSession, pyDebugApp, pyRunApp, rRunApp } from "./run";
 import {
@@ -65,7 +65,9 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+  deactivateAssistant();
+}
 
 function updateContext(language: "python" | "r"): boolean {
   const shinyContext = `shiny.${language}.active`;

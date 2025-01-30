@@ -143,7 +143,7 @@ export function registerShinyChatParticipant(
 
                   var tree: vscode.ChatResponseFileTree[] = [
                     {
-                      name: proposedFilesPrefixDir,
+                      name: "/",
                       children: shinyAppFiles.map((f) => {
                         return { name: f.name };
                       }),
@@ -152,7 +152,12 @@ export function registerShinyChatParticipant(
 
                   stream.markdown("Preview in editor:\n");
 
-                  stream.filetree(tree, vscode.Uri.parse("proposed-files:///"));
+                  stream.filetree(
+                    tree,
+                    vscode.Uri.parse(
+                      "proposed-files://" + proposedFilesPrefixDir
+                    )
+                  );
 
                   stream.button({
                     title: "Write files to disk",

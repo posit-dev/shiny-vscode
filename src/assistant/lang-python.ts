@@ -45,3 +45,30 @@ export async function checkPythonEnvironment(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Checks if the Shiny package is installed in the current Python environment
+ * @returns Promise that resolves to true if Shiny is installed, false otherwise
+ */
+export async function checkShinyInstalled(): Promise<boolean> {
+  const pythonExtension = vscode.extensions.getExtension("ms-python.python");
+  if (!pythonExtension) {
+    return false;
+  }
+
+  try {
+    const pythonAPI = await pythonExtension.activate();
+    const code =
+      'import importlib.util; print(importlib.util.find_spec("shiny") is not None)';
+    const result = await pythonAPI.environments.executeInTerminal(code);
+
+    // The result will be 'True' if shiny is installed, 'False' if not
+    return result?.trim().toLowerCase() === "true";
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      "Error checking Shiny installation: " +
+        (error instanceof Error ? error.message : String(error))
+    );
+    return false;
+  }
+}

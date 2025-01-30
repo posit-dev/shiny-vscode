@@ -4,7 +4,7 @@ import * as vscode from "vscode";
  * Counts the number of R and Python files in all workspace folders
  * @returns An object containing the count of .r/.R and .py files
  */
-export async function countLanguageFiles(): Promise<{
+async function countLanguageFilesInWorkspace(): Promise<{
   r: number;
   python: number;
 }> {
@@ -24,7 +24,7 @@ export async function countLanguageFiles(): Promise<{
   return result;
 }
 
-export type ProjectType =
+export type ProjectLanguageGuess =
   | "definitely_r"
   | "definitely_python"
   | "probably_r"
@@ -35,18 +35,18 @@ export type ProjectType =
  * Guess the likely project type based on the count of R and Python files.
  *
  * @param counts Object containing counts of R and Python files
- * @returns ProjectType indicating whether the project is definitely/probably
- * R/Python or unsure
+ * @returns ProjectLanguage indicating whether the project is
+ * definitely/probably R/Python or unsure
  * - "definitely_r": Only R files present
  * - "definitely_python": Only Python files present
  * - "probably_r": R files outnumber Python files by at least 3:1
  * - "probably_python": Python files outnumber R files by at least 3:1
  * - "unsure": No clear majority or no files found
  */
-export function guessProjectType(counts: {
+function guessProjectLanguage(counts: {
   r: number;
   python: number;
-}): ProjectType {
+}): ProjectLanguageGuess {
   // If only one type exists, it's definitely that type
   if (counts.r > 0 && counts.python === 0) return "definitely_r";
   if (counts.python > 0 && counts.r === 0) return "definitely_python";
@@ -61,6 +61,11 @@ export function guessProjectType(counts: {
 
   // If ratio is between 1/3 and 3, we're unsure
   return "unsure";
+}
+
+export async function guessWorkspaceLanguage(): Promise<ProjectLanguageGuess> {
+  const counts = await countLanguageFilesInWorkspace();
+  return guessProjectLanguage(counts);
 }
 
 /**

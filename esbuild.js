@@ -69,7 +69,7 @@ const metafilePlugin = {
 async function main() {
   const buildmap = {
     extension: esbuild.context({
-      entryPoints: ["src/extension.ts", "src/test/runTest.ts"],
+      entryPoints: ["src/extension.ts"],
       bundle: true,
       outdir: "out/",
       format: "cjs",
@@ -81,6 +81,20 @@ async function main() {
       logLevel: "silent",
       metafile: metafile,
       plugins: [metafilePlugin, esbuildProblemMatcherPlugin],
+    }),
+    test: esbuild.context({
+      entryPoints: ["src/test/**/*.ts"],
+      bundle: true,
+      outdir: "out/test/",
+      format: "cjs",
+      minify: false,
+      sourcemap: false,
+      sourcesContent: false,
+      platform: "node",
+      external: ["vscode"],
+      logLevel: "silent",
+      metafile: false,
+      plugins: [esbuildProblemMatcherPlugin],
     }),
   };
 
@@ -94,7 +108,10 @@ async function main() {
           await context.dispose();
         }
       })
-      .catch(() => process.exit(1))
+      .catch((e) => {
+        console.error(e);
+        process.exit(1);
+      })
   );
 }
 

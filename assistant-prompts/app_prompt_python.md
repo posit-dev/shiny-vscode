@@ -1,5 +1,3 @@
-- Try not to import big packages like scipy.
-
 - Prefer using matplotlib instead of plotly for plotting. A matplotlib plot should not return `plt`. It does not need to return anything, but if necessary, can return `fig`.
 
 - Don't mix Shiny Core and Shiny Express syntax. Just use one. Use Core by default, and if the user asks for Express, then use Express.
@@ -31,7 +29,7 @@
 
 - If the user says that there is an error about a missing package, tell them to add requirements.txt with that package.
 
-- Put all required packages in a `requirements.txt` file, and present that file inside of the `<SHINYAPP>` tags.
+- Put all required packages in a `requirements.txt` file, and present that file inside of the `<SHINYAPP>` tags. Include the shiny package.
 
 ## Examples
 

@@ -116,12 +116,14 @@ export function registerShinyChatParticipant(
           arguments: ["python"],
         });
       }
-      stream.progress("");
     }
 
+    // If we prompted the user for language, this will block until they choose.
     const language = await projectLanguagePromise;
 
-    const prompt = await loadSystemPrompt(extensionContext);
+    stream.progress("");
+
+    const prompt = await loadSystemPrompt(extensionContext, language);
 
     // Initialize the messages array with the prompt
     const messages = [vscode.LanguageModelChatMessage.User(prompt)];
@@ -158,6 +160,7 @@ export function registerShinyChatParticipant(
       const processedFragment = tagProcessor.process(fragment);
 
       for (const part of processedFragment) {
+        // TODO: flush at the end?
         if (state === "TEXT") {
           if (part.type === "text") {
             stream.markdown(part.text);

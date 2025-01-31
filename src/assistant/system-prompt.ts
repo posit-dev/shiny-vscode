@@ -31,7 +31,8 @@ async function loadLanguageSpecificPrompt(
 }
 
 export async function loadSystemPrompt(
-  context: vscode.ExtensionContext
+  context: vscode.ExtensionContext,
+  language: "r" | "python"
 ): Promise<string> {
   try {
     const promptPath = path.join(
@@ -40,9 +41,6 @@ export async function loadSystemPrompt(
       "app_prompt.md"
     );
     const promptTemplate = await fs.readFile(promptPath, "utf8");
-
-    // Default to Python for now
-    const language = "python";
 
     // Load language-specific prompt
     const languageSpecificPrompt = await loadLanguageSpecificPrompt(

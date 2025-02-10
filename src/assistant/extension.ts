@@ -231,7 +231,7 @@ export function registerShinyChatParticipant(
                     },
                   ];
 
-                  stream.markdown("This is the proposed file structure:\n");
+                  stream.markdown("These are the proposed files:\n");
 
                   stream.filetree(
                     tree,
@@ -241,9 +241,9 @@ export function registerShinyChatParticipant(
                   );
 
                   stream.button({
-                    title: "Write files to disk",
+                    title: "Save files to workspace",
                     command: "shiny.assistant.writeFilesToDisk",
-                    arguments: [shinyAppFiles],
+                    arguments: [shinyAppFiles, true],
                   });
                 }
                 state = "TEXT";
@@ -308,9 +308,13 @@ export function registerShinyChatParticipant(
  * Returns true if all operations are successful, false otherwise.
  *
  * @param files - The files to handle
+ * @param closeProposedFileTabs - Whether to close the tabs with proposed files.
  * @returns boolean indicating if all operations were successful
  */
-async function writeFilesToDisk(files: FileContentJson[]): Promise<boolean> {
+async function writeFilesToDisk(
+  files: FileContentJson[],
+  closeProposedFileTabs: boolean = false
+): Promise<boolean> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
   if (workspaceFolder) {
@@ -324,6 +328,9 @@ async function writeFilesToDisk(files: FileContentJson[]): Promise<boolean> {
         );
         const document = await vscode.workspace.openTextDocument(filePath);
         await vscode.window.showTextDocument(document, { preview: false });
+      }
+      if (closeProposedFileTabs) {
+        await closeAllProposedFileTabs();
       }
       return true;
     } catch (error) {
@@ -341,4 +348,17 @@ async function writeFilesToDisk(files: FileContentJson[]): Promise<boolean> {
     );
   }
   return false;
+}
+
+async function closeAllProposedFileTabs() {
+  const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
+  const proposedFileTabs = tabs.filter((tab) => {
+    console.log(tab);
+    const input = tab.input as { uri?: vscode.Uri };
+    return input?.uri?.scheme === "proposed-files";
+  });
+
+  for (const tab of proposedFileTabs) {
+    await vscode.window.tabGroups.close(tab);
+  }
 }

@@ -308,73 +308,76 @@ export function registerShinyChatParticipant(
  * or creating untitled editors (if no workspace).
  * Returns true if all operations are successful, false otherwise.
  *
- * @param files - The files to handle
+ * @param newFiles - The files to handle
  * @param closeProposedFileTabs - Whether to close the tabs with proposed files.
  * @returns boolean indicating if all operations were successful
  */
 async function saveFilesToWorkspace(
-  files: FileContentJson[],
+  newFiles: FileContentJson[],
   closeProposedFileTabs: boolean = false
 ): Promise<boolean> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
   if (workspaceFolder) {
+    if (closeProposedFileTabs) {
+      await closeAllProposedFileTabs();
+    }
+
     try {
-      // Check for existing files first
-      const existingFiles: string[] = [];
-      for (const file of files) {
-        const filePath = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
-        try {
-          await vscode.workspace.fs.stat(filePath);
-          existingFiles.push(file.name);
-        } catch (err) {
-          // File doesn't exist, which is fine
-        }
-      }
+      const changedUris: vscode.Uri[] = [];
+      const workspaceEdit = new vscode.WorkspaceEdit();
 
-      // If there are existing files, prompt for confirmation
-      if (existingFiles.length > 0) {
-        const message =
-          existingFiles.length === 1
-            ? `File "${existingFiles[0]}" already exists. Do you want to overwrite it?`
-            : `The following files already exist:\n${existingFiles.join("\n")}\nDo you want to overwrite them?`;
-
-        const response = await vscode.window.showWarningMessage(
-          message,
-          { modal: true },
-          "Yes, Overwrite",
-          "No, Cancel"
-        );
-
-        if (response !== "Yes, Overwrite") {
-          return false;
-        }
-      }
-
-      let appFileEditor: vscode.TextEditor | null = null;
       // If we have a workspace, save files to disk.
-      for (const file of files) {
-        const filePath = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
-        await vscode.workspace.fs.writeFile(
-          filePath,
-          Buffer.from(file.content)
-        );
-        const document = await vscode.workspace.openTextDocument(filePath);
+      for (const newFile of newFiles) {
+        const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, newFile.name);
 
-        const textEditor = await vscode.window.showTextDocument(document, {
-          preview: false,
-        });
-        if (["app.R", "app.py"].includes(path.basename(file.name))) {
-          appFileEditor = textEditor;
+        try {
+          // Try to open existing file. If it exists, then replace its content.
+          await vscode.workspace.fs.stat(fileUri);
+          const document = await vscode.workspace.openTextDocument(fileUri);
+
+          // Replace the content only if it's different.
+          if (document.getText() !== newFile.content) {
+            workspaceEdit.set(fileUri, [
+              vscode.TextEdit.replace(
+                new vscode.Range(
+                  document.positionAt(0),
+                  document.positionAt(document.getText().length)
+                ),
+                newFile.content
+              ),
+            ]);
+            changedUris.push(fileUri);
+          }
+        } catch (err) {
+          // File does not exist; create it.
+          workspaceEdit.createFile(fileUri, {
+            overwrite: false,
+            contents: Buffer.from(newFile.content, "utf-8"),
+          });
+          changedUris.push(fileUri);
         }
       }
-      if (closeProposedFileTabs) {
-        await closeAllProposedFileTabs();
+
+      await vscode.workspace.applyEdit(workspaceEdit);
+
+      let appFileDocument: vscode.TextDocument | null = null;
+      // Open all the changed files in editors
+      for (const uri of changedUris) {
+        const document = await vscode.workspace.openTextDocument(uri);
+        if (["app.R", "app.py"].includes(path.basename(uri.fsPath))) {
+          appFileDocument = document;
+        }
+        await vscode.window.showTextDocument(document, {
+          preserveFocus: false,
+        });
       }
 
-      if (appFileEditor) {
-        // Bring the app.py/R editor to the front and give it focus.
-        await vscode.window.showTextDocument(appFileEditor.document, {
+      // If there was an app.py/R, then focus on it. The reason we didn't simply
+      // sort the file list and put the app.py/R last is because it usually
+      // makes sense to have it first in the list of editors.
+      if (appFileDocument) {
+        await vscode.window.showTextDocument(appFileDocument, {
           preserveFocus: false,
         });
       }

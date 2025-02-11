@@ -74,8 +74,6 @@ export class StreamingTagProcessor {
    * there is no such text.
    */
   process(chunk: string): Array<ProcessedText | ProcessedTag> {
-    // this.buffer += chunk;
-
     const result: Array<ProcessedText | ProcessedTag> = [];
 
     for (const char of chunk) {

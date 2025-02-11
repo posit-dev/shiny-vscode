@@ -400,7 +400,6 @@ async function saveFilesToWorkspace(
 async function closeAllProposedFileTabs() {
   const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
   const proposedFileTabs = tabs.filter((tab) => {
-    console.log(tab);
     const input = tab.input as { uri?: vscode.Uri };
     return input?.uri?.scheme === "proposed-files";
   });

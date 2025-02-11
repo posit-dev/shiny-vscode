@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import { checkPythonEnvironment, guessWorkspaceLanguage } from "./language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
@@ -319,7 +320,8 @@ async function saveFilesToWorkspace(
 
   if (workspaceFolder) {
     try {
-      // If we have a workspace, save files to disk
+      let appFileEditor: vscode.TextEditor | null = null;
+      // If we have a workspace, save files to disk.
       for (const file of files) {
         const filePath = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
         await vscode.workspace.fs.writeFile(
@@ -327,11 +329,25 @@ async function saveFilesToWorkspace(
           Buffer.from(file.content)
         );
         const document = await vscode.workspace.openTextDocument(filePath);
-        await vscode.window.showTextDocument(document, { preview: false });
+
+        const textEditor = await vscode.window.showTextDocument(document, {
+          preview: false,
+        });
+        if (["app.R", "app.py"].includes(path.basename(file.name))) {
+          appFileEditor = textEditor;
+        }
       }
       if (closeProposedFileTabs) {
         await closeAllProposedFileTabs();
       }
+
+      if (appFileEditor) {
+        // Bring the app.py/R editor to the front and give it focus.
+        await vscode.window.showTextDocument(appFileEditor.document, {
+          preserveFocus: false,
+        });
+      }
+
       return true;
     } catch (error) {
       if (error instanceof Error) {

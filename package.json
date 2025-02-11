@@ -81,8 +81,8 @@
         "icon": "$(cloud-upload)"
       },
       {
-        "command": "shiny.assistant.writeFilesToDisk",
-        "title": "Write files to disk"
+        "command": "shiny.assistant.saveFilesToWorkspace",
+        "title": "Save files to workspace"
       }
     ],
     "menus": {

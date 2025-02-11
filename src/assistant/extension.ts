@@ -21,9 +21,9 @@ const projectLanguagePromise: PromiseWithStatus<"r" | "python"> =
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   registerShinyChatParticipant(extensionContext);
 
-  const writeFilesToDiskDisposable = vscode.commands.registerCommand(
-    "shiny.assistant.writeFilesToDisk",
-    writeFilesToDisk
+  const saveFilesToWorkspaceDisposable = vscode.commands.registerCommand(
+    "shiny.assistant.saveFilesToWorkspace",
+    saveFilesToWorkspace
   );
   const setProjectLanguageDisposable = vscode.commands.registerCommand(
     "shiny.assistant.setProjectLanguage",
@@ -40,7 +40,7 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
       proposedFilePreviewProvider
     );
 
-  extensionContext.subscriptions.push(writeFilesToDiskDisposable);
+  extensionContext.subscriptions.push(saveFilesToWorkspaceDisposable);
   extensionContext.subscriptions.push(setProjectLanguageDisposable);
   extensionContext.subscriptions.push(
     registerTextDocumentContentProviderDisposable
@@ -241,8 +241,8 @@ export function registerShinyChatParticipant(
                   );
 
                   stream.button({
-                    title: "Save files to workspace",
-                    command: "shiny.assistant.writeFilesToDisk",
+                    title: "Save files to disk",
+                    command: "shiny.assistant.saveFilesToWorkspace",
                     arguments: [shinyAppFiles, true],
                   });
                 }
@@ -311,7 +311,7 @@ export function registerShinyChatParticipant(
  * @param closeProposedFileTabs - Whether to close the tabs with proposed files.
  * @returns boolean indicating if all operations were successful
  */
-async function writeFilesToDisk(
+async function saveFilesToWorkspace(
   files: FileContentJson[],
   closeProposedFileTabs: boolean = false
 ): Promise<boolean> {

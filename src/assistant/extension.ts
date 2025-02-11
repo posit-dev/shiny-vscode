@@ -320,6 +320,37 @@ async function saveFilesToWorkspace(
 
   if (workspaceFolder) {
     try {
+      // Check for existing files first
+      const existingFiles: string[] = [];
+      for (const file of files) {
+        const filePath = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
+        try {
+          await vscode.workspace.fs.stat(filePath);
+          existingFiles.push(file.name);
+        } catch (err) {
+          // File doesn't exist, which is fine
+        }
+      }
+
+      // If there are existing files, prompt for confirmation
+      if (existingFiles.length > 0) {
+        const message =
+          existingFiles.length === 1
+            ? `File "${existingFiles[0]}" already exists. Do you want to overwrite it?`
+            : `The following files already exist:\n${existingFiles.join("\n")}\nDo you want to overwrite them?`;
+
+        const response = await vscode.window.showWarningMessage(
+          message,
+          { modal: true },
+          "Yes, Overwrite",
+          "No, Cancel"
+        );
+
+        if (response !== "Yes, Overwrite") {
+          return false;
+        }
+      }
+
       let appFileEditor: vscode.TextEditor | null = null;
       // If we have a workspace, save files to disk.
       for (const file of files) {

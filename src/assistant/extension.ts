@@ -16,6 +16,9 @@ let proposedFilePreviewProvider: ProposedFilePreviewProvider | null = null;
 // Each set of proposed files gets a unique counter value.
 let proposedFilePreviewCounter = 0;
 
+// The label for the editor tab that shows proposed changes.
+const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
+
 const projectLanguagePromise: PromiseWithStatus<"r" | "python"> =
   createPromiseWithStatus<"r" | "python">();
 
@@ -25,6 +28,10 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   const saveFilesToWorkspaceDisposable = vscode.commands.registerCommand(
     "shiny.assistant.saveFilesToWorkspace",
     saveFilesToWorkspace
+  );
+  const showDiffDisposable = vscode.commands.registerCommand(
+    "shiny.assistant.showDiff",
+    showDiff
   );
   const setProjectLanguageDisposable = vscode.commands.registerCommand(
     "shiny.assistant.setProjectLanguage",
@@ -42,6 +49,7 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
     );
 
   extensionContext.subscriptions.push(saveFilesToWorkspaceDisposable);
+  extensionContext.subscriptions.push(showDiffDisposable);
   extensionContext.subscriptions.push(setProjectLanguageDisposable);
   extensionContext.subscriptions.push(
     registerTextDocumentContentProviderDisposable
@@ -221,8 +229,6 @@ export function registerShinyChatParticipant(
               if (part.name === "SHINYAPP") {
                 if (shinyAppFiles) {
                   // Render the file tree control at a base location
-                  // const workspaceFolder = vscode.workspace.workspaceFolders![0];
-
                   proposedFilePreviewCounter++;
                   const proposedFilesPrefixDir =
                     "/app-preview-" + proposedFilePreviewCounter;
@@ -231,26 +237,36 @@ export function registerShinyChatParticipant(
                     proposedFilesPrefixDir
                   );
 
-                  const tree: vscode.ChatResponseFileTree[] = [
-                    {
-                      name: "/",
-                      children: shinyAppFiles.map((f) => {
-                        return { name: f.name };
-                      }),
-                    },
-                  ];
+                  // const tree: vscode.ChatResponseFileTree[] = [
+                  //   {
+                  //     name: "/",
+                  //     children: shinyAppFiles.map((f) => {
+                  //       return { name: f.name };
+                  //     }),
+                  //   },
+                  // ];
 
-                  stream.markdown("These are the proposed files:\n");
+                  // stream.markdown("These are the proposed files:\n");
 
-                  stream.filetree(
-                    tree,
-                    vscode.Uri.parse(
-                      "proposed-files://" + proposedFilesPrefixDir
-                    )
-                  );
+                  // stream.filetree(
+                  //   tree,
+                  //   vscode.Uri.parse(
+                  //     "proposed-files://" + proposedFilesPrefixDir
+                  //   )
+                  // );
 
                   stream.button({
-                    title: "Save files to disk",
+                    title: "Show changes as diff",
+                    command: "shiny.assistant.showDiff",
+                    arguments: [
+                      shinyAppFiles,
+                      vscode.workspace.workspaceFolders?.[0],
+                      proposedFilesPrefixDir,
+                    ],
+                  });
+
+                  stream.button({
+                    title: "Apply changes to workspace",
                     command: "shiny.assistant.saveFilesToWorkspace",
                     arguments: [shinyAppFiles, true],
                   });
@@ -317,18 +333,18 @@ export function registerShinyChatParticipant(
  * Returns true if all operations are successful, false otherwise.
  *
  * @param newFiles - The files to handle
- * @param closeProposedFileTabs - Whether to close the tabs with proposed files.
+ * @param closeProposedChangesTabs - Whether to close the tabs with proposed files.
  * @returns boolean indicating if all operations were successful
  */
 async function saveFilesToWorkspace(
   newFiles: FileContentJson[],
-  closeProposedFileTabs: boolean = false
+  closeProposedChangesTabs: boolean = false
 ): Promise<boolean> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
   if (workspaceFolder) {
-    if (closeProposedFileTabs) {
-      await closeAllProposedFileTabs();
+    if (closeProposedChangesTabs) {
+      await closeAllProposedChangesTabs();
     }
 
     try {
@@ -408,11 +424,55 @@ async function saveFilesToWorkspace(
   return false;
 }
 
-async function closeAllProposedFileTabs() {
+async function showDiff(
+  newFiles: FileContentJson[],
+  workspaceFolder: vscode.WorkspaceFolder | undefined,
+  proposedFilesPrefixDir: string
+): Promise<boolean> {
+  if (!workspaceFolder) {
+    // TODO: Better handling here
+    vscode.window.showErrorMessage(
+      "You currently do not have an active workspace folder. Please open a workspace folder and try again."
+    );
+    return false;
+  }
+
+  try {
+    // Add files to the preview provider
+    proposedFilePreviewProvider?.addFiles(newFiles);
+
+    const changes: Array<[vscode.Uri, vscode.Uri, vscode.Uri]> = [];
+
+    for (const file of newFiles) {
+      const existingUri = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
+      const proposedUri = vscode.Uri.parse(
+        `proposed-files://${proposedFilesPrefixDir}/${file.name}`
+      );
+
+      changes.push([
+        // As far as I can tell, the label URI is completely unused.
+        vscode.Uri.parse("dummy-scheme://unused-label"),
+        existingUri,
+        proposedUri,
+      ]);
+    }
+    vscode.commands.executeCommand(
+      "vscode.changes",
+      PROPOSED_CHANGES_TAB_LABEL,
+      changes
+    );
+
+    return true;
+  } catch (error) {
+    console.error("Error showing diff:", error);
+    return false;
+  }
+}
+
+async function closeAllProposedChangesTabs() {
   const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
   const proposedFileTabs = tabs.filter((tab) => {
-    const input = tab.input as { uri?: vscode.Uri };
-    return input?.uri?.scheme === "proposed-files";
+    return tab.isPreview && tab.label.startsWith(PROPOSED_CHANGES_TAB_LABEL);
   });
 
   for (const tab of proposedFileTabs) {

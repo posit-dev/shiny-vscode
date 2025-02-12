@@ -445,6 +445,17 @@ async function showDiff(
 
     for (const file of newFiles) {
       const existingUri = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
+      let sourceUri: vscode.Uri;
+      // For non-existent files, use an empty URI with the proposed-files scheme
+      try {
+        await vscode.workspace.fs.stat(existingUri);
+        sourceUri = existingUri;
+      } catch {
+        // If the file doesn't exist on disk, use a (virtual) empty file
+        // instead.
+        sourceUri = vscode.Uri.parse(`proposed-files://empty/${file.name}`);
+      }
+
       const proposedUri = vscode.Uri.parse(
         `proposed-files://${proposedFilesPrefixDir}/${file.name}`
       );
@@ -452,7 +463,7 @@ async function showDiff(
       changes.push([
         // As far as I can tell, the label URI is completely unused.
         vscode.Uri.parse("dummy-scheme://unused-label"),
-        existingUri,
+        sourceUri,
         proposedUri,
       ]);
     }

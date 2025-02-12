@@ -124,10 +124,10 @@ export function registerShinyChatParticipant(
 
     stream.progress("");
 
-    const prompt = await loadSystemPrompt(extensionContext, language);
+    const systemPrompt = await loadSystemPrompt(extensionContext, language);
 
     // Initialize the messages array with the prompt
-    const messages = [vscode.LanguageModelChatMessage.User(prompt)];
+    const messages = [vscode.LanguageModelChatMessage.User(systemPrompt)];
 
     // Get all the previous participant messages
     const previousMessages = chatContext.history.filter(
@@ -144,7 +144,15 @@ export function registerShinyChatParticipant(
       messages.push(vscode.LanguageModelChatMessage.Assistant(fullMessage));
     });
 
-    messages.push(vscode.LanguageModelChatMessage.User(request.prompt));
+    // Construct the user message from the <context> blocks for the references,
+    // and the literal user-submitted prompt.
+    const requestReferenceContextBlocks: string[] = await createContextBlocks(
+      request.references
+    );
+    const requestPrompt =
+      requestReferenceContextBlocks.join("\n") + "\n" + request.prompt;
+
+    messages.push(vscode.LanguageModelChatMessage.User(requestPrompt));
 
     const chatResponse = await request.model.sendRequest(messages, {}, token);
 
@@ -409,5 +417,68 @@ async function closeAllProposedFileTabs() {
 
   for (const tab of proposedFileTabs) {
     await vscode.window.tabGroups.close(tab);
+  }
+}
+
+/**
+ * Creates `<context>` blocks for an array of chat prompt references. Each
+ * reference is converted into a formatted string block containing relevant
+ * context information.
+ *
+ * @param refs - Array of ChatPromptReference objects to process
+ * @returns Promise resolving to an array of formatted context block strings
+ */
+async function createContextBlocks(
+  refs: readonly vscode.ChatPromptReference[]
+): Promise<string[]> {
+  return Promise.all(refs.map(createContextBlock));
+}
+
+/**
+ * Creates a single `<context>` block for a chat prompt reference. Handles
+ * different types of references:
+ * - Uri: Includes full file contents
+ * - Location: Includes specific line range from file
+ * - String: Includes the string directly
+ *
+ * @param ref - ChatPromptReference to process
+ * @returns Promise resolving to a formatted context block string
+ * @throws Error if the reference value type is not supported
+ */
+async function createContextBlock(
+  ref: vscode.ChatPromptReference
+): Promise<string> {
+  const value = ref.value;
+
+  if (value instanceof vscode.Uri) {
+    const fileContents = (await vscode.workspace.fs.readFile(value)).toString();
+    return `
+<context>
+${value.fsPath}:
+\`\`\`
+${fileContents}
+\`\`\`
+</context>
+`;
+  } else if (value instanceof vscode.Location) {
+    const rangeText = (
+      await vscode.workspace.openTextDocument(value.uri)
+    ).getText(value.range);
+    return `
+<context>
+${value.uri.fsPath}:${value.range.start.line + 1}-${value.range.end.line + 1}:
+\`\`\`
+${rangeText}
+\`\`\`
+</context>
+`;
+  } else if (typeof value === "string") {
+    return `
+<context>
+${value}
+</context>
+`;
+  } else {
+    throw new Error("Unsupported value type for context block.");
   }
 }

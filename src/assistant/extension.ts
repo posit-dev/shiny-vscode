@@ -425,7 +425,7 @@ async function saveFilesToWorkspace(
 }
 
 async function showDiff(
-  newFiles: FileContentJson[],
+  proposedFiles: FileContentJson[],
   workspaceFolder: vscode.WorkspaceFolder | undefined,
   proposedFilesPrefixDir: string
 ): Promise<boolean> {
@@ -439,25 +439,37 @@ async function showDiff(
 
   try {
     // Add files to the preview provider
-    proposedFilePreviewProvider?.addFiles(newFiles);
+    proposedFilePreviewProvider?.addFiles(proposedFiles);
 
     const changes: Array<[vscode.Uri, vscode.Uri, vscode.Uri]> = [];
 
-    for (const file of newFiles) {
-      const existingUri = vscode.Uri.joinPath(workspaceFolder.uri, file.name);
+    for (const proposedFile of proposedFiles) {
+      const existingUri = vscode.Uri.joinPath(
+        workspaceFolder.uri,
+        proposedFile.name
+      );
       let sourceUri: vscode.Uri;
-      // For non-existent files, use an empty URI with the proposed-files scheme
       try {
+        // Try reading the file from disk. We'll compare if the existing
+        // contents differ from the proposed contents.
         await vscode.workspace.fs.stat(existingUri);
+        const document = await vscode.workspace.openTextDocument(existingUri);
+        if (document.getText() === proposedFile.content) {
+          // If the contents are the unchanged, then we can ignore this file.
+          continue;
+        }
+
         sourceUri = existingUri;
       } catch {
         // If the file doesn't exist on disk, use a (virtual) empty file
         // instead.
-        sourceUri = vscode.Uri.parse(`proposed-files://empty/${file.name}`);
+        sourceUri = vscode.Uri.parse(
+          `proposed-files://empty/${proposedFile.name}`
+        );
       }
 
       const proposedUri = vscode.Uri.parse(
-        `proposed-files://${proposedFilesPrefixDir}/${file.name}`
+        `proposed-files://${proposedFilesPrefixDir}/${proposedFile.name}`
       );
 
       changes.push([

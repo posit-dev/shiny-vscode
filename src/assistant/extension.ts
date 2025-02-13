@@ -8,6 +8,7 @@ import type { FileContentJson } from "./types";
 import {
   capitalizeFirst,
   createPromiseWithStatus,
+  inferFileType,
   type PromiseWithStatus,
 } from "./utils";
 
@@ -229,9 +230,13 @@ export function registerShinyChatParticipant(
                   name: part.attributes["NAME"],
                   content: "",
                 });
-                stream.markdown("**`" + part.attributes["NAME"] + "`**\n");
-                // TODO: Get filetype
-                stream.markdown("```python\n");
+                stream.markdown("\n### " + part.attributes["NAME"] + "\n");
+                stream.markdown("```");
+                const fileType = inferFileType(part.attributes["NAME"]);
+                if (fileType !== "text") {
+                  stream.markdown(fileType);
+                }
+                stream.markdown("\n");
               }
             } else if (part.kind === "close") {
               if (part.name === "SHINYAPP") {

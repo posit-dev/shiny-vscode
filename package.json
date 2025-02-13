@@ -81,8 +81,8 @@
         "icon": "$(cloud-upload)"
       },
       {
-        "command": "shiny.assistant.saveFilesToWorkspace",
-        "title": "Save files to workspace"
+        "command": "shiny.assistant.applyChangesToWorkspaceFromDiffView",
+        "title": "Apply changes"
       }
     ],
     "menus": {
@@ -114,6 +114,13 @@
           "command": "shiny.r.runApp",
           "group": "navigation@-3",
           "when": "shiny.r.active && shellExecutionSupported"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "shiny.assistant.applyChangesToWorkspaceFromDiffView",
+          "group": "navigation",
+          "when": "resourceScheme == multi-diff-editor"
         }
       ]
     },

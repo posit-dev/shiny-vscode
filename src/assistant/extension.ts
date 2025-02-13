@@ -29,6 +29,11 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
     "shiny.assistant.saveFilesToWorkspace",
     saveFilesToWorkspace
   );
+  const applyChangesToWorkspaceFromDiffViewDisposable =
+    vscode.commands.registerCommand(
+      "shiny.assistant.applyChangesToWorkspaceFromDiffView",
+      applyChangesToWorkspaceFromDiffView
+    );
   const showDiffDisposable = vscode.commands.registerCommand(
     "shiny.assistant.showDiff",
     showDiff
@@ -49,6 +54,9 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
     );
 
   extensionContext.subscriptions.push(saveFilesToWorkspaceDisposable);
+  extensionContext.subscriptions.push(
+    applyChangesToWorkspaceFromDiffViewDisposable
+  );
   extensionContext.subscriptions.push(showDiffDisposable);
   extensionContext.subscriptions.push(setProjectLanguageDisposable);
   extensionContext.subscriptions.push(
@@ -256,7 +264,7 @@ export function registerShinyChatParticipant(
                   // );
 
                   stream.button({
-                    title: "Show changes as diff",
+                    title: "View changes as diff",
                     command: "shiny.assistant.showDiff",
                     arguments: [
                       shinyAppFiles,
@@ -266,7 +274,7 @@ export function registerShinyChatParticipant(
                   });
 
                   stream.button({
-                    title: "Apply changes to workspace",
+                    title: "Apply changes",
                     command: "shiny.assistant.saveFilesToWorkspace",
                     arguments: [shinyAppFiles, true],
                   });
@@ -325,6 +333,10 @@ export function registerShinyChatParticipant(
     extensionContext.extensionUri,
     "images/assistant-icon.svg"
   );
+}
+
+async function applyChangesToWorkspaceFromDiffView(): Promise<boolean> {
+  return await saveFilesToWorkspace(currentDiffViewFiles, true);
 }
 
 /**
@@ -424,6 +436,19 @@ async function saveFilesToWorkspace(
   return false;
 }
 
+// Store the proposed changes that are in the current diff view in a global
+// variable, so that they can be saved when the user clicks the "Apply changes"
+// button.
+let currentDiffViewFiles: FileContentJson[] = [];
+
+/**
+ * Shows a diff view with the proposed changes.
+ *
+ * @param proposedFiles - The proposed files to show in the diff view
+ * @param workspaceFolder - The workspace folder to apply the changes to
+ * @param proposedFilesPrefixDir - The prefix directory for the proposed files
+ * @returns boolean indicating if the operation was successful
+ */
 async function showDiff(
   proposedFiles: FileContentJson[],
   workspaceFolder: vscode.WorkspaceFolder | undefined,
@@ -436,6 +461,19 @@ async function showDiff(
     );
     return false;
   }
+
+  // Close all other proposed changes tabs - this is necessary because if the
+  // clicks the "Apply changes" button, that button can't pass arguments -- we
+  // can only call the command, and if there are multiple proposed changes tabs,
+  // it won't know which one to apply.
+  await closeAllProposedChangesTabs();
+
+  // We need to set some state for if the user clicks on the "Apply changes"
+  // button in the diff view title bar. That calls the command
+  // shiny.assistant.saveFilesToWorkspaceFromDiffView, but we can't pass
+  // arguments to that command. So we'll save the new files in a global
+  // variable.
+  currentDiffViewFiles = proposedFiles;
 
   try {
     // Add files to the preview provider

@@ -1,18 +1,14 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { checkPythonEnvironment, guessWorkspaceLanguage } from "./language";
+import { projectLanguage, SetProjectLanguageTool } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
 import type { FileContentJson } from "./types";
-import {
-  capitalizeFirst,
-  createPromiseWithStatus,
-  inferFileType,
-  type PromiseWithStatus,
-} from "./utils";
+import { inferFileType } from "./utils";
 
-let proposedFilePreviewProvider: ProposedFilePreviewProvider | null = null;
+const proposedFilePreviewProvider = new ProposedFilePreviewProvider();
 
 // Each set of proposed files gets a unique counter value.
 let proposedFilePreviewCounter = 0;
@@ -20,48 +16,44 @@ let proposedFilePreviewCounter = 0;
 // The label for the editor tab that shows proposed changes.
 const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
 
-const projectLanguagePromise: PromiseWithStatus<"r" | "python"> =
-  createPromiseWithStatus<"r" | "python">();
-
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   registerShinyChatParticipant(extensionContext);
 
-  const saveFilesToWorkspaceDisposable = vscode.commands.registerCommand(
-    "shiny.assistant.saveFilesToWorkspace",
-    saveFilesToWorkspace
+  extensionContext.subscriptions.push(
+    vscode.commands.registerCommand(
+      "shiny.assistant.saveFilesToWorkspace",
+      saveFilesToWorkspace
+    )
   );
-  const applyChangesToWorkspaceFromDiffViewDisposable =
+  extensionContext.subscriptions.push(
     vscode.commands.registerCommand(
       "shiny.assistant.applyChangesToWorkspaceFromDiffView",
       applyChangesToWorkspaceFromDiffView
-    );
-  const showDiffDisposable = vscode.commands.registerCommand(
-    "shiny.assistant.showDiff",
-    showDiff
+    )
   );
-  const setProjectLanguageDisposable = vscode.commands.registerCommand(
-    "shiny.assistant.setProjectLanguage",
-    (language: "r" | "python") => {
-      projectLanguagePromise.resolve(language);
-    }
+  extensionContext.subscriptions.push(
+    vscode.commands.registerCommand("shiny.assistant.showDiff", showDiff)
+  );
+  extensionContext.subscriptions.push(
+    vscode.commands.registerCommand(
+      "shiny.assistant.setProjectLanguage",
+      (language: "r" | "python") => projectLanguage.setValue(language)
+    )
   );
 
+  // // Tool for the LLM to set the project language
+  // extensionContext.subscriptions.push(
+  //   vscode.lm.registerTool(
+  //     "shiny-assistant_setProjectLanguageTool",
+  //     new SetProjectLanguageTool()
+  //   )
+  // );
   // Register the provider for "proposed-files://" URIs
-  proposedFilePreviewProvider = new ProposedFilePreviewProvider();
-  const registerTextDocumentContentProviderDisposable =
+  extensionContext.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(
       "proposed-files",
       proposedFilePreviewProvider
-    );
-
-  extensionContext.subscriptions.push(saveFilesToWorkspaceDisposable);
-  extensionContext.subscriptions.push(
-    applyChangesToWorkspaceFromDiffViewDisposable
-  );
-  extensionContext.subscriptions.push(showDiffDisposable);
-  extensionContext.subscriptions.push(setProjectLanguageDisposable);
-  extensionContext.subscriptions.push(
-    registerTextDocumentContentProviderDisposable
+    )
   );
 
   // eslint-disable-next-line @typescript-eslint/no-floating-promises
@@ -79,19 +71,19 @@ export function registerShinyChatParticipant(
     stream: vscode.ChatResponseStream,
     token: vscode.CancellationToken
   ) => {
-    if (!projectLanguagePromise.completed()) {
+    if (projectLanguage.value() === null) {
       const languageGuess = await guessWorkspaceLanguage();
 
       if (languageGuess === "definitely_r") {
         stream.markdown(
           "Based on the files in your workspace, it looks like you are using R.\n\n"
         );
-        projectLanguagePromise.resolve("r");
+        projectLanguage.setValue("r");
       } else if (languageGuess === "definitely_python") {
         stream.markdown(
           "Based on the files in your workspace, it looks like you are using Python.\n\n"
         );
-        projectLanguagePromise.resolve("python");
+        projectLanguage.setValue("python");
       } else {
         // If we're don't know for sure what language is being used, prompt the
         // user.
@@ -109,20 +101,6 @@ export function registerShinyChatParticipant(
           );
         }
 
-        // const languageSelectionPrompt = new vscode.MarkdownString(
-        //   "|    |    |\n" +
-        //   "|----|----|\n" +
-        //     "| [I'm using R](command:shiny.assistant.setProjectLanguageR) | [I'm using Python](command:shiny.assistant.setProjectLanguagePython) |\n\n"
-        // );
-        // languageSelectionPrompt.isTrusted = {
-        //   enabledCommands: [
-        //     "shiny.assistant.setProjectLanguageR",
-        //     "shiny.assistant.setProjectLanguagePython",
-        //   ],
-        // };
-
-        // stream.markdown(languageSelectionPrompt);
-
         stream.button({
           title: "I'm using R",
           command: "shiny.assistant.setProjectLanguage",
@@ -137,11 +115,14 @@ export function registerShinyChatParticipant(
     }
 
     // If we prompted the user for language, this will block until they choose.
-    const language = await projectLanguagePromise;
+    await projectLanguage.promise;
 
     stream.progress("");
 
-    const systemPrompt = await loadSystemPrompt(extensionContext, language);
+    const systemPrompt = await loadSystemPrompt(
+      extensionContext,
+      projectLanguage.value()!
+    );
 
     // Initialize the messages array with the prompt
     const messages = [vscode.LanguageModelChatMessage.User(systemPrompt)];
@@ -171,7 +152,21 @@ export function registerShinyChatParticipant(
 
     messages.push(vscode.LanguageModelChatMessage.User(requestPrompt));
 
-    const chatResponse = await request.model.sendRequest(messages, {}, token);
+    const options: vscode.LanguageModelChatRequestOptions = {
+      // // TODO: Make tool calls work
+      // tools: [
+      //   {
+      //     name: "shiny-assistant_setProjectLanguageTool",
+      //     description: "Set the language of the project to R or Python",
+      //   },
+      // ],
+    };
+
+    const chatResponse = await request.model.sendRequest(
+      messages,
+      options,
+      token
+    );
 
     // Stream the response
     const tagProcessor = new StreamingTagProcessor(["SHINYAPP", "FILE"]);

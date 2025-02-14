@@ -217,12 +217,17 @@
             "Uses the latest released version of Shiny in Python or R.",
             "Uses the latest development version of Shiny in Python or R."
           ]
+        },
+        "shiny.assistant.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the Shiny Assistant chat participant (experimental)."
         }
       }
     },
     "chatParticipants": [
       {
-        "id": "chat-tutorial.shiny-assistant",
+        "id": "chat.shiny-assistant",
         "fullName": "Shiny Assistant",
         "name": "shiny",
         "description": "How can I help you?",
@@ -232,7 +237,8 @@
             "name": "exercise",
             "description": "Provide exercises to practice a concept."
           }
-        ]
+        ],
+        "when": "config.shiny.assistant.enabled"
       }
     ]
   },

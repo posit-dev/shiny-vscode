@@ -16,55 +16,58 @@ let proposedFilePreviewCounter = 0;
 // The label for the editor tab that shows proposed changes.
 const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
 
-export function activateAssistant(extensionContext: vscode.ExtensionContext) {
-  registerShinyChatParticipant(extensionContext);
+// Track assistant-specific disposables
+let assistantDisposables: vscode.Disposable[] = [];
 
-  extensionContext.subscriptions.push(
+export function activateAssistant(extensionContext: vscode.ExtensionContext) {
+  console.log("Activating Shiny Assistant");
+
+  // Clean up any existing disposables
+  deactivateAssistant();
+
+  // Create new disposables
+  assistantDisposables = [
     vscode.commands.registerCommand(
       "shiny.assistant.saveFilesToWorkspace",
       saveFilesToWorkspace
-    )
-  );
-  extensionContext.subscriptions.push(
+    ),
     vscode.commands.registerCommand(
       "shiny.assistant.applyChangesToWorkspaceFromDiffView",
       applyChangesToWorkspaceFromDiffView
-    )
-  );
-  extensionContext.subscriptions.push(
-    vscode.commands.registerCommand("shiny.assistant.showDiff", showDiff)
-  );
-  extensionContext.subscriptions.push(
+    ),
+    vscode.commands.registerCommand("shiny.assistant.showDiff", showDiff),
     vscode.commands.registerCommand(
       "shiny.assistant.setProjectLanguage",
       (language: "r" | "python") => projectLanguage.setValue(language)
-    )
-  );
-
-  // // Tool for the LLM to set the project language
-  // extensionContext.subscriptions.push(
-  //   vscode.lm.registerTool(
-  //     "shiny-assistant_setProjectLanguageTool",
-  //     new SetProjectLanguageTool()
-  //   )
-  // );
-  // Register the provider for "proposed-files://" URIs
-  extensionContext.subscriptions.push(
+    ),
     vscode.workspace.registerTextDocumentContentProvider(
       "proposed-files",
       proposedFilePreviewProvider
-    )
-  );
+    ),
+    registerShinyChatParticipant(extensionContext),
+  ];
+
+  // Add the assistant disposables to the extension's subscriptions
+  assistantDisposables.forEach((d) => extensionContext.subscriptions.push(d));
 
   // eslint-disable-next-line @typescript-eslint/no-floating-promises
   checkPythonEnvironment();
 }
 
-export function deactivateAssistant() {}
+export function deactivateAssistant() {
+  if (assistantDisposables.length === 0) {
+    return;
+  }
+
+  console.log("Deactivating Shiny Assistant");
+  // Dispose of all assistant-specific disposables
+  assistantDisposables.forEach((d) => d.dispose());
+  assistantDisposables = [];
+}
 
 export function registerShinyChatParticipant(
   extensionContext: vscode.ExtensionContext
-) {
+): vscode.Disposable {
   const handler: vscode.ChatRequestHandler = async (
     request: vscode.ChatRequest,
     chatContext: vscode.ChatContext,
@@ -117,6 +120,7 @@ export function registerShinyChatParticipant(
     // If we prompted the user for language, this will block until they choose.
     await projectLanguage.promise;
 
+    // TODO: Don't show if the user has already set the language
     stream.progress("");
 
     const systemPrompt = await loadSystemPrompt(
@@ -325,7 +329,7 @@ export function registerShinyChatParticipant(
   };
 
   const shinyAssistant = vscode.chat.createChatParticipant(
-    "chat-tutorial.shiny-assistant",
+    "chat.shiny-assistant",
     handler
   );
 
@@ -333,6 +337,8 @@ export function registerShinyChatParticipant(
     extensionContext.extensionUri,
     "images/assistant-icon.svg"
   );
+
+  return shinyAssistant;
 }
 
 async function applyChangesToWorkspaceFromDiffView(): Promise<boolean> {
@@ -470,7 +476,7 @@ async function showDiff(
 
   // We need to set some state for if the user clicks on the "Apply changes"
   // button in the diff view title bar. That calls the command
-  // shiny.assistant.saveFilesToWorkspaceFromDiffView, but we can't pass
+  // shiny.assistant.applyChangesToWorkspaceFromDiffView, but we can't pass
   // arguments to that command. So we'll save the new files in a global
   // variable.
   currentDiffViewFiles = proposedFiles;

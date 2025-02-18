@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import { activateAssistant, deactivateAssistant } from "./assistant/extension";
 import { handlePositShinyUri } from "./extension-onUri";
 import { onDidStartDebugSession, pyDebugApp, pyRunApp, rRunApp } from "./run";
 import {
@@ -8,7 +9,8 @@ import {
   shinyliveSaveAppFromUrl,
 } from "./shinylive";
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
+  console.log("Activating Shiny extension");
   context.subscriptions.push(
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
@@ -29,6 +31,29 @@ export function activate(context: vscode.ExtensionContext) {
       async handleUri(uri: vscode.Uri): Promise<void> {
         await handlePositShinyUri(uri);
       },
+    })
+  );
+
+  if (
+    vscode.workspace.getConfiguration("shiny.assistant").get("enabled", false)
+  ) {
+    activateAssistant(context);
+  }
+
+  // Listen for configuration changes to enable/disable the assistant
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("shiny.assistant.enabled")) {
+        const enabled = vscode.workspace
+          .getConfiguration("shiny.assistant")
+          .get("enabled", false);
+
+        if (enabled) {
+          activateAssistant(context);
+        } else {
+          deactivateAssistant();
+        }
+      }
     })
   );
 
@@ -61,7 +86,9 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+  deactivateAssistant();
+}
 
 function updateContext(language: "python" | "r"): boolean {
   const shinyContext = `shiny.${language}.active`;

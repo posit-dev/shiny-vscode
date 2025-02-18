@@ -1,7 +1,12 @@
 import eslint from "@eslint/js";
 import tsParser from "@typescript-eslint/parser";
 import globals from "globals";
+import path from "path";
 import tseslint from "typescript-eslint";
+import url from "url";
+
+const __filename = url.fileURLToPath(new URL(import.meta.url));
+const __dirname = path.dirname(__filename);
 
 const commonRules = {
   "@typescript-eslint/naming-convention": "warn",
@@ -19,6 +24,7 @@ const commonTsConfig = {
   ecmaVersion: 2022,
   sourceType: "module",
   parserOptions: {
+    tsconfigRootDir: __dirname,
     ecmaVersion: 2022,
     sourceType: "module",
     project: "./tsconfig.json",
@@ -35,8 +41,8 @@ export default tseslint.config(
     ignores: ["out", "**/*.d.ts"],
   },
   {
-    // Build scripts config - these are run by nodejs, and use commonjs syntax.
-    files: ["esbuild.js", "**/tailwind.config.js"],
+    // Build scripts config - these are run by nodejs.
+    files: ["esbuild.js", "eslint.config.mjs"],
     languageOptions: {
       globals: globals.node,
     },

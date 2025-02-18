@@ -4,7 +4,7 @@
   "description": "Run and develop Shiny apps in Python or R.",
   "version": "1.1.0",
   "publisher": "Posit",
-  "icon": "logo.png",
+  "icon": "images/logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/posit-dev/shiny-vscode"
@@ -14,7 +14,7 @@
     "url": "https://github.com/posit-dev/shiny-vscode/issues/"
   },
   "engines": {
-    "vscode": "^1.66.0"
+    "vscode": "^1.96.0"
   },
   "categories": [
     "Other"
@@ -79,6 +79,10 @@
         "command": "shiny.shinylive.createFromExplorer",
         "title": "Create Shinylive Link from Selected Files",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "shiny.assistant.applyChangesToWorkspaceFromDiffView",
+        "title": "Apply changes"
       }
     ],
     "menus": {
@@ -110,6 +114,13 @@
           "command": "shiny.r.runApp",
           "group": "navigation@-3",
           "when": "shiny.r.active && shellExecutionSupported"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "shiny.assistant.applyChangesToWorkspaceFromDiffView",
+          "group": "navigation",
+          "when": "resourceScheme == multi-diff-editor"
         }
       ]
     },
@@ -211,15 +222,36 @@
             "Uses the latest released version of Shiny in Python or R.",
             "Uses the latest development version of Shiny in Python or R."
           ]
+        },
+        "shiny.assistant.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the Shiny Assistant chat participant (experimental)."
         }
       }
-    }
+    },
+    "chatParticipants": [
+      {
+        "id": "chat.shiny-assistant",
+        "fullName": "Shiny Assistant",
+        "name": "shiny",
+        "description": "How can I help you?",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "exercise",
+            "description": "Provide exercises to practice a concept."
+          }
+        ],
+        "when": "config.shiny.assistant.enabled"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
     "package": "npm run check-types && npm run lint  && node esbuild.js --production",
     "compile": "npm run check-types && npm run lint && node esbuild.js",
-    "watch": "npm-run-all -p watch:*",
+    "watch": "concurrently npm:watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch",
     "pretest": "npm run compile && npm run lint",
@@ -232,27 +264,29 @@
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "20.11.22",
-    "@types/vscode": "1.66.0",
+    "@types/vscode": "1.96.0",
+    "@types/winreg": "^1.2.36",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
+    "@vscode/python-extension": "^1.0.5",
     "@vscode/test-electron": "^2.1.3",
+    "concurrently": "^9.1.0",
     "esbuild": "^0.24.0",
     "eslint": "^9.15.0",
-    "glob": "^10.3.10",
-    "mocha": "^10.3.0",
-    "npm-run-all": "^4.1.5",
-    "prettier": "^3.3.3",
-    "prettier-plugin-organize-imports": "^4.1.0",
-    "typescript": "^5.6.3",
-    "typescript-eslint": "^8.15.0"
-  },
-  "extensionDependencies": [],
-  "dependencies": {
-    "@types/winreg": "^1.2.36",
-    "@vscode/python-extension": "^1.0.5",
     "fs": "^0.0.1-security",
+    "glob": "^10.3.10",
     "istextorbinary": "^9.5.0",
     "lz-string": "^1.5.0",
+    "mocha": "^10.3.0",
+    "prettier": "^3.3.3",
+    "prettier-plugin-organize-imports": "^4.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "react-syntax-highlighter": "^15.6.1",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.15.0",
     "winreg": "^1.2.5"
-  }
+  },
+  "extensionDependencies": []
 }

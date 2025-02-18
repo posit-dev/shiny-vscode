@@ -12,9 +12,19 @@ const esbuildProblemMatcherPlugin = {
   name: "esbuild-problem-matcher",
 
   setup(build) {
+    let entryPoints = build.initialOptions.entryPoints;
+    if (!Array.isArray(entryPoints)) {
+      entryPoints = [entryPoints];
+    }
+
     build.onStart(() => {
-      console.log("[watch] build started");
+      console.log(
+        `[${watch ? "watch " : ""}${new Date().toISOString()}] build ${entryPoints.join(
+          ", "
+        )}`
+      );
     });
+
     build.onEnd((result) => {
       result.errors.forEach(({ text, location }) => {
         console.error(`✘ [ERROR] ${text}`);
@@ -30,13 +40,11 @@ const esbuildProblemMatcherPlugin = {
 const metafilePlugin = {
   name: "metafile",
   setup(build) {
-    // const outfile = build.initialOptions.outfile;
-    // const entryPoints = build.initialOptions.entryPoints;
-
     build.onEnd((result) => {
       if (result.metafile) {
         // For each output in the metafile
         Object.entries(result.metafile.outputs).forEach(
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           ([outputPath, output]) => {
             // Get the entry point for this output
             const entryPoint = output.entryPoint;
@@ -45,7 +53,6 @@ const metafilePlugin = {
               const bundleName = entryPoint
                 .replace(/^.*[\\/]/, "")
                 .replace(/\.[^/.]+$/, "");
-              console.log(`meta.${bundleName}.json`);
 
               fs.writeFileSync(
                 `${bundleName}.esbuild-meta.json`,
@@ -62,7 +69,7 @@ const metafilePlugin = {
 async function main() {
   const buildmap = {
     extension: esbuild.context({
-      entryPoints: ["src/extension.ts", "src/test/runTest.ts"],
+      entryPoints: ["src/extension.ts"],
       bundle: true,
       outdir: "out/",
       format: "cjs",
@@ -74,6 +81,20 @@ async function main() {
       logLevel: "silent",
       metafile: metafile,
       plugins: [metafilePlugin, esbuildProblemMatcherPlugin],
+    }),
+    test: esbuild.context({
+      entryPoints: ["src/test/**/*.ts"],
+      bundle: true,
+      outdir: "out/test/",
+      format: "cjs",
+      minify: false,
+      sourcemap: false,
+      sourcesContent: false,
+      platform: "node",
+      external: ["vscode"],
+      logLevel: "silent",
+      metafile: false,
+      plugins: [esbuildProblemMatcherPlugin],
     }),
   };
 
@@ -87,7 +108,10 @@ async function main() {
           await context.dispose();
         }
       })
-      .catch(() => process.exit(1))
+      .catch((e) => {
+        console.error(e);
+        process.exit(1);
+      })
   );
 }
 

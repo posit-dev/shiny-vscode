@@ -14,3 +14,6 @@ snippets/README.txt
 *.esbuild-meta.json
 esbuild.js
 eslint.config.mjs
+out/test/**
+.windsurfrules
+temp/**

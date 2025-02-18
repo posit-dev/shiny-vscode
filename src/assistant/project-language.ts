@@ -19,7 +19,7 @@ class ProjectLanguageState {
 
 export const projectLanguage = new ProjectLanguageState();
 
-type SetProjectLanguageParams = {
+export type SetProjectLanguageParams = {
   language: "r" | "python";
 };
 

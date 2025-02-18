@@ -5,6 +5,7 @@ import { projectLanguage, SetProjectLanguageTool } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
+import { tools } from "./tools";
 import type { FileContentJson } from "./types";
 import { createPromiseWithStatus, inferFileType } from "./utils";
 
@@ -197,13 +198,7 @@ export function registerShinyChatParticipant(
     messages.push(vscode.LanguageModelChatMessage.User(requestPrompt));
 
     const options: vscode.LanguageModelChatRequestOptions = {
-      // // TODO: Make tool calls work
-      // tools: [
-      //   {
-      //     name: "shiny-assistant_setProjectLanguageTool",
-      //     description: "Set the language of the project to R or Python",
-      //   },
-      // ],
+      tools: tools,
     };
 
     const chatResponse = await request.model.sendRequest(
@@ -213,6 +208,7 @@ export function registerShinyChatParticipant(
     );
 
     // Stream the response
+    const toolCalls: vscode.LanguageModelToolCallPart[] = [];
     const tagProcessor = new StreamingTagProcessor(["SHINYAPP", "FILE"]);
     let shinyAppFiles: FileContentJson[] | null = null;
     // States of a state machine to handle the response
@@ -221,8 +217,19 @@ export function registerShinyChatParticipant(
     // a leading \n that needs to be removed;
     let fileStateProcessedFirstChunk = false;
 
-    for await (const fragment of chatResponse.text) {
-      const processedFragment = tagProcessor.process(fragment);
+    for await (const part of chatResponse.stream) {
+      if (part instanceof vscode.LanguageModelTextPart) {
+        //
+      } else if (part instanceof vscode.LanguageModelToolCallPart) {
+        toolCalls.push(part);
+        console.log("LanguageModelToolCallPart: ", part);
+        continue;
+      } else {
+        console.log("Unknown part type: ", part);
+        continue;
+      }
+      console.log("Fragment:", part.value);
+      const processedFragment = tagProcessor.process(part.value);
 
       for (const part of processedFragment) {
         // TODO: flush at the end?
@@ -364,6 +371,35 @@ export function registerShinyChatParticipant(
         }
       }
     }
+
+    if (toolCalls.length > 0) {
+      for (const toolCall of toolCalls) {
+        const tool = tools.find((tool) => tool.name === toolCall.name);
+        if (!tool) {
+          console.log(`Tool not found: ${toolCall.name}`);
+          continue;
+        }
+        const result = (await tool.invoke(
+          toolCall,
+          null
+        )) as vscode.LanguageModelToolResultPart;
+
+        messages.push(
+          vscode.LanguageModelChatMessage.User([
+            new vscode.LanguageModelToolResultPart(toolCall.callId, [
+              result.content,
+            ]),
+          ])
+        );
+
+        console.log("Response will be: ", messages);
+      }
+
+      //
+    }
+
+    // TODO: run tools here
+    console.log("finished stream");
 
     return;
   };

@@ -34,28 +34,7 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  if (
-    vscode.workspace.getConfiguration("shiny.assistant").get("enabled", false)
-  ) {
-    activateAssistant(context);
-  }
-
-  // Listen for configuration changes to enable/disable the assistant
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("shiny.assistant.enabled")) {
-        const enabled = vscode.workspace
-          .getConfiguration("shiny.assistant")
-          .get("enabled", false);
-
-        if (enabled) {
-          activateAssistant(context);
-        } else {
-          deactivateAssistant();
-        }
-      }
-    })
-  );
+  activateAssistant(context);
 
   const throttledUpdateContext = new Throttler(2000, () => {
     updateContext("python");

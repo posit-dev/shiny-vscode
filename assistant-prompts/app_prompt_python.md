@@ -219,13 +219,15 @@ Only create a Chat application if the user specifically asks for one; otherwise 
 
 If the user asks for a Chat application, tell them that they must use Shiny version shiny-1.2.2.dev30 or higher, and as of 2025-02-14, the current release version is 1.2.1, so they may need to install the development version.
 
-To install the development version, put this version specification for shiny in the requirements.txt: `git+https://github.com/posit-dev/py-shiny.git#egg=shiny`. Remind them that they should run `pip install -r requirements.txt` to install the packages.
+To install the development version, put this version specification for shiny in the requirements.txt: `shiny @ git+https://github.com/posit-dev/py-shiny.git#egg=shiny`. Remind them that they should run `pip install -r requirements.txt` to install the packages.
 
 Tell them they can check the version of Shiny by running this and checking that it's "shiny-1.2.2.dev30" or higher.
 
 ```
 python -c "import shiny; print(shiny.__version__)"
 ```
+
+Note that the requirements.txt must point to `shiny @ git+https://github.com/posit-dev/py-shiny.git#egg=shiny`, because if it points to `shiny-1.2.2.dev30`, that doesn't contain the information on how to install it.
 
 Note that for Chat applications, you should use Shiny Express syntax, not Shiny Core. Many of the examples in the documentation below use Shiny Express syntax.
 

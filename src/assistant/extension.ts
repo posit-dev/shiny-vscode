@@ -6,7 +6,7 @@ import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
 import type { FileContentJson } from "./types";
-import { inferFileType } from "./utils";
+import { createPromiseWithStatus, inferFileType } from "./utils";
 
 const proposedFilePreviewProvider = new ProposedFilePreviewProvider();
 
@@ -19,7 +19,7 @@ const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
 // Track assistant-specific disposables
 let assistantDisposables: vscode.Disposable[] = [];
 
-let hasEmittedClaudeSuggestionMessage = false;
+const hasConfirmedClaude = createPromiseWithStatus<boolean>();
 
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   // Clean up any existing disposables
@@ -39,6 +39,11 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "shiny.assistant.setProjectLanguage",
       (language: "r" | "python") => projectLanguage.setValue(language)
+    ),
+    vscode.commands.registerCommand(
+      "shiny.assistant.continueAfterClaudeSuggestion",
+      (switchedToClaude: boolean) =>
+        hasConfirmedClaude.resolve(switchedToClaude)
     ),
     vscode.workspace.registerTextDocumentContentProvider(
       "proposed-files",
@@ -73,44 +78,64 @@ export function registerShinyChatParticipant(
     stream: vscode.ChatResponseStream,
     token: vscode.CancellationToken
   ) => {
+    // If the user isn't using Claude 3.5 Sonnet, prompt them to switch.
     if (
       request.model.id !== "claude-3.5-sonnet" &&
-      !hasEmittedClaudeSuggestionMessage
+      !hasConfirmedClaude.resolved()
     ) {
+      // The text displays much more quickly if we call markdown() twice instead
+      // of just once.
       stream.markdown(
-        `It looks like you are using **${request.model.name}** for Copilot. ` +
-          "For best results with `@shiny`, switch to **Claude 3.5 Sonnet**.\n\n"
+        `It looks like you are using **${request.model.name}** for Copilot. `
       );
-      hasEmittedClaudeSuggestionMessage = true;
+      stream.markdown(
+        "For best results with `@shiny`, please switch to **Claude 3.5 Sonnet**.\n\n"
+      );
+      stream.button({
+        title: "I'll switch to Claude 3.5 Sonnet",
+        command: "shiny.assistant.continueAfterClaudeSuggestion",
+        arguments: [true],
+      });
+      stream.button({
+        title: `No thanks, I'll continue with ${request.model.name}`,
+        command: "shiny.assistant.continueAfterClaudeSuggestion",
+        arguments: [false],
+      });
+
+      if (await hasConfirmedClaude) {
+        stream.markdown(
+          new vscode.MarkdownString(
+            "Great! In the text input box, switch to Claude 3.5 Sonnet and then click on the $(refresh) button.\n\n",
+            true
+          )
+        );
+        return;
+      }
     }
 
+    let showedLanguageButtons = false;
+
+    // Infer the language of the project if it hasn't been set yet.
     if (projectLanguage.value() === null) {
       const languageGuess = await guessWorkspaceLanguage();
+      stream.markdown("Based on the files in your workspace, ");
 
       if (languageGuess === "definitely_r") {
-        stream.markdown(
-          "Based on the files in your workspace, it looks like you are using R.\n\n"
-        );
+        stream.markdown("it looks like you are using R.\n\n");
         projectLanguage.setValue("r");
       } else if (languageGuess === "definitely_python") {
-        stream.markdown(
-          "Based on the files in your workspace, it looks like you are using Python.\n\n"
-        );
+        stream.markdown("it looks like you are using Python.\n\n");
         projectLanguage.setValue("python");
       } else {
         // If we're don't know for sure what language is being used, prompt the
         // user.
         if (languageGuess === "probably_r") {
-          stream.markdown(
-            "Based on the files in your workspace, it looks like you are probably using R.\n\n"
-          );
+          stream.markdown(" it looks like you are probably using R.\n\n");
         } else if (languageGuess === "probably_python") {
-          stream.markdown(
-            "Based on the files in your workspace, it looks like you are probably using Python.\n\n"
-          );
+          stream.markdown(" it looks like you are probably using Python.\n\n");
         } else {
           stream.markdown(
-            "Based on the files in your workspace, I can't infer what language you want to use for Shiny.\n\n"
+            " I can't infer what language you want to use for Shiny.\n\n"
           );
         }
 
@@ -124,14 +149,19 @@ export function registerShinyChatParticipant(
           command: "shiny.assistant.setProjectLanguage",
           arguments: ["python"],
         });
+
+        showedLanguageButtons = true;
       }
     }
 
     // If we prompted the user for language, this will block until they choose.
     await projectLanguage.promise;
 
-    // TODO: Don't show if the user has already set the language
-    stream.progress("");
+    // If we had shown the language buttons, there can be a long pause at this
+    // point. Show progress so the user knows something is still happening.
+    if (showedLanguageButtons) {
+      stream.progress("");
+    }
 
     const systemPrompt = await loadSystemPrompt(
       extensionContext,

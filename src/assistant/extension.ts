@@ -296,24 +296,6 @@ export function registerShinyChatParticipant(
                     proposedFilesPrefixDir
                   );
 
-                  // const tree: vscode.ChatResponseFileTree[] = [
-                  //   {
-                  //     name: "/",
-                  //     children: shinyAppFiles.map((f) => {
-                  //       return { name: f.name };
-                  //     }),
-                  //   },
-                  // ];
-
-                  // stream.markdown("These are the proposed files:\n");
-
-                  // stream.filetree(
-                  //   tree,
-                  //   vscode.Uri.parse(
-                  //     "proposed-files://" + proposedFilesPrefixDir
-                  //   )
-                  // );
-
                   stream.button({
                     title: "View changes as diff",
                     command: "shiny.assistant.showDiff",

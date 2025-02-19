@@ -19,9 +19,9 @@ const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
 // Track assistant-specific disposables
 let assistantDisposables: vscode.Disposable[] = [];
 
-export function activateAssistant(extensionContext: vscode.ExtensionContext) {
-  console.log("Activating Shiny Assistant");
+let hasEmittedClaudeSuggestionMessage = false;
 
+export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   // Clean up any existing disposables
   deactivateAssistant();
 
@@ -59,7 +59,6 @@ export function deactivateAssistant() {
     return;
   }
 
-  console.log("Deactivating Shiny Assistant");
   // Dispose of all assistant-specific disposables
   assistantDisposables.forEach((d) => d.dispose());
   assistantDisposables = [];
@@ -74,6 +73,17 @@ export function registerShinyChatParticipant(
     stream: vscode.ChatResponseStream,
     token: vscode.CancellationToken
   ) => {
+    if (
+      request.model.id !== "claude-3.5-sonnet" &&
+      !hasEmittedClaudeSuggestionMessage
+    ) {
+      stream.markdown(
+        `It looks like you are using **${request.model.name}** for Copilot. ` +
+          "For best results with `@shiny`, switch to **Claude 3.5 Sonnet**.\n\n"
+      );
+      hasEmittedClaudeSuggestionMessage = true;
+    }
+
     if (projectLanguage.value() === null) {
       const languageGuess = await guessWorkspaceLanguage();
 

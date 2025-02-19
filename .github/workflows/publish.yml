@@ -4,6 +4,7 @@ on:
       - "v[0-9]*"
     branches:
       - "main"
+      - "v[0-9]*-pre*" # Add support for pre-release branches
   pull_request:
     branches:
       - "main"
@@ -32,14 +33,34 @@ jobs:
           name: shiny-vscode
           path: "shiny*.vsix"
 
+  check-ref:
+    runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.check.outputs.should_publish }}
+      is_prerelease: ${{ steps.check.outputs.is_prerelease }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_type }}" == "branch" ]] && [[ "${{ github.ref_name }}" =~ ^v[0-9.]+-pre[0-9]*$ ]]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
   publish-open-vsx:
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' &&
-      github.ref_type == 'tag' &&
-      github.repository_owner == 'posit-dev'
     needs:
       - build-vsix
+      - check-ref
+    if: |
+      github.event_name == 'push' &&
+      needs.check-ref.outputs.should_publish == 'true' &&
+      github.repository_owner == 'posit-dev'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,15 +74,17 @@ jobs:
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
           skipDuplicate: true
+          preRelease: ${{ needs.check-ref.outputs.is_prerelease }}
 
   publish-vscode-marketplace:
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' &&
-      github.ref_type == 'tag' &&
-      github.repository_owner == 'posit-dev'
     needs:
       - build-vsix
+      - check-ref
+    if: |
+      github.event_name == 'push' &&
+      needs.check-ref.outputs.should_publish == 'true' &&
+      github.repository_owner == 'posit-dev'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -76,3 +99,4 @@ jobs:
           pat: ${{ secrets.VSCE_PAT }}
           skipDuplicate: true
           registryUrl: https://marketplace.visualstudio.com
+          preRelease: ${{ needs.check-ref.outputs.is_prerelease }}

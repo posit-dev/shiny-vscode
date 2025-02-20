@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { checkPythonEnvironment, guessWorkspaceLanguage } from "./language";
-import { projectLanguage, SetProjectLanguageTool } from "./project-language";
+import { projectLanguage } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
@@ -24,11 +24,6 @@ const hasConfirmedClaude = createPromiseWithStatus<boolean>();
 
 const dummyCancellationToken: vscode.CancellationToken =
   new vscode.CancellationTokenSource().token;
-
-type ToolCallRound = {
-  response: string;
-  toolCalls: vscode.LanguageModelToolCallPart[];
-};
 
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   // Clean up any existing disposables
@@ -413,6 +408,7 @@ export function registerShinyChatParticipant(
         );
 
         // Loop until there are no more tool calls
+        stream.markdown("\n\n");
         return runWithTools();
       }
     }

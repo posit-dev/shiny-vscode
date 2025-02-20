@@ -22,6 +22,14 @@ let assistantDisposables: vscode.Disposable[] = [];
 
 const hasConfirmedClaude = createPromiseWithStatus<boolean>();
 
+const dummyCancellationToken: vscode.CancellationToken =
+  new vscode.CancellationTokenSource().token;
+
+type ToolCallRound = {
+  response: string;
+  toolCalls: vscode.LanguageModelToolCallPart[];
+};
+
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   // Clean up any existing disposables
   deactivateAssistant();
@@ -164,224 +172,252 @@ export function registerShinyChatParticipant(
       stream.progress("");
     }
 
+    // Convert the chat history to message format.
+    const messages = chatContext.history.map((message) => {
+      if (message instanceof vscode.ChatRequestTurn) {
+        return vscode.LanguageModelChatMessage.User(message.prompt);
+      } else if (message instanceof vscode.ChatResponseTurn) {
+        let messageText = "";
+        message.response.forEach((r) => {
+          if (r instanceof vscode.ChatResponseMarkdownPart) {
+            messageText += r.value.value;
+          }
+        });
+        return vscode.LanguageModelChatMessage.Assistant(messageText);
+      }
+      throw new Error(`Unknown message type in chat history: ${message}`);
+    });
+
+    // Prepend system prompt to the messages.
     const systemPrompt = await loadSystemPrompt(
       extensionContext,
       projectLanguage.value()!
     );
+    messages.unshift(vscode.LanguageModelChatMessage.User(systemPrompt));
 
-    // Initialize the messages array with the prompt
-    const messages = [vscode.LanguageModelChatMessage.User(systemPrompt)];
-
-    // Get all the previous participant messages
-    const previousMessages = chatContext.history.filter(
-      (h) => h instanceof vscode.ChatResponseTurn
-    );
-
-    // Add the previous messages to the messages array
-    previousMessages.forEach((m) => {
-      let fullMessage = "";
-      m.response.forEach((r) => {
-        const mdPart = r as vscode.ChatResponseMarkdownPart;
-        fullMessage += mdPart.value.value;
-      });
-      messages.push(vscode.LanguageModelChatMessage.Assistant(fullMessage));
-    });
-
-    // Construct the user message from the <context> blocks for the references,
-    // and the literal user-submitted prompt.
+    // Construct a user message from the <context> blocks for the references.
     const requestReferenceContextBlocks: string[] = await createContextBlocks(
       request.references
     );
-    const requestPrompt =
-      requestReferenceContextBlocks.join("\n") + "\n" + request.prompt;
+    messages.push(
+      vscode.LanguageModelChatMessage.User(
+        requestReferenceContextBlocks.join("\n")
+      )
+    );
 
-    messages.push(vscode.LanguageModelChatMessage.User(requestPrompt));
+    messages.push(vscode.LanguageModelChatMessage.User(request.prompt));
 
     const options: vscode.LanguageModelChatRequestOptions = {
       tools: tools,
     };
 
-    const chatResponse = await request.model.sendRequest(
-      messages,
-      options,
-      token
-    );
+    async function runWithTools() {
+      const chatResponse = await request.model.sendRequest(
+        messages,
+        options,
+        token
+      );
 
-    // Stream the response
-    const toolCalls: vscode.LanguageModelToolCallPart[] = [];
-    const tagProcessor = new StreamingTagProcessor(["SHINYAPP", "FILE"]);
-    let shinyAppFiles: FileContentJson[] | null = null;
-    // States of a state machine to handle the response
-    let state: "TEXT" | "SHINYAPP" | "FILE" = "TEXT";
-    // When processing text in the FILE state, the first chunk of text may have
-    // a leading \n that needs to be removed;
-    let fileStateProcessedFirstChunk = false;
+      // Stream the response
+      const toolCalls: vscode.LanguageModelToolCallPart[] = [];
+      const tagProcessor = new StreamingTagProcessor(["SHINYAPP", "FILE"]);
+      let shinyAppFiles: FileContentJson[] | null = null;
+      // States of a state machine to handle the response
+      let state: "TEXT" | "SHINYAPP" | "FILE" = "TEXT";
+      // When processing text in the FILE state, the first chunk of text may have
+      // a leading \n that needs to be removed;
+      let fileStateProcessedFirstChunk = false;
+      // The response text streamed in from the LLM.
+      let responseText = "";
 
-    for await (const part of chatResponse.stream) {
-      if (part instanceof vscode.LanguageModelTextPart) {
-        //
-      } else if (part instanceof vscode.LanguageModelToolCallPart) {
-        toolCalls.push(part);
-        console.log("LanguageModelToolCallPart: ", part);
-        continue;
-      } else {
-        console.log("Unknown part type: ", part);
-        continue;
-      }
-      console.log("Fragment:", part.value);
-      const processedFragment = tagProcessor.process(part.value);
-
-      for (const part of processedFragment) {
-        // TODO: flush at the end?
-        if (state === "TEXT") {
-          if (part.type === "text") {
-            stream.markdown(part.text);
-          } else if (part.type === "tag") {
-            if (part.kind === "open") {
-              if (part.name === "SHINYAPP") {
-                state = "SHINYAPP";
-                // TODO: handle multiple shiny apps? Or just error?
-                shinyAppFiles = [];
-              } else if (part.name === "FILE") {
-                console.log(
-                  "Parse error: <FILE> tag found, but not in <SHINYAPP> block."
-                );
-              }
-            } else if (part.kind === "close") {
-              console.log("Parse error: Unexpected closing tag in TEXT state.");
-            }
-          } else {
-            console.log("Parse error: Unexpected part type in TEXT state.");
-          }
-        } else if (state === "SHINYAPP") {
-          if (part.type === "text") {
-            // console.log(
-            //   "Parse error: Unexpected text in SHINYAPP state.",
-            //   part.text,
-            //   "."
-            // );
-            stream.markdown(part.text);
-          } else if (part.type === "tag") {
-            if (part.kind === "open") {
-              if (part.name === "SHINYAPP") {
-                console.log(
-                  "Parse error: Nested <SHINYAPP> tags are not supported."
-                );
-              } else if (part.name === "FILE") {
-                state = "FILE";
-                fileStateProcessedFirstChunk = false;
-
-                // TODO: Handle case when NAME attribute is missing
-                shinyAppFiles!.push({
-                  name: part.attributes["NAME"],
-                  content: "",
-                });
-                stream.markdown("\n### " + part.attributes["NAME"] + "\n");
-                stream.markdown("```");
-                const fileType = inferFileType(part.attributes["NAME"]);
-                if (fileType !== "text") {
-                  stream.markdown(fileType);
-                }
-                stream.markdown("\n");
-              }
-            } else if (part.kind === "close") {
-              if (part.name === "SHINYAPP") {
-                if (shinyAppFiles) {
-                  // Render the file tree control at a base location
-                  proposedFilePreviewCounter++;
-                  const proposedFilesPrefixDir =
-                    "/app-preview-" + proposedFilePreviewCounter;
-                  proposedFilePreviewProvider?.addFiles(
-                    shinyAppFiles,
-                    proposedFilesPrefixDir
-                  );
-
-                  stream.button({
-                    title: "View changes as diff",
-                    command: "shiny.assistant.showDiff",
-                    arguments: [
-                      shinyAppFiles,
-                      vscode.workspace.workspaceFolders?.[0],
-                      proposedFilesPrefixDir,
-                    ],
-                  });
-
-                  stream.button({
-                    title: "Apply changes",
-                    command: "shiny.assistant.saveFilesToWorkspace",
-                    arguments: [shinyAppFiles, true],
-                  });
-                }
-                state = "TEXT";
-              } else {
-                console.log(
-                  "Parse error: Unexpected closing tag in SHINYAPP state."
-                );
-              }
-            }
-          } else {
-            console.log("Parse error: Unexpected part type in SHINYAPP state.");
-          }
-        } else if (state === "FILE") {
-          if (part.type === "text") {
-            if (!fileStateProcessedFirstChunk) {
-              fileStateProcessedFirstChunk = true;
-              // "<FILE>" may be followed by "\n", which needs to be removed.
-              if (part.text.startsWith("\n")) {
-                part.text = part.text.slice(1);
-              }
-            }
-            stream.markdown(part.text);
-            // Add text to the current file content
-            shinyAppFiles![shinyAppFiles!.length - 1].content += part.text;
-          } else if (part.type === "tag") {
-            if (part.kind === "open") {
-              console.log(
-                "Parse error: tags inside of <FILE> are not supported."
-              );
-            } else if (part.kind === "close") {
-              if (part.name === "FILE") {
-                stream.markdown("```");
-                state = "SHINYAPP";
-              } else {
-                console.log(
-                  "Parse error: Unexpected closing tag in FILE state."
-                );
-              }
-            }
-          }
-        }
-      }
-    }
-
-    if (toolCalls.length > 0) {
-      for (const toolCall of toolCalls) {
-        const tool = tools.find((tool) => tool.name === toolCall.name);
-        if (!tool) {
-          console.log(`Tool not found: ${toolCall.name}`);
+      for await (const part of chatResponse.stream) {
+        if (part instanceof vscode.LanguageModelTextPart) {
+          //
+        } else if (part instanceof vscode.LanguageModelToolCallPart) {
+          toolCalls.push(part);
+          continue;
+        } else {
+          console.log("Unknown part type: ", part);
           continue;
         }
-        const result = (await tool.invoke(
-          toolCall,
-          null
-        )) as vscode.LanguageModelToolResultPart;
 
-        messages.push(
-          vscode.LanguageModelChatMessage.User([
-            new vscode.LanguageModelToolResultPart(toolCall.callId, [
-              result.content,
-            ]),
-          ])
-        );
+        responseText += part.value;
+        const processedFragment = tagProcessor.process(part.value);
 
-        console.log("Response will be: ", messages);
+        for (const part of processedFragment) {
+          // TODO: flush at the end?
+          if (state === "TEXT") {
+            if (part.type === "text") {
+              stream.markdown(part.text);
+            } else if (part.type === "tag") {
+              if (part.kind === "open") {
+                if (part.name === "SHINYAPP") {
+                  state = "SHINYAPP";
+                  // TODO: handle multiple shiny apps? Or just error?
+                  shinyAppFiles = [];
+                } else if (part.name === "FILE") {
+                  console.log(
+                    "Parse error: <FILE> tag found, but not in <SHINYAPP> block."
+                  );
+                }
+              } else if (part.kind === "close") {
+                console.log(
+                  "Parse error: Unexpected closing tag in TEXT state."
+                );
+              }
+            } else {
+              console.log("Parse error: Unexpected part type in TEXT state.");
+            }
+          } else if (state === "SHINYAPP") {
+            if (part.type === "text") {
+              // console.log(
+              //   "Parse error: Unexpected text in SHINYAPP state.",
+              //   part.text,
+              //   "."
+              // );
+              stream.markdown(part.text);
+            } else if (part.type === "tag") {
+              if (part.kind === "open") {
+                if (part.name === "SHINYAPP") {
+                  console.log(
+                    "Parse error: Nested <SHINYAPP> tags are not supported."
+                  );
+                } else if (part.name === "FILE") {
+                  state = "FILE";
+                  fileStateProcessedFirstChunk = false;
+
+                  // TODO: Handle case when NAME attribute is missing
+                  shinyAppFiles!.push({
+                    name: part.attributes["NAME"],
+                    content: "",
+                  });
+                  stream.markdown("\n### " + part.attributes["NAME"] + "\n");
+                  stream.markdown("```");
+                  const fileType = inferFileType(part.attributes["NAME"]);
+                  if (fileType !== "text") {
+                    stream.markdown(fileType);
+                  }
+                  stream.markdown("\n");
+                }
+              } else if (part.kind === "close") {
+                if (part.name === "SHINYAPP") {
+                  if (shinyAppFiles) {
+                    // Render the file tree control at a base location
+                    proposedFilePreviewCounter++;
+                    const proposedFilesPrefixDir =
+                      "/app-preview-" + proposedFilePreviewCounter;
+                    proposedFilePreviewProvider?.addFiles(
+                      shinyAppFiles,
+                      proposedFilesPrefixDir
+                    );
+
+                    stream.button({
+                      title: "View changes as diff",
+                      command: "shiny.assistant.showDiff",
+                      arguments: [
+                        shinyAppFiles,
+                        vscode.workspace.workspaceFolders?.[0],
+                        proposedFilesPrefixDir,
+                      ],
+                    });
+
+                    stream.button({
+                      title: "Apply changes",
+                      command: "shiny.assistant.saveFilesToWorkspace",
+                      arguments: [shinyAppFiles, true],
+                    });
+                  }
+                  state = "TEXT";
+                } else {
+                  console.log(
+                    "Parse error: Unexpected closing tag in SHINYAPP state."
+                  );
+                }
+              }
+            } else {
+              console.log(
+                "Parse error: Unexpected part type in SHINYAPP state."
+              );
+            }
+          } else if (state === "FILE") {
+            if (part.type === "text") {
+              if (!fileStateProcessedFirstChunk) {
+                fileStateProcessedFirstChunk = true;
+                // "<FILE>" may be followed by "\n", which needs to be removed.
+                if (part.text.startsWith("\n")) {
+                  part.text = part.text.slice(1);
+                }
+              }
+              stream.markdown(part.text);
+              // Add text to the current file content
+              shinyAppFiles![shinyAppFiles!.length - 1].content += part.text;
+            } else if (part.type === "tag") {
+              if (part.kind === "open") {
+                console.log(
+                  "Parse error: tags inside of <FILE> are not supported."
+                );
+              } else if (part.kind === "close") {
+                if (part.name === "FILE") {
+                  stream.markdown("```");
+                  state = "SHINYAPP";
+                } else {
+                  console.log(
+                    "Parse error: Unexpected closing tag in FILE state."
+                  );
+                }
+              }
+            }
+          }
+        }
       }
 
-      //
+      messages.push(
+        vscode.LanguageModelChatMessage.Assistant([
+          new vscode.LanguageModelTextPart(responseText),
+          ...toolCalls,
+        ])
+      );
+
+      if (toolCalls.length > 0) {
+        const toolCallsResults: Array<vscode.LanguageModelToolResultPart> = [];
+        for (const toolCall of toolCalls) {
+          const tool = tools.find((tool) => tool.name === toolCall.name);
+          if (!tool) {
+            console.log(`Tool not found: ${toolCall.name}`);
+            continue;
+          }
+          const result = await tool.invoke(
+            {
+              input: toolCall.input,
+              toolInvocationToken: request.toolInvocationToken,
+            },
+            dummyCancellationToken
+          );
+
+          if (result === null || result === undefined) {
+            console.log("Tool returned null or undefined.");
+            continue;
+          }
+          const toolCallResult = new vscode.LanguageModelToolResultPart(
+            toolCall.callId,
+            result.content
+          );
+          toolCallsResults.push(toolCallResult);
+        }
+        messages.push(vscode.LanguageModelChatMessage.User(toolCallsResults));
+
+        messages.push(
+          vscode.LanguageModelChatMessage.User(
+            "The messages above contain the results from one or more tool calls. The user can't see these results, so you should explain to the user if you reference them in your response."
+          )
+        );
+
+        // Loop until there are no more tool calls
+        return runWithTools();
+      }
     }
 
-    // TODO: run tools here
-    console.log("finished stream");
+    await runWithTools();
 
     return;
   };

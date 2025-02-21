@@ -213,3 +213,56 @@ except ImportError:
     return resultString;
   },
 });
+
+tools.push({
+  name: "shiny-assistant_installRequiredPackagesTool",
+  description: "Installs necessary R or Python packages.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      language: {
+        type: "string",
+        enum: ["r", "python"],
+        description: "Programming language that Shiny is being used with",
+      },
+    },
+    required: ["language"],
+    additionalProperties: false,
+  },
+  invoke: async (
+    { language }: { language: "r" | "python" },
+    token: vscode.CancellationToken
+  ): Promise<string> => {
+    let langRuntimePath: string | false;
+    let args: string[] = [];
+
+    let resultString = "";
+
+    if (language === "r") {
+      return "Installing R packages is not supported yet.";
+    } else if (language === "python") {
+      langRuntimePath = await getSelectedPythonInterpreter();
+      if (!langRuntimePath) {
+        return "No Python interpreter selected";
+      }
+
+      args = ["-m", "pip", "install", "r", "requirements.txt"];
+    } else {
+      return `Invalid language: ${language}`;
+    }
+
+    const cmdResult = await runShellCommand({
+      cmd: langRuntimePath,
+      args: args,
+    });
+
+    if (cmdResult.status === "error") {
+      resultString = `Error installing packages.`;
+    } else {
+      resultString = cmdResult.stdout.join("");
+    }
+    console.log(resultString);
+
+    return resultString;
+  },
+});

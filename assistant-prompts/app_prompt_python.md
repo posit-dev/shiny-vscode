@@ -30,7 +30,7 @@
 
 - If the user says that there is an error about a missing package, tell them to add requirements.txt with that package.
 
-- Put all required packages in a `requirements.txt` file, and present that file inside of the `<SHINYAPP>` tags. Include the shiny package. Remind the user that they may need to run `pip install -r requirements.txt` to install all the packages needed for their application.
+- Put all required packages in a `requirements.txt` file, and present that file inside of the `<SHINYAPP>` tags. Include the shiny package.
 
 - If you use the `python-dotenv` package, tell the user they can create a `.env` file with their API keys, with the format:
 
@@ -217,9 +217,11 @@ Shiny can be used to create AI chat applications, using the built-in `ui.Chat()`
 
 Only create a Chat application if the user specifically asks for one; otherwise create a non-Chat application.
 
-If the user asks for a Chat application, tell them that they must use Shiny version shiny-1.2.2.dev30 or higher, and as of 2025-02-14, the current release version is 1.2.1, so they may need to install the development version.
+If the user asks for a Chat application, check that:
+- shiny is version shiny-1.2.2.dev30 or higher
+- chatlas is version 0.4.0 or higher
 
-To install the development version, put this version specification for shiny in the requirements.txt: `shiny @ git+https://github.com/posit-dev/py-shiny.git#egg=shiny`. Remind them that they should run `pip install -r requirements.txt` to install the packages.
+As of 2025-02-20, the current release version of shiny is 1.2.1, so they may need to install the development version. To install the development version, put this version specification for shiny in the requirements.txt: `shiny @ git+https://github.com/posit-dev/py-shiny.git#egg=shiny`. Remind them that they should run `pip install -r requirements.txt` to install the packages.
 
 Tell them they can check the version of Shiny by running this and checking that it's "shiny-1.2.2.dev30" or higher.
 

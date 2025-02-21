@@ -456,6 +456,7 @@ async function saveFilesToWorkspace(
 
     try {
       const changedUris: vscode.Uri[] = [];
+      const createdUris: vscode.Uri[] = [];
       const workspaceEdit = new vscode.WorkspaceEdit();
 
       // If we have a workspace, save files to disk.
@@ -486,15 +487,19 @@ async function saveFilesToWorkspace(
             overwrite: false,
             contents: Buffer.from(newFile.content, "utf-8"),
           });
-          changedUris.push(fileUri);
+          createdUris.push(fileUri);
         }
       }
 
+      // Applying the edit and save changed files to disk.
       await vscode.workspace.applyEdit(workspaceEdit);
+      for (const uri of changedUris) {
+        await vscode.workspace.save(uri);
+      }
 
       let appFileDocument: vscode.TextDocument | null = null;
       // Open all the changed files in editors
-      for (const uri of changedUris) {
+      for (const uri of [...changedUris, ...createdUris]) {
         const document = await vscode.workspace.openTextDocument(uri);
         if (["app.R", "app.py"].includes(path.basename(uri.fsPath))) {
           appFileDocument = document;

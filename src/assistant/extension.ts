@@ -5,7 +5,7 @@ import { projectLanguage } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
-import { tools } from "./tools";
+import { tools, wrapToolInvocationResult } from "./tools";
 import type { FileContentJson } from "./types";
 import { createPromiseWithStatus, inferFileType } from "./utils";
 
@@ -382,20 +382,19 @@ export function registerShinyChatParticipant(
             continue;
           }
           const result = await tool.invoke(
-            {
-              input: toolCall.input,
-              toolInvocationToken: request.toolInvocationToken,
-            },
+            toolCall.input,
             dummyCancellationToken
           );
 
-          if (result === null || result === undefined) {
-            console.log("Tool returned null or undefined.");
+          if (result === undefined) {
+            console.log(`Tool returned undefined: ${toolCall.name}`);
             continue;
           }
+
+          const resultWrapped = wrapToolInvocationResult(result);
           const toolCallResult = new vscode.LanguageModelToolResultPart(
             toolCall.callId,
-            result.content
+            resultWrapped.content
           );
           toolCallsResults.push(toolCallResult);
         }

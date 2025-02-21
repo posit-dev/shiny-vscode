@@ -5,13 +5,50 @@ import {
   projectLanguage,
   type SetProjectLanguageParams,
 } from "./project-language";
+import type { JSONifiable } from "./types";
 
-export const tools: Array<Tool<unknown>> = [];
+// TODO: Fix types so that we can get rid of the `any`, because it disables
+// type checking for the `params` argument of all `invoke()` methods -- they
+// could be a non-Record type, which contradicts the type definition of Tool.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const tools: Array<Tool<any>> = [];
 
-// This type is a union of the LanguageModelTool (contains implementation) and
-// LanguageModelChatTool (contains metadata) interfaces, so that the
-// implementation and metadata for the tool can be defined in a single object.
-type Tool<T> = vscode.LanguageModelTool<T> & vscode.LanguageModelChatTool;
+// This type is a union of the LanguageModelChatTool (contains metadata)
+// interface and an invoke method, so that the metadata and implementation for
+// the tool can be defined in a single object. The VS Code chat extension API
+// usually wants the invoke() implementation in a LanguageModelTool object. Here
+// we have a simpler version of LanguageModelTool, in which the `invoke()`
+// method can return a JSONifiable value (which will be wrapped later) instead
+// of the more complex LanguageModelToolResult.
+type Tool<T extends Record<string, unknown>> = vscode.LanguageModelChatTool & {
+  invoke: (
+    params: T,
+    cancellationToken: vscode.CancellationToken
+  ) => JSONifiable | Promise<JSONifiable>;
+};
+
+/**
+ * Wraps a tool's invocation result in a VS Code LanguageModelToolResult. If the
+ * result is already a LanguageModelToolResult, returns it as is. Otherwise,
+ * converts the result to a JSON string and wraps it in a new
+ * LanguageModelToolResult.
+ *
+ * @param result - The result from a tool's invoke method, either a JSONifiable
+ * value or a LanguageModelToolResult
+ * @returns A LanguageModelToolResult that can be returned to VS Code's language
+ * model API
+ */
+export function wrapToolInvocationResult(
+  result: JSONifiable | vscode.LanguageModelToolResult
+): vscode.LanguageModelToolResult {
+  if (result instanceof vscode.LanguageModelToolResult) {
+    return result;
+  } else {
+    return new vscode.LanguageModelToolResult([
+      new vscode.LanguageModelTextPart(JSON.stringify(result)),
+    ]);
+  }
+}
 
 // This tool will be called when the user asks to set the project language to
 // either R or Python.
@@ -25,23 +62,18 @@ tools.push({
       language: {
         type: "string",
         enum: ["r", "python"],
-        description: "Programming language to be used",
+        description: "Programming language to use for the project",
       },
     },
     required: ["language"],
     additionalProperties: false,
   },
   invoke: (
-    options: vscode.LanguageModelToolInvocationOptions<SetProjectLanguageParams>,
+    { language }: SetProjectLanguageParams,
     token: vscode.CancellationToken
-  ): vscode.LanguageModelToolResult => {
-    const params = options.input;
-    projectLanguage.setValue(params.language);
-    return new vscode.LanguageModelToolResult([
-      new vscode.LanguageModelTextPart(
-        `The project language has been set to ${params.language}`
-      ),
-    ]);
+  ): string => {
+    projectLanguage.setValue(language);
+    return `The project language has been set to ${language}`;
   },
 });
 
@@ -73,47 +105,39 @@ tools.push({
       },
     },
     required: ["language", "package"],
-
     additionalProperties: false,
   },
   invoke: async (
-    options: vscode.LanguageModelToolInvocationOptions<CheckPackageVersionParams>,
+    // Note `package` is a reserved keyword so we'll use `package_` instead.
+    { language, package: package_, minVersion }: CheckPackageVersionParams,
     token: vscode.CancellationToken
-  ): Promise<vscode.LanguageModelToolResult> => {
-    const params = options.input;
-
+  ): Promise<string> => {
     let langRuntimePath: string | false;
     let args: string[] = [];
 
     let resultString = "";
 
-    if (params.language === "r") {
+    if (language === "r") {
       langRuntimePath = await getRBinPath("Rscript");
       if (!langRuntimePath) {
-        return new vscode.LanguageModelToolResult([
-          new vscode.LanguageModelTextPart(
-            "Could not find R runtime. It seems to not be installed."
-          ),
-        ]);
+        return "Could not find R runtime. It seems to not be installed.";
       }
 
       const versionCheckCode = `
-cat("Language: ${params.language}\\nPackage: ${params.package}\\n")
-if (system.file(package = "${params.package}") == "") {
+cat("Language: ${language}\\nPackage: ${package_}\\n")
+if (system.file(package = "${package_}") == "") {
   cat("Version: not installed\\n")
 } else {
-  version <- packageVersion("${params.package}")
+  version <- packageVersion("${package_}")
   cat("Version:", as.character(version), "\\n")
-  cat("Is greater or equal to min version (${params.minVersion}):", version >= "${params.minVersion}", "\\n")
+  cat("Is greater or equal to min version (${minVersion}):", version >= "${minVersion}", "\\n")
 }
 `;
       args = ["-e", versionCheckCode];
-    } else if (params.language === "python") {
+    } else if (language === "python") {
       langRuntimePath = await getSelectedPythonInterpreter();
       if (!langRuntimePath) {
-        return new vscode.LanguageModelToolResult([
-          new vscode.LanguageModelTextPart("No Python interpreter selected"),
-        ]);
+        return "No Python interpreter selected";
       }
 
       // Python code to check that a version number is greater or equal to
@@ -159,24 +183,20 @@ def version_ge(version1: str, version2: str):
 
   return True
 
-print("Language: ${params.language}\\nPackage: ${params.package}")
+print("Language: ${language}\\nPackage: ${package_}")
 
 try:
   from importlib.metadata import version
-  import ${params.package}
-  ver = version("${params.package}")
+  import ${package_}
+  ver = version("${package_}")
   print("Version:", ver)
-  print("Is greater or equal to min version (${params.minVersion}):", version_ge(ver, "${params.minVersion}"))
+  print("Is greater or equal to min version (${minVersion}):", version_ge(ver, "${minVersion}"))
 except ImportError:
   print("Version: not installed")
 `;
       args = ["-c", versionCheckCode];
     } else {
-      return new vscode.LanguageModelToolResult([
-        new vscode.LanguageModelTextPart(
-          `Invalid language: ${params.language}`
-        ),
-      ]);
+      return `Invalid language: ${language}`;
     }
 
     const cmdResult = await runShellCommand({
@@ -185,13 +205,11 @@ except ImportError:
     });
 
     if (cmdResult.status === "error") {
-      resultString = `Error getting version of ${params.package}.`;
+      resultString = `Error getting version of ${package_}.`;
     } else {
       resultString = cmdResult.stdout.join("");
     }
 
-    return new vscode.LanguageModelToolResult([
-      new vscode.LanguageModelTextPart(resultString),
-    ]);
+    return resultString;
   },
 });

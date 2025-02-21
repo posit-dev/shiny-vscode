@@ -9,3 +9,11 @@ export type FileContent = {
   content: string;
   type: "text" | "binary";
 };
+
+export type JSONifiable =
+  | string
+  | number
+  | boolean
+  | null
+  | Array<JSONifiable>
+  | { [key: string]: JSONifiable };

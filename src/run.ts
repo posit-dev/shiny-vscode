@@ -180,6 +180,12 @@ export async function rRunApp(): Promise<void> {
     },
   });
 
+  // Wait until the server port and auto-reload ports are both available.
+  if (!(await waitUntilServerPortIsAvailable(port))) {
+    vscode.window.showErrorMessage(`Unable to open server port ${port}.`);
+    return;
+  }
+
   const useDevmode = vscode.workspace
     .getConfiguration("shiny.r")
     .get("devmode");

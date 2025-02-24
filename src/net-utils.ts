@@ -57,7 +57,6 @@ export async function waitUntilServerPortIsAvailable(
   const portIsOpen: true | undefined = await retryUntilTimeout(
     timeout,
     async (): Promise<true> => {
-      console.log(`Checking if port ${port} is open...`);
       if ((await isServerPortAvailable(port)) === true) {
         return true;
       } else {

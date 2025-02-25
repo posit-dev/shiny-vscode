@@ -21,6 +21,8 @@ const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
 let assistantDisposables: vscode.Disposable[] = [];
 
 const hasConfirmedClaude = createPromiseWithStatus<boolean>();
+const hasContinuedAfterWorkspaceFolderSuggestion =
+  createPromiseWithStatus<void>();
 
 const dummyCancellationToken: vscode.CancellationToken =
   new vscode.CancellationTokenSource().token;
@@ -55,6 +57,10 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
       "shiny.assistant.continueAfterClaudeSuggestion",
       (switchedToClaude: boolean) =>
         hasConfirmedClaude.resolve(switchedToClaude)
+    ),
+    vscode.commands.registerCommand(
+      "shiny.assistant.continueAfterWorkspaceFolderSuggestion",
+      () => hasContinuedAfterWorkspaceFolderSuggestion.resolve()
     ),
     vscode.workspace.registerTextDocumentContentProvider(
       "proposed-files",
@@ -160,6 +166,27 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     }
 
     let showedLanguageButtons = false;
+
+    // Tell the user this works best if they have a workspace folder
+    if (!vscode.workspace.workspaceFolders?.[0]) {
+      stream.markdown(
+        "You currently do not have an active workspace folder.\n\n"
+      );
+      stream.markdown(
+        "Please open a folder by clicking on the **Open Folder** button in the sidebar, or by clicking on the **File** menu and then **Open Folder...** (You can continue without an open folder, but I won't be able to save files to disk and you won't be able to run apps.)\n\n"
+      );
+      stream.button({
+        title: `Got it, continue`,
+        command: "shiny.assistant.continueAfterWorkspaceFolderSuggestion",
+      });
+
+      await hasContinuedAfterWorkspaceFolderSuggestion;
+      if (!vscode.workspace.workspaceFolders?.[0]) {
+        stream.markdown(
+          "Continuing without an active workspace folder. Not all features will work.\n\n"
+        );
+      }
+    }
 
     // Infer the language of the project if it hasn't been set yet.
     if (projectLanguage.value() === null) {

@@ -1,13 +1,18 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { checkPythonEnvironment, guessWorkspaceLanguage } from "./language";
+import {
+  checkPythonEnvironment,
+  guessWorkspaceLanguage,
+  inferFileType,
+  type LangName,
+} from "./language";
 import { projectLanguage } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
 import { tools, wrapToolInvocationResult } from "./tools";
 import type { FileContentJson } from "./types";
-import { createPromiseWithStatus, inferFileType } from "./utils";
+import { createPromiseWithStatus } from "./utils";
 
 const proposedFilePreviewProvider = new ProposedFilePreviewProvider();
 
@@ -51,7 +56,7 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
     vscode.commands.registerCommand("shiny.assistant.showDiff", showDiff),
     vscode.commands.registerCommand(
       "shiny.assistant.setProjectLanguage",
-      (language: "r" | "python") => projectLanguage.setValue(language)
+      (language: LangName) => projectLanguage.set(language)
     ),
     vscode.commands.registerCommand(
       "shiny.assistant.continueAfterClaudeSuggestion",
@@ -182,7 +187,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     }
 
     // Infer the language of the project if it hasn't been set yet.
-    if (projectLanguage.value() === null) {
+    if (!projectLanguage.isSet()) {
       const languageGuess = await guessWorkspaceLanguage();
       stream.markdown("Based on the files in your workspace, ");
 
@@ -248,7 +253,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // Prepend system prompt to the messages.
     const systemPrompt = await loadSystemPrompt(
       extensionContext,
-      projectLanguage.value()!
+      projectLanguage.name()
     );
     messages.unshift(vscode.LanguageModelChatMessage.User(systemPrompt));
 

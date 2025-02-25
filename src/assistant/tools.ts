@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { runShellCommandWithTerminalOutput } from "../extension-api-utils/run-command-terminal-output";
 import { getRBinPath, getSelectedPythonInterpreter } from "../run";
+import { type LangName } from "./language";
 import {
   projectLanguage,
   type SetProjectLanguageParams,
@@ -79,13 +80,13 @@ tools.push({
     opts: InvokeOptions
   ): string => {
     opts.stream.markdown(`\n\nSetting project language to ${language}.\n\n`);
-    projectLanguage.setValue(language);
+    projectLanguage.set(language);
     return `The project language has been set to ${language}`;
   },
 });
 
 interface CheckPackageVersionParams {
-  language: "r" | "python";
+  language: LangName;
   package: string;
   minVersion?: string;
 }
@@ -277,7 +278,7 @@ tools.push({
     additionalProperties: false,
   },
   invoke: async (
-    { language }: { language: "r" | "python" },
+    { language }: { language: LangName },
     opts: InvokeOptions
   ): Promise<string> => {
     let langRuntimePath: string | false;

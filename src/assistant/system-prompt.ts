@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import type * as vscode from "vscode";
-import { type ProjectLanguageGuess } from "./language";
+import { type LangName } from "./language";
 
 // The system prompt directory relative to the extension
 const SYSTEM_PROMPT_DIR = "assistant-prompts";
@@ -15,7 +15,7 @@ interface PromptVariables {
 
 async function loadLanguageSpecificPrompt(
   context: vscode.ExtensionContext,
-  language: "r" | "python"
+  language: LangName
 ): Promise<string> {
   try {
     const promptPath = path.join(
@@ -32,7 +32,7 @@ async function loadLanguageSpecificPrompt(
 
 export async function loadSystemPrompt(
   context: vscode.ExtensionContext,
-  language: "r" | "python"
+  language: LangName
 ): Promise<string> {
   try {
     const promptPath = path.join(

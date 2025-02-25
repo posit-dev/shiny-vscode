@@ -1,7 +1,5 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { runShellCommandWithTerminalOutput } from "../extension-api-utils/run-command-terminal-output";
-import { runShellCommand } from "../extension-api-utils/runShellCommand";
 import { checkPythonEnvironment, guessWorkspaceLanguage } from "./language";
 import { projectLanguage } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";

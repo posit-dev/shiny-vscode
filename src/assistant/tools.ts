@@ -315,7 +315,7 @@ tools.push({
       args: args,
       cwd: workspaceDir,
       terminalName: "Shiny Assistant tool call",
-      timeout_ms: 15000,
+      timeoutMs: 15000,
       stdout: (s: string) => {
         resultString += s;
       },

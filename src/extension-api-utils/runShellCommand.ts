@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 // From https://github.com/rstudio/shinyuieditor/blob/392659a0d936e4e38ac99660e89b0327db45b3a9/inst/vscode-extension/src/extension-api-utils/runShellCommand.ts
 // With some modifications
-import { type CommonOptions, spawn } from "child_process";
+import { spawn } from "child_process";
 
 type ProcOutput = {
   stdout: string[];
@@ -25,7 +24,7 @@ export type CommandExecOptions = {
   env?: NodeJS.ProcessEnv;
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
-  timeout_ms?: number;
+  timeoutMs?: number;
   verbose?: boolean;
 };
 export async function runShellCommand({
@@ -35,7 +34,7 @@ export async function runShellCommand({
   env,
   stdout,
   stderr,
-  timeout_ms = 1500,
+  timeoutMs = 1500,
   verbose = false,
 }: CommandExecOptions): Promise<CommandOutput> {
   const logger = makeLogger(verbose, "runShellCommand: ");
@@ -43,7 +42,7 @@ export async function runShellCommand({
   return new Promise<CommandOutput>((resolve) => {
     const output: ProcOutput = { stdout: [], stderr: [] };
 
-    const spawnedProcess = spawn(cmd, args, { cwd, env, timeout: timeout_ms });
+    const spawnedProcess = spawn(cmd, args, { cwd, env, timeout: timeoutMs });
     function onSpawn() {
       logger("Spawned");
     }
@@ -86,13 +85,13 @@ export async function runShellCommand({
     const startTimeout = setTimeout(() => {
       resolve({
         status: "error",
-        errorMsgs: `Command, no response from run command within ${timeout_ms}ms:\n${cmd} ${args?.join(
+        errorMsgs: `Command, no response from run command within ${timeoutMs}ms:\n${cmd} ${args?.join(
           " "
         )}`,
         ...output,
       });
       cleanup();
-    }, timeout_ms);
+    }, timeoutMs);
 
     spawnedProcess.on("spawn", onSpawn);
     spawnedProcess.on("error", onError);

@@ -17,7 +17,7 @@ export async function runShellCommandWithTerminalOutput({
   terminalName,
   stdout,
   stderr,
-  timeout_ms = 1500,
+  timeoutMs = 1500,
   verbose = false,
 }: RunShellCommandWithTerminalOutputOptions): Promise<CommandOutput> {
   let pty: MyPTY;
@@ -74,7 +74,7 @@ export async function runShellCommandWithTerminalOutput({
       pty.write(s);
       if (stderr) stderr(s);
     },
-    timeout_ms,
+    timeoutMs: timeoutMs,
     verbose,
   });
   return result;

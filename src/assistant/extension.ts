@@ -193,10 +193,12 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
       if (languageGuess === "definitely_r") {
         stream.markdown("it looks like you are using R.\n\n");
-        projectLanguage.setValue("r");
+        stream.progress("");
+        projectLanguage.set("r");
       } else if (languageGuess === "definitely_python") {
         stream.markdown("it looks like you are using Python.\n\n");
-        projectLanguage.setValue("python");
+        stream.progress("");
+        projectLanguage.set("python");
       } else {
         // If we're don't know for sure what language is being used, prompt the
         // user.
@@ -391,6 +393,13 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                       command: "shiny.assistant.saveFilesToWorkspace",
                       arguments: [shinyAppFiles, true],
                     });
+
+                    stream.markdown(
+                      new vscode.MarkdownString(
+                        `After you apply the changes, press the $(run) button in the upper right of the app.${projectLanguage.fileExt()} editor panel to run the app.\n\n`,
+                        true
+                      )
+                    );
                   }
                   state = "TEXT";
                 } else {

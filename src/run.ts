@@ -5,7 +5,11 @@ import * as vscode from "vscode";
 import * as winreg from "winreg";
 import { isShinyAppRPart } from "./extension";
 import { getPositronPreferredRuntime } from "./extension-api-utils/extensionHost";
-import { openBrowser, openBrowserWhenReady } from "./net-utils";
+import {
+  openBrowser,
+  openBrowserWhenReady,
+  waitUntilServerPortIsAvailable,
+} from "./net-utils";
 import { getAppPort, getAutoreloadPort } from "./port-settings";
 import {
   envVarsForShell as envVarsForTerminal,
@@ -51,6 +55,23 @@ export async function pyRunApp(): Promise<void> {
       ...envVarsForTerminal(),
     },
   });
+
+  // Wait until the server port and auto-reload ports are both available.
+  const serverPortsAvailable = await Promise.all([
+    waitUntilServerPortIsAvailable(port),
+    waitUntilServerPortIsAvailable(autoreloadPort),
+  ]);
+
+  if (!serverPortsAvailable[0]) {
+    vscode.window.showErrorMessage(`Unable to open server port ${port}.`);
+    return;
+  }
+  if (!serverPortsAvailable[1]) {
+    vscode.window.showErrorMessage(
+      `Unable to open auto-reload port ${autoreloadPort}.`
+    );
+    return;
+  }
 
   const args: string[] = ["-m", "shiny", "run"];
   args.push("--port", port + "");
@@ -157,6 +178,12 @@ export async function rRunApp(): Promise<void> {
       ...envVarsForTerminal(),
     },
   });
+
+  // Wait until the server port and auto-reload ports are both available.
+  if (!(await waitUntilServerPortIsAvailable(port))) {
+    vscode.window.showErrorMessage(`Unable to open server port ${port}.`);
+    return;
+  }
 
   const useDevmode = vscode.workspace
     .getConfiguration("shiny.r")

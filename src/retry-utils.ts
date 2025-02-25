@@ -9,9 +9,13 @@
  */
 export async function retryUntilTimeout<T>(
   timeoutMs: number,
-  callback: () => Promise<T>
+  callback: () => Promise<T>,
+  retryIntervalMs: number = 20
 ): Promise<T | undefined> {
-  const { result, cancel: cancelResult } = retryUntilCancel(20, callback);
+  const { result, cancel: cancelResult } = retryUntilCancel(
+    retryIntervalMs,
+    callback
+  );
 
   let timer: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<undefined>((resolve) => {

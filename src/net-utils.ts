@@ -39,6 +39,62 @@ async function isPortOpen(
   });
 }
 
+/**
+ * Repeatedly attempts to listen on a specified port until it becomes available
+ * or times out. Retries every 80ms until the timeout.
+ *
+ * @param port - The port number to check
+ * @param timeout - Maximum time in milliseconds to wait for the port to open
+ * (default: 1000ms)
+ * @returns A promise that resolves to true if the port opens within the timeout
+ * period, false otherwise
+ */
+export async function waitUntilServerPortIsAvailable(
+  port: number,
+  timeout: number = 1000
+): Promise<boolean> {
+  const portIsOpen: true | undefined = await retryUntilTimeout(
+    timeout,
+    async (): Promise<true> => {
+      if ((await isServerPortAvailable(port)) === true) {
+        return true;
+      } else {
+        // This callback needs to throw an error for the retry to happen.
+        throw new Error(`Port ${port} is not open yet`);
+      }
+    },
+    80
+  );
+  if (portIsOpen === true) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Checks if a port is available for a server to listen on by attempting to
+ * create an HTTP server on that port. This is more reliable than TCP connection
+ * tests for determining if a port can be used by a server.
+ *
+ * @param port - The port number to check for availability
+ * @returns A promise that resolves to true if the port is available for use,
+ *          false if the port is already in use or cannot be bound to.
+ */
+export async function isServerPortAvailable(port: number): Promise<boolean> {
+  const server = http.createServer();
+
+  const p = new Promise<boolean>((resolve, reject) => {
+    server.on("listening", () => resolve(true));
+    server.on("error", () => resolve(false));
+  }).finally(() => {
+    return closeServer(server);
+  });
+
+  server.listen(port, "127.0.0.1");
+
+  return p;
+}
+
 async function getTerminalClosedPromise(
   terminal: vscode.Terminal
 ): Promise<boolean> {
@@ -57,7 +113,8 @@ async function getTerminalClosedPromise(
  */
 function configShinyTimeoutOpenBrowser(): number {
   return (
-    vscode.workspace.getConfiguration().get("shiny.timeoutOpenBrowser", 10) * 1000
+    vscode.workspace.getConfiguration().get("shiny.timeoutOpenBrowser", 10) *
+    1000
   );
 }
 

@@ -62,15 +62,14 @@ export async function pyRunApp(): Promise<void> {
     waitUntilServerPortIsAvailable(autoreloadPort),
   ]);
 
-  if (!serverPortsAvailable.every((x) => x)) {
-    if (!serverPortsAvailable[0]) {
-      vscode.window.showErrorMessage(`Unable to open server port ${port}.`);
-    }
-    if (!serverPortsAvailable[1]) {
-      vscode.window.showErrorMessage(
-        `Unable to open auto-reload port ${autoreloadPort}.`
-      );
-    }
+  if (!serverPortsAvailable[0]) {
+    vscode.window.showErrorMessage(`Unable to open server port ${port}.`);
+    return;
+  }
+  if (!serverPortsAvailable[1]) {
+    vscode.window.showErrorMessage(
+      `Unable to open auto-reload port ${autoreloadPort}.`
+    );
     return;
   }
 

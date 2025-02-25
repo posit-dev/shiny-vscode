@@ -1,5 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import { runShellCommandWithTerminalOutput } from "../extension-api-utils/run-command-terminal-output";
+import { runShellCommand } from "../extension-api-utils/runShellCommand";
 import { checkPythonEnvironment, guessWorkspaceLanguage } from "./language";
 import { projectLanguage } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
@@ -24,6 +26,13 @@ const hasConfirmedClaude = createPromiseWithStatus<boolean>();
 
 const dummyCancellationToken: vscode.CancellationToken =
   new vscode.CancellationTokenSource().token;
+
+interface ShinyAssistantChatResult extends vscode.ChatResult {
+  metadata: {
+    command: string | undefined;
+    followups: Array<string | vscode.ChatFollowup>;
+  };
+}
 
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   // Clean up any existing disposables
@@ -81,7 +90,42 @@ export function registerShinyChatParticipant(
     chatContext: vscode.ChatContext,
     stream: vscode.ChatResponseStream,
     token: vscode.CancellationToken
-  ) => {
+  ): Promise<ShinyAssistantChatResult> => {
+    const chatResult: ShinyAssistantChatResult = {
+      metadata: {
+        command: undefined,
+        followups: [],
+      },
+    };
+
+    // await runShellCommandWithTerminalOutput({
+    //   cmd: "echo",
+    //   args: ["Hello, world!"],
+    //   terminalName: "Shiny Assistant tool call",
+    //   cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    // });
+
+    if (request.command === "start") {
+      stream.markdown(`Shiny Assistant can help you with building and deploying Shiny applications. You can ask me to:
+
+  - Create a Shiny app
+  - Modify an existing Shiny app
+  - Install packages needed for your app
+  - Troubleshoot a Shiny app
+
+You can also ask me to explain the code in your Shiny app, or to help you with any other questions you have about Shiny.
+        `);
+      chatResult.metadata.followups.push("Create a simple Shiny app.");
+      // chatResult.metadata.followups.push(
+      //   "Help me set up a development environment for Shiny apps."
+      // );
+      chatResult.metadata.followups.push(
+        "Install the packages needed for my app."
+      );
+      // chatResult.metadata.followups.push("Help me deploy my app.");
+      return chatResult;
+    }
+
     // If the user isn't using Claude 3.5 Sonnet, prompt them to switch.
     if (
       request.model.id !== "claude-3.5-sonnet" &&
@@ -113,7 +157,7 @@ export function registerShinyChatParticipant(
             true
           )
         );
-        return;
+        return chatResult;
       }
     }
 
@@ -206,6 +250,8 @@ export function registerShinyChatParticipant(
       tools: tools,
     };
 
+    let responseContainsShinyApp = false;
+
     async function runWithTools() {
       const chatResponse = await request.model.sendRequest(
         messages,
@@ -250,6 +296,7 @@ export function registerShinyChatParticipant(
                   state = "SHINYAPP";
                   // TODO: handle multiple shiny apps? Or just error?
                   shinyAppFiles = [];
+                  responseContainsShinyApp = true;
                 } else if (part.name === "FILE") {
                   console.log(
                     "Parse error: <FILE> tag found, but not in <SHINYAPP> block."
@@ -381,10 +428,10 @@ export function registerShinyChatParticipant(
             console.log(`Tool not found: ${toolCall.name}`);
             continue;
           }
-          const result = await tool.invoke(
-            toolCall.input,
-            dummyCancellationToken
-          );
+          const result = await tool.invoke(toolCall.input, {
+            stream: stream,
+            cancellationToken: dummyCancellationToken,
+          });
 
           if (result === undefined) {
             console.log(`Tool returned undefined: ${toolCall.name}`);
@@ -414,13 +461,38 @@ export function registerShinyChatParticipant(
 
     await runWithTools();
 
-    return;
+    if (responseContainsShinyApp) {
+      chatResult.metadata.followups.push(
+        "Install the packages needed for my app."
+      );
+    }
+
+    return chatResult;
   };
 
   const shinyAssistant = vscode.chat.createChatParticipant(
     "chat.shiny-assistant",
     handler
   );
+
+  shinyAssistant.followupProvider = {
+    provideFollowups: (
+      result: ShinyAssistantChatResult,
+      context: vscode.ChatContext,
+      token: vscode.CancellationToken
+    ): vscode.ChatFollowup[] => {
+      const followups: vscode.ChatFollowup[] = result.metadata.followups.map(
+        (item) => {
+          if (typeof item === "string") {
+            return { prompt: item, command: "" };
+          } else {
+            return item;
+          }
+        }
+      );
+      return followups;
+    },
+  };
 
   shinyAssistant.iconPath = vscode.Uri.joinPath(
     extensionContext.extensionUri,
@@ -703,3 +775,35 @@ ${value}
     throw new Error("Unsupported value type for context block.");
   }
 }
+
+// // Example usage
+// async function exampleUsage() {
+//   try {
+//     const pty = new MyPTY();
+
+//     const terminal = vscode.window.createTerminal({
+//       name: "My Custom Terminal",
+//       pty,
+//     });
+//     terminal.show();
+
+//     // Don't continue until the pseudoterminal is opened; otherwise we could
+//     // write to the pty before it's ready and that output will be lost.
+//     await pty.openedPromise;
+//     pty.write("> ");
+
+//     await runShellCommand({
+//       cmd: "echo",
+//       args: ["Hello, world!"],
+//       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+//       stdout: (s: string) => {
+//         pty.write(s);
+//       },
+//       stderr: (s: string) => {
+//         pty.write(s);
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error running command:", error);
+//   }
+// }

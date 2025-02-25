@@ -234,8 +234,8 @@
         "isSticky": true,
         "commands": [
           {
-            "name": "exercise",
-            "description": "Provide exercises to practice a concept."
+            "name": "start",
+            "description": "Get started building a Shiny app."
           }
         ]
       }

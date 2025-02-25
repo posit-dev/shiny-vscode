@@ -1,17 +1,23 @@
 import * as vscode from "vscode";
-import { runShellCommand } from "../extension-api-utils/runShellCommand";
+import { runShellCommandWithTerminalOutput } from "../extension-api-utils/run-command-terminal-output";
 import { getRBinPath, getSelectedPythonInterpreter } from "../run";
 import {
   projectLanguage,
   type SetProjectLanguageParams,
 } from "./project-language";
 import type { JSONifiable } from "./types";
+import { capitalizeFirst } from "./utils";
 
 // TODO: Fix types so that we can get rid of the `any`, because it disables
 // type checking for the `params` argument of all `invoke()` methods -- they
 // could be a non-Record type, which contradicts the type definition of Tool.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const tools: Array<Tool<any>> = [];
+
+type InvokeOptions = {
+  stream: vscode.ChatResponseStream;
+  cancellationToken: vscode.CancellationToken;
+};
 
 // This type is a union of the LanguageModelChatTool (contains metadata)
 // interface and an invoke method, so that the metadata and implementation for
@@ -23,7 +29,7 @@ export const tools: Array<Tool<any>> = [];
 type Tool<T extends Record<string, unknown>> = vscode.LanguageModelChatTool & {
   invoke: (
     params: T,
-    cancellationToken: vscode.CancellationToken
+    opts: InvokeOptions
   ) => JSONifiable | Promise<JSONifiable>;
 };
 
@@ -70,8 +76,9 @@ tools.push({
   },
   invoke: (
     { language }: SetProjectLanguageParams,
-    token: vscode.CancellationToken
+    opts: InvokeOptions
   ): string => {
+    opts.stream.markdown(`\n\nSetting project language to ${language}.\n\n`);
     projectLanguage.setValue(language);
     return `The project language has been set to ${language}`;
   },
@@ -110,12 +117,17 @@ tools.push({
   invoke: async (
     // Note `package` is a reserved keyword so we'll use `package_` instead.
     { language, package: package_, minVersion }: CheckPackageVersionParams,
-    token: vscode.CancellationToken
+    opts: InvokeOptions
   ): Promise<string> => {
+    opts.stream.markdown(
+      `\n\nChecking version of ${package_} for ${capitalizeFirst(language)}...\n\n`
+    );
     let langRuntimePath: string | false;
     let args: string[] = [];
 
-    let resultString = "";
+    if (minVersion === undefined) {
+      minVersion = "";
+    }
 
     if (language === "r") {
       langRuntimePath = await getRBinPath("Rscript");
@@ -123,17 +135,32 @@ tools.push({
         return "Could not find R runtime. It seems to not be installed.";
       }
 
+      // TODO: Replace this with proper JSON output
       const versionCheckCode = `
-cat("Language: ${language}\\nPackage: ${package_}\\n")
 if (system.file(package = "${package_}") == "") {
-  cat("Version: not installed\\n")
+  version <- "null"
+  at_least_min_version <- "null"
 } else {
   version <- packageVersion("${package_}")
-  cat("Version:", as.character(version), "\\n")
-  cat("Is greater or equal to min version (${minVersion}):", version >= "${minVersion}", "\\n")
+  if ("${minVersion}" != "") {
+    at_least_min_version <- version >= "${minVersion}"
+  } else {
+    at_least_min_version <- "null"
+  }
 }
-`;
+
+cat(
+  sep = "",
+  '{
+  "language": "${language}",
+  "package": "${package_}",
+  "version": "' , as.character(version), '",
+  "min_version": "${minVersion}",
+  "at_least_min_version": "', as.character(at_least_min_version), '"
+}')`;
       args = ["-e", versionCheckCode];
+
+      //
     } else if (language === "python") {
       langRuntimePath = await getSelectedPythonInterpreter();
       if (!langRuntimePath) {
@@ -183,40 +210,60 @@ def version_ge(version1: str, version2: str):
 
   return True
 
-print("Language: ${language}\\nPackage: ${package_}")
-
 try:
+  import json
   from importlib.metadata import version
   import ${package_}
   ver = version("${package_}")
-  print("Version:", ver)
-  print("Is greater or equal to min version (${minVersion}):", version_ge(ver, "${minVersion}"))
+  if "${minVersion}" == "":
+    at_least_min_version = None
+  else:
+    at_least_min_version = version_ge(ver, "${minVersion}")
 except ImportError:
-  print("Version: not installed")
+  ver = None
+  at_least_min_version = None
+
+print(json.dumps({
+  "language": "${language}",
+  "package": "${package_}",
+  "version": ver,
+  "min_version": "${minVersion}",
+  "at_least_min_version": at_least_min_version
+}, indent=2))
 `;
       args = ["-c", versionCheckCode];
     } else {
       return `Invalid language: ${language}`;
     }
 
-    const cmdResult = await runShellCommand({
+    let resultString = "";
+    const appendToResultString = (s: string) => {
+      resultString += s;
+    };
+
+    const cmdResult = await runShellCommandWithTerminalOutput({
       cmd: langRuntimePath,
       args: args,
+      terminalName: "Shiny Assistant tool call",
+      cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+      stdout: appendToResultString,
+      stderr: appendToResultString,
     });
 
     if (cmdResult.status === "error") {
-      resultString = `Error getting version of ${package_}.`;
-    } else {
-      resultString = cmdResult.stdout.join("");
+      resultString += `\nError getting version of ${package_}.`;
     }
+
+    // opts.stream.markdown(resultString);
 
     return resultString;
   },
 });
 
+// TODO: Implement for R
 tools.push({
   name: "shiny-assistant_installRequiredPackagesTool",
-  description: "Installs necessary R or Python packages.",
+  description: "Installs necessary packages, for Python only.",
   inputSchema: {
     type: "object",
     properties: {
@@ -231,12 +278,20 @@ tools.push({
   },
   invoke: async (
     { language }: { language: "r" | "python" },
-    token: vscode.CancellationToken
+    opts: InvokeOptions
   ): Promise<string> => {
     let langRuntimePath: string | false;
     let args: string[] = [];
 
     let resultString = "";
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!(workspaceFolders && workspaceFolders.length > 0)) {
+      return "No workspace folder found.";
+    }
+    const workspaceDir = workspaceFolders[0].uri.fsPath;
+
+    opts.stream.markdown("\n\nInstalling required packages...\n\n");
 
     if (language === "r") {
       return "Installing R packages is not supported yet.";
@@ -246,22 +301,32 @@ tools.push({
         return "No Python interpreter selected";
       }
 
-      args = ["-m", "pip", "install", "r", "requirements.txt"];
+      args = ["-m", "pip", "install", "-r", "requirements.txt"];
     } else {
       return `Invalid language: ${language}`;
     }
 
-    const cmdResult = await runShellCommand({
+    resultString = `Running command: \n\`\`\`\n${langRuntimePath} ${args.join(" ")}\n\`\`\`\n\n`;
+    opts.stream.markdown(resultString);
+    opts.stream.progress("Running...");
+
+    const cmdResult = await runShellCommandWithTerminalOutput({
       cmd: langRuntimePath,
       args: args,
+      cwd: workspaceDir,
+      terminalName: "Shiny Assistant tool call",
+      timeout_ms: 15000,
+      stdout: (s: string) => {
+        resultString += s;
+      },
+      stderr: (s: string) => {
+        resultString += s;
+      },
     });
 
     if (cmdResult.status === "error") {
-      resultString = `Error installing packages.`;
-    } else {
-      resultString = cmdResult.stdout.join("");
+      resultString += `Error installing packages.`;
     }
-    console.log(resultString);
 
     return resultString;
   },

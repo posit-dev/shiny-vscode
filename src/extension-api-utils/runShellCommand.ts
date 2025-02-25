@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 // From https://github.com/rstudio/shinyuieditor/blob/392659a0d936e4e38ac99660e89b0327db45b3a9/inst/vscode-extension/src/extension-api-utils/runShellCommand.ts
-
-import { spawn } from "child_process";
+// With some modifications
+import { type CommonOptions, spawn } from "child_process";
 
 type ProcOutput = {
   stdout: string[];
   stderr: string[];
 };
-type CommandOutput = (
+export type CommandOutput = (
   | {
       status: "success";
     }
@@ -18,24 +18,32 @@ type CommandOutput = (
 ) &
   ProcOutput;
 
-type CommandExecOptions = {
+export type CommandExecOptions = {
   cmd: string;
   args?: string[];
+  cwd?: string | URL;
+  env?: NodeJS.ProcessEnv;
+  stdout?: (s: string) => void;
+  stderr?: (s: string) => void;
   timeout_ms?: number;
   verbose?: boolean;
 };
 export async function runShellCommand({
   cmd,
   args,
-  verbose = false,
+  cwd,
+  env,
+  stdout,
+  stderr,
   timeout_ms = 1500,
+  verbose = false,
 }: CommandExecOptions): Promise<CommandOutput> {
   const logger = makeLogger(verbose, "runShellCommand: ");
 
   return new Promise<CommandOutput>((resolve) => {
     const output: ProcOutput = { stdout: [], stderr: [] };
 
-    const spawnedProcess = spawn(cmd, args);
+    const spawnedProcess = spawn(cmd, args, { cwd, env, timeout: timeout_ms });
     function onSpawn() {
       logger("Spawned");
     }
@@ -53,11 +61,17 @@ export async function runShellCommand({
     function onStdout(d: any) {
       logger(`stdout: ${d.toString()}`);
       output.stdout.push(d.toString());
+      if (stdout) {
+        stdout(d.toString());
+      }
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function onStderr(d: any) {
       logger(`stderr: ${d.toString()}`);
       output.stderr.push(d.toString());
+      if (stderr) {
+        stderr(d.toString());
+      }
     }
 
     function cleanup() {

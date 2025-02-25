@@ -102,13 +102,6 @@ export function registerShinyChatParticipant(
       },
     };
 
-    // await runShellCommandWithTerminalOutput({
-    //   cmd: "echo",
-    //   args: ["Hello, world!"],
-    //   terminalName: "Shiny Assistant tool call",
-    //   cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-    // });
-
     if (request.command === "start") {
       stream.markdown(`Shiny Assistant can help you with building and deploying Shiny applications. You can ask me to:
 
@@ -546,91 +539,90 @@ async function saveFilesToWorkspace(
 ): Promise<boolean> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
-  if (workspaceFolder) {
-    if (closeProposedChangesTabs) {
-      await closeAllProposedChangesTabs();
-    }
-
-    try {
-      const changedUris: vscode.Uri[] = [];
-      const createdUris: vscode.Uri[] = [];
-      const workspaceEdit = new vscode.WorkspaceEdit();
-
-      // If we have a workspace, save files to disk.
-      for (const newFile of newFiles) {
-        const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, newFile.name);
-
-        try {
-          // Try to open existing file. If it exists, then replace its content.
-          await vscode.workspace.fs.stat(fileUri);
-          const document = await vscode.workspace.openTextDocument(fileUri);
-
-          // Replace the content only if it's different.
-          if (document.getText() !== newFile.content) {
-            workspaceEdit.set(fileUri, [
-              vscode.TextEdit.replace(
-                new vscode.Range(
-                  document.positionAt(0),
-                  document.positionAt(document.getText().length)
-                ),
-                newFile.content
-              ),
-            ]);
-            changedUris.push(fileUri);
-          }
-        } catch (err) {
-          // File does not exist; create it.
-          workspaceEdit.createFile(fileUri, {
-            overwrite: false,
-            contents: Buffer.from(newFile.content, "utf-8"),
-          });
-          createdUris.push(fileUri);
-        }
-      }
-
-      // Applying the edit and save changed files to disk.
-      await vscode.workspace.applyEdit(workspaceEdit);
-      for (const uri of changedUris) {
-        await vscode.workspace.save(uri);
-      }
-
-      let appFileDocument: vscode.TextDocument | null = null;
-      // Open all the changed files in editors
-      for (const uri of [...changedUris, ...createdUris]) {
-        const document = await vscode.workspace.openTextDocument(uri);
-        if (["app.R", "app.py"].includes(path.basename(uri.fsPath))) {
-          appFileDocument = document;
-        }
-        await vscode.window.showTextDocument(document, {
-          preserveFocus: false,
-        });
-      }
-
-      // If there was an app.py/R, then focus on it. The reason we didn't simply
-      // sort the file list and put the app.py/R last is because it usually
-      // makes sense to have it first in the list of editors.
-      if (appFileDocument) {
-        await vscode.window.showTextDocument(appFileDocument, {
-          preserveFocus: false,
-        });
-      }
-
-      return true;
-    } catch (error) {
-      if (error instanceof Error) {
-        vscode.window.showErrorMessage(
-          `Failed to handle files: ${error.message}`
-        );
-      }
-      return false;
-    }
-  } else {
-    // If no workspace, create untitled editors
+  if (!workspaceFolder) {
     vscode.window.showErrorMessage(
       "You currently do not have an active workspace folder. Please open a workspace folder and try again."
     );
+    return false;
   }
-  return false;
+
+  if (closeProposedChangesTabs) {
+    await closeAllProposedChangesTabs();
+  }
+
+  try {
+    const changedUris: vscode.Uri[] = [];
+    const createdUris: vscode.Uri[] = [];
+    const workspaceEdit = new vscode.WorkspaceEdit();
+
+    // If we have a workspace, save files to disk.
+    for (const newFile of newFiles) {
+      const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, newFile.name);
+
+      try {
+        // Try to open existing file. If it exists, then replace its content.
+        await vscode.workspace.fs.stat(fileUri);
+        const document = await vscode.workspace.openTextDocument(fileUri);
+
+        // Replace the content only if it's different.
+        if (document.getText() !== newFile.content) {
+          workspaceEdit.set(fileUri, [
+            vscode.TextEdit.replace(
+              new vscode.Range(
+                document.positionAt(0),
+                document.positionAt(document.getText().length)
+              ),
+              newFile.content
+            ),
+          ]);
+          changedUris.push(fileUri);
+        }
+      } catch (err) {
+        // File does not exist; create it.
+        workspaceEdit.createFile(fileUri, {
+          overwrite: false,
+          contents: Buffer.from(newFile.content, "utf-8"),
+        });
+        createdUris.push(fileUri);
+      }
+    }
+
+    // Applying the edit and save changed files to disk.
+    await vscode.workspace.applyEdit(workspaceEdit);
+    for (const uri of changedUris) {
+      await vscode.workspace.save(uri);
+    }
+
+    let appFileDocument: vscode.TextDocument | null = null;
+    // Open all the changed files in editors
+    for (const uri of [...changedUris, ...createdUris]) {
+      const document = await vscode.workspace.openTextDocument(uri);
+      if (["app.R", "app.py"].includes(path.basename(uri.fsPath))) {
+        appFileDocument = document;
+      }
+      await vscode.window.showTextDocument(document, {
+        preserveFocus: false,
+      });
+    }
+
+    // If there was an app.py/R, then focus on it. The reason we didn't simply
+    // sort the file list and put the app.py/R last is because it usually
+    // makes sense to have it first in the list of editors.
+    if (appFileDocument) {
+      await vscode.window.showTextDocument(appFileDocument, {
+        preserveFocus: false,
+      });
+    }
+
+    return true;
+  } catch (error) {
+    if (error instanceof Error) {
+      vscode.window.showErrorMessage(
+        `Failed to handle files: ${error.message}`
+      );
+    }
+    return false;
+  }
 }
 
 // Store the proposed changes that are in the current diff view in a global

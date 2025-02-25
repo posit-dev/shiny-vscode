@@ -40,9 +40,8 @@ async function isPortOpen(
 }
 
 /**
- * Repeatedly attempts to connect to a specified port until it becomes available
- * or times out. Uses a shorter connection timeout (200ms) for each attempt
- * while respecting the overall timeout period.
+ * Repeatedly attempts to listen on a specified port until it becomes available
+ * or times out. Retries every 80ms until the timeout.
  *
  * @param port - The port number to check
  * @param timeout - Maximum time in milliseconds to wait for the port to open

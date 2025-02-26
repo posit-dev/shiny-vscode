@@ -36,6 +36,9 @@ interface ShinyAssistantChatResult extends vscode.ChatResult {
   metadata: {
     command: string | undefined;
     followups: Array<string | vscode.ChatFollowup>;
+    // This is the raw response text from the LLM, before we do some
+    // transformations and send it to the UI.
+    rawResponseText: string;
   };
 }
 
@@ -104,6 +107,7 @@ export function registerShinyChatParticipant(
       metadata: {
         command: undefined,
         followups: [],
+        rawResponseText: "",
       },
     };
 
@@ -242,11 +246,24 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
         return vscode.LanguageModelChatMessage.User(message.prompt);
       } else if (message instanceof vscode.ChatResponseTurn) {
         let messageText = "";
-        message.response.forEach((r) => {
-          if (r instanceof vscode.ChatResponseMarkdownPart) {
-            messageText += r.value.value;
-          }
-        });
+        if (message.result.metadata?.rawResponseText) {
+          // If the response has saved the raw text from the LLM, use that.
+          messageText = message.result.metadata.rawResponseText;
+        } else {
+          // Otherwise, construct the message from the response parts. (There
+          // might be multiple parts to the response if, for example, the LLM
+          // calls tools.) Note that this message will consist of the text parts
+          // that were streamed to the UI, which may have been transformed from
+          // the raw LLM response. Additionally these text parts may include
+          // content that was streamed to the UI without being part of the LLM
+          // response at all, like if `stream.markdown("...")` is called
+          // directly.
+          message.response.forEach((r) => {
+            if (r instanceof vscode.ChatResponseMarkdownPart) {
+              messageText += r.value.value;
+            }
+          });
+        }
         return vscode.LanguageModelChatMessage.Assistant(messageText);
       }
       throw new Error(`Unknown message type in chat history: ${message}`);
@@ -276,6 +293,9 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     };
 
     let responseContainsShinyApp = false;
+    // Collect all the raw text from the LLM. This will include the text
+    // spanning multiple tool calls, if present.
+    let rawResponseText = "";
 
     async function runWithTools() {
       const chatResponse = await request.model.sendRequest(
@@ -294,11 +314,11 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       // a leading \n that needs to be removed;
       let fileStateProcessedFirstChunk = false;
       // The response text streamed in from the LLM.
-      let responseText = "";
+      let thisTurnResponseText = "";
 
       for await (const part of chatResponse.stream) {
         if (part instanceof vscode.LanguageModelTextPart) {
-          //
+          rawResponseText += part.value;
         } else if (part instanceof vscode.LanguageModelToolCallPart) {
           toolCalls.push(part);
           continue;
@@ -307,7 +327,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           continue;
         }
 
-        responseText += part.value;
+        thisTurnResponseText += part.value;
         const processedFragment = tagProcessor.process(part.value);
 
         for (const part of processedFragment) {
@@ -447,7 +467,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
       messages.push(
         vscode.LanguageModelChatMessage.Assistant([
-          new vscode.LanguageModelTextPart(responseText),
+          new vscode.LanguageModelTextPart(thisTurnResponseText),
           ...toolCalls,
         ])
       );
@@ -487,12 +507,15 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
         // Loop until there are no more tool calls
         stream.markdown("\n\n");
+        // Add line breaks between tool call loop iterations.
+        rawResponseText += "\n\n";
         return runWithTools();
       }
     }
 
     await runWithTools();
 
+    chatResult.metadata.rawResponseText = rawResponseText;
     if (responseContainsShinyApp) {
       chatResult.metadata.followups.push(
         "Install the packages needed for my app."

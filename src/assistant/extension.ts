@@ -624,14 +624,11 @@ async function saveFilesToWorkspace(
       }
     }
 
-    // Applying the edit and save changed files to disk.
+    // Apply the edit
     await vscode.workspace.applyEdit(workspaceEdit);
-    for (const uri of changedUris) {
-      await vscode.workspace.save(uri);
-    }
 
-    let appFileDocument: vscode.TextDocument | null = null;
     // Open all the changed files in editors
+    let appFileDocument: vscode.TextDocument | null = null;
     for (const uri of [...changedUris, ...createdUris]) {
       const document = await vscode.workspace.openTextDocument(uri);
       if (["app.R", "app.py"].includes(path.basename(uri.fsPath))) {
@@ -640,6 +637,8 @@ async function saveFilesToWorkspace(
       await vscode.window.showTextDocument(document, {
         preserveFocus: false,
       });
+      // Save changed files to disk (file must be open in an editor to save).
+      await vscode.workspace.save(uri);
     }
 
     // If there was an app.py/R, then focus on it. The reason we didn't simply
@@ -687,12 +686,6 @@ async function showDiff(
     );
     return false;
   }
-
-  // Close all other proposed changes tabs - this is necessary because if the
-  // clicks the "Apply changes" button, that button can't pass arguments -- we
-  // can only call the command, and if there are multiple proposed changes tabs,
-  // it won't know which one to apply.
-  await closeAllProposedChangesTabs();
 
   // We need to set some state for if the user clicks on the "Apply changes"
   // button in the diff view title bar. That calls the command
@@ -743,7 +736,7 @@ async function showDiff(
         proposedUri,
       ]);
     }
-    vscode.commands.executeCommand(
+    await vscode.commands.executeCommand(
       "vscode.changes",
       PROPOSED_CHANGES_TAB_LABEL,
       changes
@@ -829,35 +822,3 @@ ${value}
     throw new Error("Unsupported value type for context block.");
   }
 }
-
-// // Example usage
-// async function exampleUsage() {
-//   try {
-//     const pty = new MyPTY();
-
-//     const terminal = vscode.window.createTerminal({
-//       name: "My Custom Terminal",
-//       pty,
-//     });
-//     terminal.show();
-
-//     // Don't continue until the pseudoterminal is opened; otherwise we could
-//     // write to the pty before it's ready and that output will be lost.
-//     await pty.openedPromise;
-//     pty.write("> ");
-
-//     await runShellCommand({
-//       cmd: "echo",
-//       args: ["Hello, world!"],
-//       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-//       stdout: (s: string) => {
-//         pty.write(s);
-//       },
-//       stderr: (s: string) => {
-//         pty.write(s);
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error running command:", error);
-//   }
-// }

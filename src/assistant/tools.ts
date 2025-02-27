@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { runShellCommandWithTerminalOutput } from "../extension-api-utils/run-command-terminal-output";
 import { getRBinPath, getSelectedPythonInterpreter } from "../run";
-import { type LangName } from "./language";
+import { langNameToProperName, type LangName } from "./language";
 import {
   projectLanguage,
   type SetProjectLanguageParams,
@@ -79,9 +79,11 @@ tools.push({
     { language }: SetProjectLanguageParams,
     opts: InvokeOptions
   ): string => {
-    opts.stream.markdown(`\n\nSetting project language to ${language}.\n\n`);
+    opts.stream.markdown(
+      `\n\nSetting project language to ${langNameToProperName(language)}...\n\n`
+    );
     projectLanguage.set(language);
-    return `The project language has been set to ${language}`;
+    return `The project language has been set to ${langNameToProperName(language)}`;
   },
 });
 
@@ -121,7 +123,7 @@ tools.push({
     opts: InvokeOptions
   ): Promise<string> => {
     opts.stream.markdown(
-      `\n\nChecking version of ${package_} for ${capitalizeFirst(language)}...\n\n`
+      `\n\nChecking version of ${package_} for ${langNameToProperName(language)}...\n\n`
     );
     let langRuntimePath: string | false;
     let args: string[] = [];
@@ -254,8 +256,6 @@ print(json.dumps({
     if (cmdResult.status === "error") {
       resultString += `\nError getting version of ${package_}.`;
     }
-
-    // opts.stream.markdown(resultString);
 
     return resultString;
   },

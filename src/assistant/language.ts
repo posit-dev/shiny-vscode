@@ -99,6 +99,10 @@ export function inferFileType(filename: string): LangName | "text" {
   }
 }
 
+export function langNameToProperName(name: LangName): LangProperName {
+  return shinyLanguages[name].properName;
+}
+
 /**
  * Counts the number of R and Python files in all workspace folders
  * @returns An object containing the count of .r/.R and .py files

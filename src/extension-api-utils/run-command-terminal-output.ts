@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
 
+const GREEN_COLOR = "\x1b[32m";
+const RESET_COLOR = "\x1b[0m";
+
 import {
   runShellCommand,
   type CommandExecOptions,
@@ -57,9 +60,13 @@ export async function runShellCommandWithTerminalOutput({
   // write to the pty before it's ready and that output will be lost.
   await pty.openedPromise;
 
-  pty.write("===========================================================\n");
-  pty.write(`Running command: ${JSON.stringify({ cmd, args })}\n`);
-  pty.write("===========================================================\n");
+  pty.write(
+    "================================================================\n"
+  );
+  pty.write(
+    `${GREEN_COLOR}Running command: ${JSON.stringify({ cmd, args }, undefined, "  ")}${RESET_COLOR}\n`
+  );
+  pty.write("\n");
 
   const result = await runShellCommand({
     cmd,

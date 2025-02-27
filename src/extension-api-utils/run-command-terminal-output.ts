@@ -12,6 +12,7 @@ import {
 type RunShellCommandWithTerminalOutputOptions = CommandExecOptions & {
   terminalName: string;
 };
+
 export async function runShellCommandWithTerminalOutput({
   cmd,
   args,
@@ -50,7 +51,16 @@ export async function runShellCommandWithTerminalOutput({
       name: terminalName,
       pty,
     });
+
+    // Make sure to dispose of the pty when the terminal is closed.
+    const subscription = vscode.window.onDidCloseTerminal(function sub(term) {
+      if (term === terminal) {
+        pty.dispose();
+        subscription.dispose();
+      }
+    });
   }
+
   // If we get here, pty must be defined.
   pty = pty!;
 
@@ -142,5 +152,12 @@ class MyPTY implements vscode.Pseudoterminal {
     this.openedPromiseResolve();
   }
 
-  close() {}
+  close() {
+    this.writeEmitter.dispose();
+    this.closeEmitter.dispose();
+  }
+
+  dispose() {
+    this.close();
+  }
 }

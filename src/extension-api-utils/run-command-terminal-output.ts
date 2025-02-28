@@ -10,7 +10,8 @@ import {
 } from "./runShellCommand";
 
 type RunShellCommandWithTerminalOutputOptions = CommandExecOptions & {
-  terminalName: string;
+  newTerminalName: string;
+  terminal?: TerminalWithMyPty;
 };
 
 export async function runShellCommandWithTerminalOutput({
@@ -18,51 +19,39 @@ export async function runShellCommandWithTerminalOutput({
   args,
   cwd,
   env,
-  terminalName,
+  terminal, // If defined, a Terminal to use instead of creating a new one
+  newTerminalName, // If `terminal` was not passed in, create a Terminal with this name
   stdout,
   stderr,
   timeoutMs = 1500,
   verbose = false,
-}: RunShellCommandWithTerminalOutputOptions): Promise<CommandOutput> {
+}: RunShellCommandWithTerminalOutputOptions): Promise<{
+  cmdResult: CommandOutput;
+  terminal: TerminalWithMyPty;
+}> {
   let pty: MyPTY;
-  let terminal: vscode.Terminal | undefined = undefined;
 
-  // TODO: reset terminal per chat message
-  //
-  // First look for old terminals that have the same title AND contain the
-  // correct pty type. If both are satisfied, grab the pty and terminal; if
-  // not, then we'll create new ones.
-  const oldTerminals = vscode.window.terminals.filter(
-    (term) => term.name === terminalName
-  );
-  if (oldTerminals.length >= 1) {
-    const options = oldTerminals[0].creationOptions;
-    if ("pty" in options && options.pty && options.pty instanceof MyPTY) {
-      pty = options.pty;
-      terminal = oldTerminals[0];
-    }
-  }
-
-  // If we didn't find an existing terminal+pty, create a new one.
-  if (terminal === undefined) {
-    pty = new MyPTY();
-
-    terminal = vscode.window.createTerminal({
-      name: terminalName,
-      pty,
-    });
-
-    // Make sure to dispose of the pty when the terminal is closed.
-    const subscription = vscode.window.onDidCloseTerminal(function sub(term) {
-      if (term === terminal) {
-        pty.dispose();
-        subscription.dispose();
+  // If we were passed a terminal, use it.
+  if (terminal) {
+    pty = terminal.creationOptions.pty;
+  } else {
+    // First look for old terminals that have the same title AND contain the
+    // correct pty type, and dispose of them
+    vscode.window.terminals.forEach((term) => {
+      const options = term.creationOptions;
+      if (
+        term.name === newTerminalName &&
+        "pty" in options &&
+        options.pty &&
+        options.pty instanceof MyPTY
+      ) {
+        term.dispose();
       }
     });
-  }
 
-  // If we get here, pty must be defined.
-  pty = pty!;
+    terminal = createTerminalWithMyPty(newTerminalName);
+    pty = terminal.creationOptions.pty;
+  }
 
   terminal.show();
 
@@ -78,7 +67,7 @@ export async function runShellCommandWithTerminalOutput({
   );
   pty.write("\n");
 
-  const result = await runShellCommand({
+  const cmdResult = await runShellCommand({
     cmd,
     args,
     cwd,
@@ -94,7 +83,8 @@ export async function runShellCommandWithTerminalOutput({
     timeoutMs: timeoutMs,
     verbose,
   });
-  return result;
+
+  return { cmdResult, terminal };
 }
 
 /**
@@ -160,4 +150,38 @@ class MyPTY implements vscode.Pseudoterminal {
   dispose() {
     this.close();
   }
+}
+
+/**
+ * A TerminalWithMyPty is a vscode.Terminal that was created with a pty: MyPTY
+ * object.
+ */
+export interface TerminalWithMyPty extends vscode.Terminal {
+  creationOptions: Readonly<vscode.ExtensionTerminalOptions & { pty: MyPTY }>;
+}
+
+/**
+ * Creates a terminal with a MyPTY.
+ * @param terminalName The name of the terminal.
+ * @returns A TerminalWithMyPty object.
+ */
+export function createTerminalWithMyPty(
+  terminalName: string
+): TerminalWithMyPty {
+  const pty = new MyPTY();
+
+  const terminal = vscode.window.createTerminal({
+    name: terminalName,
+    pty,
+  }) as TerminalWithMyPty;
+
+  // Make sure to dispose of the pty when the terminal is closed.
+  const subscription = vscode.window.onDidCloseTerminal(function sub(term) {
+    if (term === terminal) {
+      pty.dispose();
+      subscription.dispose();
+    }
+  });
+
+  return terminal;
 }

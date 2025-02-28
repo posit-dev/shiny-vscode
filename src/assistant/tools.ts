@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
-import { runShellCommandWithTerminalOutput } from "../extension-api-utils/run-command-terminal-output";
+import {
+  runShellCommandWithTerminalOutput,
+  type TerminalWithMyPty,
+} from "../extension-api-utils/run-command-terminal-output";
 import { getRBinPath, getSelectedPythonInterpreter } from "../run";
 import { langNameToProperName, type LangName } from "./language";
 import {
@@ -7,7 +10,6 @@ import {
   type SetProjectLanguageParams,
 } from "./project-language";
 import type { JSONifiable } from "./types";
-import { capitalizeFirst } from "./utils";
 
 // TODO: Fix types so that we can get rid of the `any`, because it disables
 // type checking for the `params` argument of all `invoke()` methods -- they
@@ -15,8 +17,11 @@ import { capitalizeFirst } from "./utils";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const tools: Array<Tool<any>> = [];
 
-type InvokeOptions = {
+export type InvokeOptions = {
   stream: vscode.ChatResponseStream;
+  extensionContext: vscode.ExtensionContext;
+  newTerminalName: string;
+  terminal?: TerminalWithMyPty;
   cancellationToken: vscode.CancellationToken;
 };
 
@@ -138,7 +143,6 @@ tools.push({
         return "Could not find R runtime. It seems to not be installed.";
       }
 
-      // TODO: Replace this with proper JSON output
       const versionCheckCode = `
 if (system.file(package = "${package_}") == "") {
   version <- "null"
@@ -244,16 +248,19 @@ print(json.dumps({
       resultString += s;
     };
 
-    const cmdResult = await runShellCommandWithTerminalOutput({
+    const res = await runShellCommandWithTerminalOutput({
       cmd: langRuntimePath,
       args: args,
-      terminalName: "Shiny Assistant tool call",
+      terminal: opts.terminal,
+      newTerminalName: opts.newTerminalName,
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
       stdout: appendToResultString,
       stderr: appendToResultString,
     });
+    // Store terminal for future tool calls
+    opts.terminal = res.terminal;
 
-    if (cmdResult.status === "error") {
+    if (res.cmdResult.status === "error") {
       resultString += `\nError getting version of ${package_}.`;
     }
 
@@ -311,11 +318,12 @@ tools.push({
     opts.stream.markdown(resultString);
     opts.stream.progress("Running...");
 
-    const cmdResult = await runShellCommandWithTerminalOutput({
+    const res = await runShellCommandWithTerminalOutput({
       cmd: langRuntimePath,
       args: args,
       cwd: workspaceDir,
-      terminalName: "Shiny Assistant tool call",
+      terminal: opts.terminal,
+      newTerminalName: opts.newTerminalName,
       timeoutMs: 15000,
       stdout: (s: string) => {
         resultString += s;
@@ -324,8 +332,10 @@ tools.push({
         resultString += s;
       },
     });
+    // Store terminal for future tool calls
+    opts.terminal = res.terminal;
 
-    if (cmdResult.status === "error") {
+    if (res.cmdResult.status === "error") {
       resultString += `Error installing packages.`;
     }
 

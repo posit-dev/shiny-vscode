@@ -486,6 +486,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
             // By leaving this undefined, the first tool call that needs a terminal
             // will create the Terminal, and future tool calls will reuse it.
             terminal: undefined,
+            extensionContext: extensionContext,
             cancellationToken: dummyCancellationToken,
           });
 

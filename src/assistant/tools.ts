@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import {
   runShellCommandWithTerminalOutput,
@@ -133,41 +134,27 @@ tools.push({
     let langRuntimePath: string | false;
     let args: string[] = [];
 
-    if (minVersion === undefined) {
-      minVersion = "";
-    }
-
     if (language === "r") {
       langRuntimePath = await getRBinPath("Rscript");
       if (!langRuntimePath) {
         return "Could not find R runtime. It seems to not be installed.";
       }
-
-      const versionCheckCode = `
-if (system.file(package = "${package_}") == "") {
-  version <- "null"
-  at_least_min_version <- "null"
-} else {
-  version <- packageVersion("${package_}")
-  if ("${minVersion}" != "") {
-    at_least_min_version <- version >= "${minVersion}"
-  } else {
-    at_least_min_version <- "null"
-  }
-}
-
-cat(
-  sep = "",
-  '{
-  "language": "${language}",
-  "package": "${package_}",
-  "version": "' , as.character(version), '",
-  "min_version": "${minVersion}",
-  "at_least_min_version": "', as.character(at_least_min_version), '"
-}')`;
-      args = ["-e", versionCheckCode];
-
-      //
+      const toolsScriptPath = path.join(
+        opts.extensionContext.extensionPath,
+        "assistant-prompts",
+        "tools.R"
+      );
+      args = [
+        "-e",
+        `source("${toolsScriptPath}"); args <- json_parse_args()`,
+        "-e",
+        "cat(to_json(check_package_version(args$package, args$min_version)))",
+        JSON.stringify({
+          package: package_,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          min_version: minVersion ?? null,
+        }),
+      ];
     } else if (language === "python") {
       langRuntimePath = await getSelectedPythonInterpreter();
       if (!langRuntimePath) {

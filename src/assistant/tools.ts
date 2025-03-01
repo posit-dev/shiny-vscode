@@ -133,6 +133,7 @@ tools.push({
     );
     let langRuntimePath: string | false;
     let args: string[] = [];
+    const env: Record<string, string> = {};
 
     if (language === "r") {
       langRuntimePath = await getRBinPath("Rscript");
@@ -161,71 +162,24 @@ tools.push({
         return "No Python interpreter selected";
       }
 
-      // Python code to check that a version number is greater or equal to
-      // another. It would be nicer to use packaging.version, but that's not
-      // part of the standard library.
-      // Test cases for version_ge():
-      //   assert not version_ge("0.dev16+g83", "0.0.1")
-      //   assert not version_ge("0.3.dev16+g83", "0.3.1")
-      //   assert version_ge("0.3.1.dev16+g83", "0.3.1")
-      //   assert not version_ge("0.3.1", "0.3.1.dev16+g83")
-      //   assert not version_ge("0.3.1.dev16+g83", "0.3.2")
-      //   assert version_ge("0.3.1.dev16+g83", "0.3.1.dev15")
-      //   assert version_ge("0.3.1.dev15+g83", "0.3.1.dev15")
-      //   assert not version_ge("0.3.1.dev15+g83", "0.3.1.dev16")
-      //   assert version_ge("0.3.1dev16", "0.3.1")
-      //   assert version_ge("0.3.1.dev16", "0.3.1")
-      //   assert not version_ge("0.3.dev16+g83", "0.3.1")
-      //   assert not version_ge("0.3.0dev16", "0.3.1")
-      const versionCheckCode = `
-def version_ge(version1: str, version2: str):
-  # First drop everything after '+'
-  version1 = version1.split("+")[0]
-  version2 = version2.split("+")[0]
+      args = [
+        "-c",
+        `import tools
+args = tools.args()
+res = tools.check_package_version(args['package'], args['min_version'])
+import json
+print(json.dumps(res, indent=2))`,
+        JSON.stringify({
+          package: package_,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          min_version: minVersion ?? null,
+        }),
+      ];
 
-  def split_version(v: str) -> list[str]:
-    # First split on '.dev'
-    v = v.replace(".dev", ".").replace("dev", ".")
-    parts = v.split(".")
-    return parts
-
-  parts1 = [int(x) for x in split_version(version1)]
-  parts2 = [int(x) for x in split_version(version2)]
-
-  max_length = max(len(parts1), len(parts2))
-  parts1 += [0] * (max_length - len(parts1))
-  parts2 += [0] * (max_length - len(parts2))
-
-  for part1, part2 in zip(parts1, parts2):
-    if part1 > part2:
-      return True
-    elif part1 < part2:
-      return False
-
-  return True
-
-try:
-  import json
-  from importlib.metadata import version
-  import ${package_}
-  ver = version("${package_}")
-  if "${minVersion}" == "":
-    at_least_min_version = None
-  else:
-    at_least_min_version = version_ge(ver, "${minVersion}")
-except ImportError:
-  ver = None
-  at_least_min_version = None
-
-print(json.dumps({
-  "language": "${language}",
-  "package": "${package_}",
-  "version": ver,
-  "min_version": "${minVersion}",
-  "at_least_min_version": at_least_min_version
-}, indent=2))
-`;
-      args = ["-c", versionCheckCode];
+      env.PYTHONPATH = path.join(
+        opts.extensionContext.extensionPath,
+        "assistant-prompts"
+      );
     } else {
       return `Invalid language: ${language}`;
     }
@@ -238,6 +192,7 @@ print(json.dumps({
     const res = await runShellCommandWithTerminalOutput({
       cmd: langRuntimePath,
       args: args,
+      env: env,
       terminal: opts.terminal,
       newTerminalName: opts.newTerminalName,
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,

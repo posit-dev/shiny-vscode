@@ -441,12 +441,12 @@ json_parse_args <- function() {
 #' @param min_version The minimum required version (optional)
 #' @return A list with the package name, installed version, minimum version,
 #'   and whether the installed version is at least the minimum version
-check_package_version <- function(pkg, min_version = NULL) {
-  if (system.file(package = pkg) == "") {
+check_package_version <- function(package, min_version = NULL) {
+  if (system.file(package = package) == "") {
     version <- NULL
     at_least_min_version <- NULL
   } else {
-    version <- packageVersion(pkg)
+    version <- packageVersion(package)
     if (!is.null(min_version)) {
       at_least_min_version <- version >= min_version
     } else {
@@ -456,7 +456,7 @@ check_package_version <- function(pkg, min_version = NULL) {
 
   list(
     language = "R",
-    package = pkg,
+    package = package,
     version = as.character(version),
     min_version = min_version,
     at_least_min_version = at_least_min_version

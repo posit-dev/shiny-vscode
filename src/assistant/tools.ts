@@ -4,7 +4,8 @@ import {
   runShellCommandWithTerminalOutput,
   type TerminalWithMyPty,
 } from "../extension-api-utils/run-command-terminal-output";
-import { getRBinPath, getSelectedPythonInterpreter } from "../run";
+import { getSelectedPythonInterpreter } from "../run";
+import { callRFunction } from "./call-r";
 import { langNameToProperName, type LangName } from "./language";
 import {
   projectLanguage,
@@ -136,26 +137,22 @@ tools.push({
     const env: Record<string, string> = {};
 
     if (language === "r") {
-      langRuntimePath = await getRBinPath("Rscript");
-      if (!langRuntimePath) {
-        return "Could not find R runtime. It seems to not be installed.";
-      }
-      const toolsScriptPath = path.join(
-        opts.extensionContext.extensionPath,
-        "assistant-prompts",
-        "tools.R"
-      );
-      args = [
-        "-e",
-        `source("${toolsScriptPath}"); args <- json_parse_args()`,
-        "-e",
-        "cat(to_json(check_package_version(args$package, args$min_version)))",
-        JSON.stringify({
+      return await callRToolFunction(
+        "check_package_version",
+        {
           package: package_,
           // eslint-disable-next-line @typescript-eslint/naming-convention
           min_version: minVersion ?? null,
-        }),
-      ];
+        },
+        {
+          extensionContext: opts.extensionContext,
+          env: {},
+          terminal: opts.terminal,
+          newTerminalName: opts.newTerminalName,
+        }
+      );
+
+      //
     } else if (language === "python") {
       langRuntimePath = await getSelectedPythonInterpreter();
       if (!langRuntimePath) {
@@ -284,3 +281,25 @@ tools.push({
     return resultString;
   },
 });
+
+async function callRToolFunction(
+  functionName: string,
+  namedArgs: Record<string, JSONifiable>,
+  opts: {
+    extensionContext: vscode.ExtensionContext;
+    env: Record<string, string>;
+    terminal?: TerminalWithMyPty;
+    newTerminalName: string;
+  }
+): Promise<string> {
+  const { extensionContext, ...restOpts } = opts;
+
+  const newOpts = {
+    ...restOpts,
+    scriptPaths: [
+      path.join(extensionContext.extensionPath, "assistant-prompts", "tools.R"),
+    ],
+  };
+
+  return await callRFunction(functionName, namedArgs, newOpts);
+}

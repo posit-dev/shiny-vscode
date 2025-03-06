@@ -44,7 +44,7 @@ export async function callPythonFunction(
   args: Readonly<Array<JSONifiable>>,
   kwArgs: Readonly<Record<string, JSONifiable>>,
   opts: {
-    env: Record<string, string>;
+    env: Readonly<Record<string, string>>;
     imports?: string[];
     terminal?: TerminalWithMyPty;
     newTerminalName: string;
@@ -73,7 +73,7 @@ export async function callPythonFunction(
     `_res = ${functionName}(*_cmdargs["args"], **_cmdargs["kwArgs"])`
   );
   pyCode.push("import json");
-  pyCode.push(`print(json.dumps(res, indent=2))`);
+  pyCode.push(`print(json.dumps(_res, indent=2))`);
 
   const pythonBinArgs = [
     "-c",
@@ -92,9 +92,10 @@ export async function callPythonFunction(
   const res = await runShellCommandWithTerminalOutput({
     cmd: langRuntimePath,
     args: pythonBinArgs,
+    cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    env: opts.env,
     terminal: opts.terminal,
     newTerminalName: opts.newTerminalName,
-    cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     stdout: appendToResultString,
     stderr: appendToResultString,
   });

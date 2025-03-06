@@ -266,7 +266,7 @@ async function callRToolFunction(
   namedArgs: Readonly<Record<string, JSONifiable>>,
   opts: Readonly<{
     extensionContext: vscode.ExtensionContext;
-    env: Record<string, string>;
+    env: Readonly<Record<string, string>>;
     terminal?: TerminalWithMyPty;
     newTerminalName: string;
   }>
@@ -289,24 +289,22 @@ async function callPythonToolFunction(
   kwArgs: Readonly<Record<string, JSONifiable>>,
   opts: Readonly<{
     extensionContext: vscode.ExtensionContext;
-    env: Record<string, string>;
+    env: Readonly<Record<string, string>>;
     terminal?: TerminalWithMyPty;
     newTerminalName: string;
   }>
 ): Promise<RunCommandWithTerminalResult> {
-  const { extensionContext, ...restOpts } = opts;
+  const { extensionContext, env, ...restOpts } = opts;
 
-  const env = { ...opts.env };
-
+  const newEnv = { ...env };
   // Prepend directory with tools.py to PYTHONPATH
-  env.PYTHONPATH =
+  newEnv.PYTHONPATH =
     path.join(extensionContext.extensionPath, "assistant-prompts") +
-    env.PYTHONPATH
-      ? `:${env.PYTHONPATH}`
-      : "";
+    (env.PYTHONPATH ? `:${env.PYTHONPATH}` : "");
 
   const newOpts = {
     ...restOpts,
+    env: newEnv,
     imports: ["tools"],
   };
 

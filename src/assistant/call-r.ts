@@ -43,7 +43,7 @@ export async function callRFunction(
   functionName: string,
   namedArgs: Readonly<Record<string, JSONifiable>>,
   opts: {
-    env: Record<string, string>;
+    env: Readonly<Record<string, string>>;
     scriptPaths?: string[];
     terminal?: TerminalWithMyPty;
     newTerminalName: string;
@@ -92,9 +92,10 @@ export async function callRFunction(
   const res = await runShellCommandWithTerminalOutput({
     cmd: rScriptRuntimePath,
     args: rBinArgs,
+    cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    env: opts.env,
     terminal: opts.terminal,
     newTerminalName: opts.newTerminalName,
-    cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     stdout: appendToResultString,
     stderr: appendToResultString,
   });

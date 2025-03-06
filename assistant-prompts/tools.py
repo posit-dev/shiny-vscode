@@ -65,14 +65,14 @@ def version_ge(version1: str, version2: str):
 #    assert not version_ge("0.3.0dev16", "0.3.1")
 
 
-def check_package_version(pkg: str, min_version: str | None):
+def check_package_version(package: str, min_version: str | None):
     try:
         import importlib
         from importlib.metadata import version
 
-        importlib.import_module(pkg)
+        importlib.import_module(package)
 
-        ver = version(pkg)
+        ver = version(package)
         if min_version is None:
             at_least_min_version = None
         else:
@@ -84,7 +84,7 @@ def check_package_version(pkg: str, min_version: str | None):
 
     return {
         "language": "python",
-        "package": pkg,
+        "package": package,
         "version": ver,
         "min_version": min_version,
         "at_least_min_version": at_least_min_version,

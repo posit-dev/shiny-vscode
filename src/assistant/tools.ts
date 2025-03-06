@@ -5,7 +5,9 @@ import {
   type TerminalWithMyPty,
 } from "../extension-api-utils/run-command-terminal-output";
 import { getSelectedPythonInterpreter } from "../run";
+import { callPythonFunction } from "./call-python";
 import { callRFunction } from "./call-r";
+import type { RunCommandWithTerminalResult } from "./call-types";
 import { langNameToProperName, type LangName } from "./language";
 import {
   projectLanguage,
@@ -132,12 +134,11 @@ tools.push({
     opts.stream.markdown(
       `\n\nChecking version of ${package_} for ${langNameToProperName(language)}...\n\n`
     );
-    let langRuntimePath: string | false;
-    let args: string[] = [];
-    const env: Record<string, string> = {};
+
+    let res: RunCommandWithTerminalResult;
 
     if (language === "r") {
-      return await callRToolFunction(
+      res = await callRToolFunction(
         "check_package_version",
         {
           package: package_,
@@ -154,50 +155,28 @@ tools.push({
 
       //
     } else if (language === "python") {
-      langRuntimePath = await getSelectedPythonInterpreter();
-      if (!langRuntimePath) {
-        return "No Python interpreter selected";
-      }
-
-      args = [
-        "-c",
-        `import tools
-args = tools.args()
-res = tools.check_package_version(args['package'], args['min_version'])
-import json
-print(json.dumps(res, indent=2))`,
-        JSON.stringify({
+      res = await callPythonToolFunction(
+        "tools.check_package_version",
+        [],
+        {
           package: package_,
           // eslint-disable-next-line @typescript-eslint/naming-convention
           min_version: minVersion ?? null,
-        }),
-      ];
-
-      env.PYTHONPATH = path.join(
-        opts.extensionContext.extensionPath,
-        "assistant-prompts"
+        },
+        {
+          extensionContext: opts.extensionContext,
+          env: {},
+          terminal: opts.terminal,
+          newTerminalName: opts.newTerminalName,
+        }
       );
     } else {
       return `Invalid language: ${language}`;
     }
 
-    let resultString = "";
-    const appendToResultString = (s: string) => {
-      resultString += s;
-    };
-
-    const res = await runShellCommandWithTerminalOutput({
-      cmd: langRuntimePath,
-      args: args,
-      env: env,
-      terminal: opts.terminal,
-      newTerminalName: opts.newTerminalName,
-      cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-      stdout: appendToResultString,
-      stderr: appendToResultString,
-    });
     // Store terminal for future tool calls
     opts.terminal = res.terminal;
+    let resultString = res.resultString;
 
     if (res.cmdResult.status === "error") {
       resultString += `\nError getting version of ${package_}.`;
@@ -284,14 +263,14 @@ tools.push({
 
 async function callRToolFunction(
   functionName: string,
-  namedArgs: Record<string, JSONifiable>,
-  opts: {
+  namedArgs: Readonly<Record<string, JSONifiable>>,
+  opts: Readonly<{
     extensionContext: vscode.ExtensionContext;
     env: Record<string, string>;
     terminal?: TerminalWithMyPty;
     newTerminalName: string;
-  }
-): Promise<string> {
+  }>
+): Promise<RunCommandWithTerminalResult> {
   const { extensionContext, ...restOpts } = opts;
 
   const newOpts = {
@@ -302,4 +281,34 @@ async function callRToolFunction(
   };
 
   return await callRFunction(functionName, namedArgs, newOpts);
+}
+
+async function callPythonToolFunction(
+  functionName: string,
+  args: Readonly<JSONifiable[]>,
+  kwArgs: Readonly<Record<string, JSONifiable>>,
+  opts: Readonly<{
+    extensionContext: vscode.ExtensionContext;
+    env: Record<string, string>;
+    terminal?: TerminalWithMyPty;
+    newTerminalName: string;
+  }>
+): Promise<RunCommandWithTerminalResult> {
+  const { extensionContext, ...restOpts } = opts;
+
+  const env = { ...opts.env };
+
+  // Prepend directory with tools.py to PYTHONPATH
+  env.PYTHONPATH =
+    path.join(extensionContext.extensionPath, "assistant-prompts") +
+    env.PYTHONPATH
+      ? `:${env.PYTHONPATH}`
+      : "";
+
+  const newOpts = {
+    ...restOpts,
+    imports: ["tools"],
+  };
+
+  return await callPythonFunction(functionName, args, kwArgs, newOpts);
 }

@@ -422,7 +422,7 @@ to_json <- function(r_object, pretty = FALSE, indent_level = 0) {
 #' first command line argument and parses it as a JSON string.
 #'
 #' @return An R data structure representing the JSON content
-json_parse_args <- function() {
+parse_arg_json <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) == 0) {
     stop("No JSON input provided")

@@ -10,7 +10,7 @@ import json
 # command line argument and parses it as a JSON string.
 #
 # @return A Python data structure representing the JSON content
-def args():
+def parse_arg_json():
     # If the first argument is "-c", then it's
     if sys.argv[0] == "-c":
         json_arg = sys.argv[1]

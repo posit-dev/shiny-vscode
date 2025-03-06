@@ -9,7 +9,7 @@ import {
   type CommandOutput,
 } from "./runShellCommand";
 
-type RunShellCommandWithTerminalOutputOptions = CommandExecOptions & {
+export type RunShellCommandWithTerminalOutputOptions = CommandExecOptions & {
   newTerminalName: string;
   terminal?: TerminalWithMyPty;
 };

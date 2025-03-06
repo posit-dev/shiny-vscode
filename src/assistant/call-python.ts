@@ -3,7 +3,7 @@ import {
   runShellCommandWithTerminalOutput,
   type TerminalWithMyPty,
 } from "../extension-api-utils/run-command-terminal-output";
-import { getRBinPath } from "../run";
+import { getSelectedPythonInterpreter } from "../run";
 import type { RunCommandWithTerminalResult } from "./call-types";
 import { type JSONifiable } from "./types";
 
@@ -39,49 +39,49 @@ import { type JSONifiable } from "./types";
  *   newTerminalName: "R Terminal"
  * });
  */
-export async function callRFunction(
+export async function callPythonFunction(
   functionName: string,
-  namedArgs: Readonly<Record<string, JSONifiable>>,
+  args: Readonly<Array<JSONifiable>>,
+  kwArgs: Readonly<Record<string, JSONifiable>>,
   opts: {
     env: Record<string, string>;
-    scriptPaths?: string[];
+    imports?: string[];
     terminal?: TerminalWithMyPty;
     newTerminalName: string;
   }
 ): Promise<RunCommandWithTerminalResult> {
-  const rScriptRuntimePath = await getRBinPath("Rscript");
-  if (!rScriptRuntimePath) {
+  const langRuntimePath = await getSelectedPythonInterpreter();
+  if (!langRuntimePath) {
     return {
       cmdResult: {
         status: "error",
         stdout: [],
         stderr: [],
-        errorMsgs: "Could not find R runtime. It seems to not be installed.",
+        errorMsgs: "No Python interpreter selected.",
       },
       terminal: opts.terminal,
-      resultString: "Could not find R runtime. It seems to not be installed.",
+      resultString: "No Python interpreter selected.",
     };
   }
+  const pyCode: string[] = [];
 
-  // If there are any script paths, we will source them before running the
-  // function. This is useful for sourcing scripts that contain the function
-  // definition.
-  const sourceScriptPathArgs: string[] = (opts.scriptPaths ?? []).flatMap(
-    (scriptPath) => ["-e", `source("${scriptPath}")`]
+  for (const import_ of opts.imports ?? []) {
+    pyCode.push(`import ${import_}`);
+  }
+  pyCode.push("_cmdargs = tools.parse_arg_json()");
+  pyCode.push(
+    `_res = ${functionName}(*_cmdargs["args"], **_cmdargs["kwArgs"])`
   );
+  pyCode.push("import json");
+  pyCode.push(`print(json.dumps(res, indent=2))`);
 
-  const rBinArgs = [
-    ...sourceScriptPathArgs,
-    "-e",
-    ".args <- parse_arg_json()",
-    "-e",
-    `.res <- do.call(${functionName}, .args)`,
-    "-e",
-    "cat(to_json(.res))",
+  const pythonBinArgs = [
+    "-c",
+    pyCode.join("\n"),
     // Pass in the JSON representation of namedArgs as a command line argument
-    // which will be picked up by commandArgs() in R, and will end up in
-    // `.args`.
-    JSON.stringify(namedArgs),
+    // which will be picked up by sys.argv() in Python, and will end up in the
+    // variable `_cmdargs`.
+    JSON.stringify({ args: args, kwArgs: kwArgs }),
   ];
 
   let resultString = "";
@@ -90,8 +90,8 @@ export async function callRFunction(
   };
 
   const res = await runShellCommandWithTerminalOutput({
-    cmd: rScriptRuntimePath,
-    args: rBinArgs,
+    cmd: langRuntimePath,
+    args: pythonBinArgs,
     terminal: opts.terminal,
     newTerminalName: opts.newTerminalName,
     cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
@@ -102,7 +102,7 @@ export async function callRFunction(
   opts.terminal = res.terminal;
 
   if (res.cmdResult.status === "error") {
-    resultString += `\nError running R function.`;
+    resultString += `\nError running Python function.`;
   }
 
   return {
@@ -112,53 +112,31 @@ export async function callRFunction(
   };
 }
 
-// Ideas about how to pass args to R functions:
-// [[null, 1], ["foo", 2]]
-// [1, 2, 3, {name_: "x", value: 3}]
-// [1, 2, 3, {name_: "x", value: {name_: "x", value: 3}}]
-//
-// [[1], ["b", 2]]
-// {a: 1, b: 2}
-// [1, new NamedArg("b", 2)]
-//
-// [1, {b: 2}, 3] // How to do unnamed object?
-// [1, {b: 2}, {"": {a: 1}}]
-// {a: 1, b: 2}
-
-// Note: This function isn't currently used. It converts JSONifiable values to R
-// code that generates those objects. Instead, we are sending JSON to the R
-// process and converting that to R objects in R.
 /**
- * Converts a JavaScript/TypeScript value into a string of R code, which, when
- * evaluated, returns an R representation of the original JSONifiable input.
+ * Converts a JavaScript/TypeScript value into a string of Python code, which,
+ * when evaluated, returns a Python representation of the original JSONifiable
+ * input.
  *
  * @param x - The value to convert. Can be a string, number, boolean, null,
  * array, or object.
- * @returns A string representation of the value that can be evaluated in R.
+ * @returns A string representation of the value that can be evaluated in
+ * Python.
  * @throws {Error} If the input type is not supported (e.g., undefined or
  * function).
- *
- * @example
- * toRString("hello") // Returns '"hello"'
- * toRString(42) // Returns '42'
- * toRString(true) // Returns 'TRUE'
- * toRString(null) // Returns 'NULL'
- * toRString([1, "a"]) // Returns 'list(1, "a")'
- * toRString({x: 1, y: "a"}) // Returns 'list(`x` = 1, `y` = "a")'
  */
-export function toRString(x: JSONifiable): string {
+export function toPythonString(x: JSONifiable): string {
   if (typeof x === "string" || typeof x === "number") {
     return JSON.stringify(x);
   } else if (typeof x === "boolean") {
-    return x ? "TRUE" : "FALSE";
+    return x ? "True" : "False";
   } else if (x === null) {
-    return "NULL";
+    return "None";
   } else if (Array.isArray(x)) {
-    return `list(${x.map(toRString).join(", ")})`;
+    return `[${x.map(toPythonString).join(", ")}]`;
   } else if (typeof x === "object") {
-    return `list(${Object.entries(x)
-      .map(([k, v]) => `\`${k}\` = ${toRString(v)}`)
-      .join(", ")})`;
+    return `{${Object.entries(x)
+      .map(([k, v]) => `${JSON.stringify(k)}: ${toPythonString(v)}`)
+      .join(", ")}}`;
   } else {
     throw new Error(`Unsupported type: ${typeof x}`);
   }

@@ -1,25 +1,3 @@
-# pyright: strict
-
-import sys
-import json
-
-
-# Parse JSON input from command line arguments
-#
-# This function is a convenience wrapper around `parse_json` that reads the first
-# command line argument and parses it as a JSON string.
-#
-# @return A Python data structure representing the JSON content
-def parse_arg_json():
-    # If the first argument is "-c", then it's
-    if sys.argv[0] == "-c":
-        json_arg = sys.argv[1]
-    else:
-        json_arg = sys.argv[0]
-
-    return json.loads(json_arg)
-
-
 #  Python code to check that a version number is greater or equal to
 #  another. It would be nicer to use packaging.version, but that's not
 #  part of the standard library.
@@ -65,7 +43,7 @@ def version_ge(version1: str, version2: str):
 #    assert not version_ge("0.3.0dev16", "0.3.1")
 
 
-def check_package_version(package: str, min_version: str | None):
+def check_package_version(package: str, min_version: str | None) -> dict[str, object]:
     try:
         import importlib
         from importlib.metadata import version

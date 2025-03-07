@@ -68,9 +68,31 @@ export async function callPythonFunction(
   for (const import_ of opts.imports ?? []) {
     pyCode.push(`import ${import_}`);
   }
-  pyCode.push("_cmdargs = tools.parse_arg_json()");
+
+  // Function to parse JSON input from command line arguments
+  //
+  // This function is a convenience wrapper around `parse_json` that reads the
+  // first command line argument and parses it as a JSON string.
+  //
+  // @return A Python data structure representing the JSON content
+  pyCode.push(`
+def _parse_arg_json():
+    import sys
+    import json
+
+    # If the first argument is "-c", then we need to ignore it.
+    if sys.argv[0] == "-c":
+        json_arg = sys.argv[1]
+    else:
+        json_arg = sys.argv[0]
+
+    return json.loads(json_arg)
+`);
+  pyCode.push("_args = _parse_arg_json()");
   pyCode.push(
-    `_res = ${functionName}(*_cmdargs["args"], **_cmdargs["kwArgs"])`
+    `
+_fn = eval(_args["functionName"])
+_res = _fn(*_args["args"], **_args["kwArgs"])`
   );
   pyCode.push("import json");
   pyCode.push(`print(json.dumps(_res, indent=2))`);
@@ -81,7 +103,11 @@ export async function callPythonFunction(
     // Pass in the JSON representation of namedArgs as a command line argument
     // which will be picked up by sys.argv() in Python, and will end up in the
     // variable `_cmdargs`.
-    JSON.stringify({ args: args, kwArgs: kwArgs }),
+    JSON.stringify({
+      functionName,
+      args,
+      kwArgs,
+    }),
   ];
 
   let resultString = "";

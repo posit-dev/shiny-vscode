@@ -282,5 +282,9 @@
     "typescript-eslint": "^8.15.0",
     "winreg": "^1.2.5"
   },
-  "extensionDependencies": []
+  "extensionDependencies": [],
+  "dependencies": {
+    "pyodide": "^0.27.3",
+    "webr": "^0.4.2"
+  }
 }

@@ -108,7 +108,7 @@ export async function runShellCommandWithTerminalOutput({
  * pty.write("Hello World");
  * ```
  */
-class MyPTY implements vscode.Pseudoterminal {
+export class MyPTY implements vscode.Pseudoterminal {
   private writeEmitter: vscode.EventEmitter<string>;
   onDidWrite: vscode.Event<string>;
 
@@ -129,13 +129,26 @@ class MyPTY implements vscode.Pseudoterminal {
     });
   }
 
+  customHandleInput(s: string) {}
+
   // Handle input from the user.
-  // handleInput(s: string) {
-  //   this.writeEmitter.fire(s === "\r" ? "\r\n" : s);
-  // }
+  handleInput(s: string) {
+    // Ignore control keys like arrows which typically start with escape sequences
+    // Common escape sequences for arrow keys: \x1b[A (up), \x1b[B (down), \x1b[C (right), \x1b[D (left)
+    if (s.startsWith("\x1b[")) {
+      return; // Ignore control sequences
+    }
+
+    this.customHandleInput(s);
+    this.writeEmitter.fire(
+      s.replaceAll("\r\n", "\n").replaceAll(/[\n\r]/g, "\r\n")
+    );
+  }
 
   write(s: string) {
-    this.writeEmitter.fire(s.replaceAll("\n", "\r\n"));
+    this.writeEmitter.fire(
+      s.replaceAll("\r\n", "\n").replaceAll(/[\n\r]/g, "\r\n")
+    );
   }
 
   open() {

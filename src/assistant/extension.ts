@@ -10,7 +10,7 @@ import { projectLanguage } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
-import { tools, wrapToolInvocationResult } from "./tools";
+import { ensureWebRSession, tools, wrapToolInvocationResult } from "./tools";
 import type { FileContentJson } from "./types";
 import { createPromiseWithStatus } from "./utils";
 
@@ -45,6 +45,9 @@ interface ShinyAssistantChatResult extends vscode.ChatResult {
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   // Clean up any existing disposables
   deactivateAssistant();
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  ensureWebRSession({ extensionPath: extensionContext.extensionPath });
+
 
   // Create new disposables
   assistantDisposables = [

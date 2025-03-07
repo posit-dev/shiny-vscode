@@ -1,7 +1,11 @@
 import * as path from "path";
+import { loadPyodide } from "pyodide";
 import * as vscode from "vscode";
+import { Console, WebR } from "webr";
 import {
+  createTerminalWithMyPty,
   runShellCommandWithTerminalOutput,
+  type MyPTY,
   type TerminalWithMyPty,
 } from "../extension-api-utils/run-command-terminal-output";
 import { getSelectedPythonInterpreter } from "../run";
@@ -261,6 +265,91 @@ tools.push({
   },
 });
 
+tools.push({
+  name: "shiny-assistant_execCodeTool",
+  description: "Safely executes R or Python code in a sandbox.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      language: {
+        type: "string",
+        enum: ["r", "python"],
+        description: "Programming language to execute code in",
+      },
+      code: {
+        type: "string",
+        description: "R or Python code to execute",
+      },
+    },
+    required: ["language"],
+    additionalProperties: false,
+  },
+  invoke: async (
+    { language, code }: { language: string; code: string },
+    opts: InvokeOptions
+  ): Promise<JSONifiable> => {
+    if (language === "r") {
+      opts.stream.markdown("Running R code:\n ```r\n" + code + "\n```\n\n");
+
+      const webRSession = await ensureWebRSession({
+        extensionPath: opts.extensionContext.extensionPath,
+      });
+      const resultString = await webRSession.eval(code);
+
+      opts.stream.markdown(
+        "Returned result:\n ```\n" + resultString + "\n```\n\n"
+      );
+
+      return { resultString: resultString };
+    } else if (language === "python") {
+      opts.stream.markdown(
+        "Running Python code:\n ```python\n" + code + "\n```\n\n"
+      );
+
+      let resultString = "";
+      const appendToResultString = (s: string) => {
+        resultString += s + "\r";
+      };
+
+      const pyodide = await loadPyodide({
+        indexURL: path.join(
+          opts.extensionContext.extensionPath,
+          "node_modules",
+          "pyodide"
+        ),
+      });
+
+      pyodide.setStdout({ batched: appendToResultString });
+      pyodide.setStderr({ batched: appendToResultString });
+
+      if (
+        vscode.workspace.workspaceFolders &&
+        vscode.workspace.workspaceFolders.length > 0
+      ) {
+        pyodide.mountNodeFS(
+          "/workspace",
+          vscode.workspace.workspaceFolders[0].uri.fsPath
+        );
+      }
+
+      const result = await pyodide.runPythonAsync(code);
+      opts.stream.markdown("Returned result:\n ```\n" + result + "\n```\n\n");
+
+      opts.stream.markdown(
+        "Printed text:\n ```\n" + resultString + "\n```\n\n"
+      );
+
+      return { result, resultString };
+    } else {
+      return `Invalid language: ${language}`;
+    }
+  },
+});
+
+// =============================================================================
+// Wrappers for calling R or Python code
+// =============================================================================
+
 async function callRToolFunction(
   functionName: string,
   namedArgs: Readonly<Record<string, JSONifiable>>,
@@ -309,4 +398,126 @@ async function callPythonToolFunction(
   };
 
   return await callPythonFunction(functionName, args, kwArgs, newOpts);
+}
+
+type WebRSession = {
+  pty: MyPTY;
+  terminal: TerminalWithMyPty;
+  console: Console;
+  eval: (code: string) => Promise<string>;
+};
+let webRSession: WebRSession | null = null;
+
+export async function ensureWebRSession({
+  extensionPath,
+}: {
+  extensionPath: string;
+}): Promise<WebRSession> {
+  const GREEN_COLOR = "\x1b[32m";
+  const RESET_COLOR = "\x1b[0m";
+
+  if (webRSession === null) {
+    const terminal = createTerminalWithMyPty("webR Terminal");
+    const pty = terminal.creationOptions.pty;
+
+    const ptyWriteLine = (s: string) => {
+      captureOutput(s);
+      pty.write(`${GREEN_COLOR}${s}${RESET_COLOR}\r\n`);
+    };
+    const webRConsole = new Console(
+      {
+        stdout: ptyWriteLine,
+        stderr: ptyWriteLine,
+        prompt: (s: string) => {
+          pty.write(s);
+          if (resolveEvalCode) {
+            resolveEvalCode(capturedOutput.join("\n"));
+            enableCaptureOutput = false;
+            capturedOutput.length = 0;
+            resolveEvalCode = null;
+          }
+        },
+      },
+      {
+        baseUrl: path.join(extensionPath, "node_modules", "webr", "dist") + "/",
+      }
+    );
+
+    if (
+      vscode.workspace.workspaceFolders &&
+      vscode.workspace.workspaceFolders.length > 0
+    ) {
+      const rlibLocalPath = path.join(
+        vscode.workspace.workspaceFolders[0].uri.fsPath,
+        "rlib"
+      );
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(rlibLocalPath));
+      await webRConsole.webR.FS.mkdir("/rlib");
+      await webRConsole.webR.FS.mount(
+        "NODEFS",
+        {
+          root: path.join(
+            vscode.workspace.workspaceFolders[0].uri.fsPath,
+            "rlib"
+          ),
+        },
+        "/rlib"
+      );
+      await webRConsole.webR.evalR(".libPaths('/rlib')");
+      // await webRConsole.webR.installPackages(["Matrix", "cli"]);
+    }
+
+    // Accumulate text until a line is completed
+    let lineBuffer = "";
+    pty.customHandleInput = (data: string) => {
+      // Also handle backspaces
+      if (data === "\x7f") {
+        if (lineBuffer.length > 0) {
+          lineBuffer = lineBuffer.slice(0, -1);
+          pty.write("\b \b");
+        }
+        return;
+      }
+      if (data === "\r") {
+        data = "\n";
+      }
+      lineBuffer += data;
+      if (data.includes("\n")) {
+        webRConsole.stdin(lineBuffer);
+        lineBuffer = "";
+      }
+    };
+
+    // Code eval stuff
+    let enableCaptureOutput = false;
+    const capturedOutput: string[] = [];
+    const captureOutput = (s: string) => {
+      if (enableCaptureOutput) {
+        capturedOutput.push(s);
+      }
+    };
+
+    let resolveEvalCode: ((value: string) => void) | null = null;
+
+    const evalCode = async (code: string): Promise<string> => {
+      pty.handleInput(code);
+      pty.handleInput("\r");
+
+      enableCaptureOutput = true;
+      return new Promise((resolve) => {
+        resolveEvalCode = resolve;
+      });
+    };
+
+    webRConsole.run();
+
+    webRSession = {
+      pty,
+      terminal,
+      console: webRConsole,
+      eval: evalCode,
+    };
+  }
+
+  return webRSession;
 }

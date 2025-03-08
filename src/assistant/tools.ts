@@ -463,8 +463,18 @@ export async function ensureWebRSession({
         },
         "/rlib"
       );
+
+      await webRConsole.webR.FS.mkdir("/workspace");
+      await webRConsole.webR.FS.mount(
+        "NODEFS",
+        {
+          root: vscode.workspace.workspaceFolders[0].uri.fsPath,
+        },
+        "/workspace"
+      );
+
       await webRConsole.webR.evalR(".libPaths('/rlib')");
-      // await webRConsole.webR.installPackages(["Matrix", "cli"]);
+      await webRConsole.webR.evalR("setwd('/workspace')");
     }
 
     // Accumulate text until a line is completed

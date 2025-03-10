@@ -43,10 +43,10 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": {
-            "regexp": "\\[watch\\] build started"
+            "regexp": "\\[watch.*?\\] build started"
           },
           "endsPattern": {
-            "regexp": "\\[watch\\] build finished"
+            "regexp": "\\[watch.*\\] build finished"
           }
         }
       },

@@ -8,11 +8,9 @@ import { getSelectedPythonInterpreter } from "../run";
 import { callPythonFunction } from "./call-python";
 import { callRFunction } from "./call-r";
 import type { RunCommandWithTerminalResult } from "./call-types";
+import { projectLanguage } from "./extension";
 import { langNameToProperName, type LangName } from "./language";
-import {
-  projectLanguage,
-  type SetProjectLanguageParams,
-} from "./project-language";
+
 import type { JSONifiable } from "./types";
 
 // TODO: Fix types so that we can get rid of the `any`, because it disables
@@ -85,7 +83,11 @@ tools.push({
     additionalProperties: false,
   },
   invoke: (
-    { language }: SetProjectLanguageParams,
+    {
+      language,
+    }: {
+      language: LangName;
+    },
     opts: InvokeOptions
   ): string => {
     opts.stream.markdown(

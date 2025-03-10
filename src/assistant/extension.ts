@@ -1,12 +1,11 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import { inferFileType, type LangName } from "./language";
 import {
   checkPythonEnvironment,
   guessWorkspaceLanguage,
-  inferFileType,
-  type LangName,
-} from "./language";
-import { projectLanguage } from "./project-language";
+  ProjectLanguageState,
+} from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
@@ -25,6 +24,8 @@ const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
 // Track assistant-specific disposables
 let assistantDisposables: vscode.Disposable[] = [];
 
+// Variables that relate to the state of the assistant.
+export const projectLanguage = new ProjectLanguageState();
 const hasConfirmedClaude = createPromiseWithStatus<boolean>();
 const hasContinuedAfterWorkspaceFolderSuggestion =
   createPromiseWithStatus<void>();

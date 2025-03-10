@@ -1,42 +1,5 @@
 import * as vscode from "vscode";
-import {
-  langInfo,
-  type LangFileExt,
-  type LangName,
-  type LangProperName,
-} from "./language";
 import { createPromiseWithStatus, type PromiseWithStatus } from "./utils";
-
-export class ProjectLanguageState {
-  private _name: LangName | null = null;
-  // This promise resolves when the project language has been set.
-  promise: PromiseWithStatus<void> = createPromiseWithStatus<void>();
-
-  // Set the project language to R or Python
-  set(name: LangName) {
-    this._name = name;
-    this.promise.resolve();
-  }
-
-  isSet(): boolean {
-    return this._name !== null;
-  }
-
-  name(): LangName {
-    if (this._name === null) {
-      throw new Error("Project language has not been set.");
-    }
-    return this._name;
-  }
-
-  properName(): LangProperName {
-    return langInfo({ name: this.name() }).properName;
-  }
-
-  fileExt(): LangFileExt {
-    return langInfo({ name: this.name() }).fileExt;
-  }
-}
 
 /**
  * Counts the number of R and Python files in all workspace folders

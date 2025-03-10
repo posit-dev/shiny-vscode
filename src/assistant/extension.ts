@@ -1,17 +1,16 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { inferFileType, type LangName } from "./language";
+import { inferFileType, langNameToFileExt, type LangName } from "./language";
 import {
   checkPythonEnvironment,
   guessWorkspaceLanguage,
-  ProjectLanguageState,
 } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
 import { tools, wrapToolInvocationResult } from "./tools";
 import type { FileContentJson } from "./types";
-import { createPromiseWithStatus } from "./utils";
+import { createPromiseWithStatus, PromisedValueContainer } from "./utils";
 
 const proposedFilePreviewProvider = new ProposedFilePreviewProvider();
 
@@ -25,7 +24,7 @@ const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
 let assistantDisposables: vscode.Disposable[] = [];
 
 // Variables that relate to the state of the assistant.
-export const projectLanguage = new ProjectLanguageState();
+export const projectLanguage = new PromisedValueContainer<LangName>();
 const hasConfirmedClaude = createPromiseWithStatus<boolean>();
 const hasContinuedAfterWorkspaceFolderSuggestion =
   createPromiseWithStatus<void>();
@@ -136,7 +135,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // If the user isn't using Claude 3.5 Sonnet, prompt them to switch.
     if (
       request.model.id !== "claude-3.5-sonnet" &&
-      !hasConfirmedClaude.resolved()
+      !hasConfirmedClaude.isResolved()
     ) {
       // The text displays much more quickly if we call markdown() twice instead
       // of just once.
@@ -273,7 +272,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // Prepend system prompt to the messages.
     const systemPrompt = await loadSystemPrompt(
       extensionContext,
-      projectLanguage.name()
+      projectLanguage.value()
     );
     messages.unshift(vscode.LanguageModelChatMessage.User(systemPrompt));
 
@@ -417,7 +416,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
                     stream.markdown(
                       new vscode.MarkdownString(
-                        `After you apply the changes, press the $(run) button in the upper right of the app.${projectLanguage.fileExt()} editor panel to run the app.\n\n`,
+                        `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(projectLanguage.value())} editor panel to run the app.\n\n`,
                         true
                       )
                     );

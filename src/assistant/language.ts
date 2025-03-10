@@ -99,6 +99,10 @@ export function inferFileType(filename: string): LangName | "text" {
   }
 }
 
+export function langNameToFileExt(name: LangName): LangFileExt {
+  return shinyLanguages[name].fileExt;
+}
+
 export function langNameToProperName(name: LangName): LangProperName {
   return shinyLanguages[name].properName;
 }

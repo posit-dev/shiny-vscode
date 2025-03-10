@@ -9,6 +9,65 @@ export function capitalizeFirst(str: string): string {
 }
 
 /**
+ * A container for a value that may not be immediately available.
+ *
+ * This class provides a way to handle values that will be set at some point in the future.
+ * It allows consumers to:
+ * - Check if the value has been set
+ * - Safely access the value once it's available
+ * - Wait for the value to be set via a promise
+ *
+ * @template T The type of the value being contained
+ */
+export class PromisedValueContainer<T> {
+  // Use this union so that we can rely on TypeScript to enforce safety.
+  private state: { isSet: false } | { isSet: true; value: T } = {
+    isSet: false,
+  };
+
+  /**
+   * A promise that resolves when the value has been set.
+   *
+   * Note: This promise resolves with void, not the value itself.
+   * This design prevents consumers from using `await x.promise` to get the value,
+   * which would return stale data if the value is later changed.
+   */
+  promise: PromiseWithStatus<void> = createPromiseWithStatus<void>();
+
+  /**
+   * Sets the contained value and resolves the promise.
+   *
+   * @param value - The value to store in the container
+   */
+  set(value: T) {
+    this.state = { isSet: true, value };
+    this.promise.resolve();
+  }
+
+  /**
+   * Checks if the value has been set.
+   *
+   * @returns True if the value has been set, false otherwise
+   */
+  isSet(): boolean {
+    return this.state.isSet;
+  }
+
+  /**
+   * Retrieves the contained value.
+   *
+   * @returns The contained value
+   * @throws Error if the value has not been set yet
+   */
+  value(): T {
+    if (!this.state.isSet) {
+      throw new Error("Promised value has not been set.");
+    }
+    return this.state.value;
+  }
+}
+
+/**
  * Extends the standard Promise interface with additional status tracking capabilities.
  * This interface allows monitoring of a promise's state (resolved, rejected, or pending)
  * and provides direct access to resolve/reject methods.
@@ -20,9 +79,9 @@ export interface PromiseWithStatus<T> extends Promise<T> {
   resolve(x: T | PromiseLike<T>): void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   reject(reason?: any): void;
-  resolved(): boolean;
-  rejected(): boolean;
-  completed(): boolean;
+  isResolved(): boolean;
+  isRejected(): boolean;
+  isCompleted(): boolean;
 }
 
 export function createPromiseWithStatus<T>(): PromiseWithStatus<T> {
@@ -49,13 +108,13 @@ export function createPromiseWithStatus<T>(): PromiseWithStatus<T> {
     catch: promise.catch.bind(promise),
     finally: promise.finally.bind(promise),
     [Symbol.toStringTag]: "InitStatus",
-    resolved() {
+    isResolved() {
       return _resolved;
     },
-    rejected() {
+    isRejected() {
       return _rejected;
     },
-    completed() {
+    isCompleted() {
       return _resolved || _rejected;
     },
   };

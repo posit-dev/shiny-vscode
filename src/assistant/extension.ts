@@ -173,9 +173,15 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       stream.markdown(
         `It looks like you are using **${request.model.name}** for Copilot. `
       );
-      stream.markdown(
-        "For best results with `@shiny`, please switch to **Claude 3.5 Sonnet**.\n\n"
-      );
+      if (request.model.id.startsWith("claude-3.7-sonnet")) {
+        stream.markdown(
+          "**Claude 3.7 Sonnet** currently doesn't work with chat participants like `@shiny`.\n\n"
+        );
+      } else {
+        stream.markdown(
+          "For best results with `@shiny`, please switch to **Claude 3.5 Sonnet**.\n\n"
+        );
+      }
       stream.button({
         title: "I'll switch to Claude 3.5 Sonnet",
         command: "shiny.assistant.continueAfterClaudeSuggestion",

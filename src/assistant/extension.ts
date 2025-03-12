@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import { isShinyAppFilename } from "../extension";
 import { inferFileType, langNameToFileExt, type LangName } from "./language";
 import {
   checkPythonEnvironment,
@@ -10,7 +11,7 @@ import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
 import { tools, wrapToolInvocationResult } from "./tools";
 import type { FileContentJson } from "./types";
-import { createPromiseWithStatus, PromisedValueContainer } from "./utils";
+import { createPromiseWithStatus } from "./utils";
 
 const proposedFilePreviewProvider = new ProposedFilePreviewProvider();
 
@@ -21,10 +22,20 @@ let proposedFilePreviewCounter = 0;
 const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
 
 // Track assistant-specific disposables
-let assistantDisposables: vscode.Disposable[] = [];
+export const assistantDisposables: vscode.Disposable[] = [];
 
 // Variables that relate to the state of the assistant.
-export const projectLanguage = new PromisedValueContainer<LangName>();
+
+export type ProjectSettings = {
+  language: LangName | null;
+  appSubdir: string;
+};
+export const projectSettings: ProjectSettings = {
+  language: null,
+  appSubdir: "",
+};
+
+// export const projectLanguage = new PromisedValueContainer<LangName>();
 const hasConfirmedClaude = createPromiseWithStatus<boolean>();
 const hasContinuedAfterWorkspaceFolderSuggestion =
   createPromiseWithStatus<void>();
@@ -47,35 +58,45 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   deactivateAssistant();
 
   // Create new disposables
-  assistantDisposables = [
-    vscode.commands.registerCommand(
-      "shiny.assistant.saveFilesToWorkspace",
-      saveFilesToWorkspace
-    ),
-    vscode.commands.registerCommand(
-      "shiny.assistant.applyChangesToWorkspaceFromDiffView",
-      applyChangesToWorkspaceFromDiffView
-    ),
-    vscode.commands.registerCommand("shiny.assistant.showDiff", showDiff),
-    vscode.commands.registerCommand(
-      "shiny.assistant.setProjectLanguage",
-      (language: LangName) => projectLanguage.set(language)
-    ),
-    vscode.commands.registerCommand(
-      "shiny.assistant.continueAfterClaudeSuggestion",
-      (switchedToClaude: boolean) =>
-        hasConfirmedClaude.resolve(switchedToClaude)
-    ),
-    vscode.commands.registerCommand(
-      "shiny.assistant.continueAfterWorkspaceFolderSuggestion",
-      () => hasContinuedAfterWorkspaceFolderSuggestion.resolve()
-    ),
-    vscode.workspace.registerTextDocumentContentProvider(
-      "proposed-files",
-      proposedFilePreviewProvider
-    ),
-    registerShinyChatParticipant(extensionContext),
-  ];
+  assistantDisposables.push(
+    ...[
+      vscode.commands.registerCommand(
+        "shiny.assistant.saveFilesToWorkspace",
+        saveFilesToWorkspace
+      ),
+      vscode.commands.registerCommand(
+        "shiny.assistant.applyChangesToWorkspaceFromDiffView",
+        applyChangesToWorkspaceFromDiffView
+      ),
+      vscode.commands.registerCommand("shiny.assistant.showDiff", showDiff),
+      vscode.commands.registerCommand(
+        "shiny.assistant.setProjectLanguage",
+        (language: LangName, callback) => {
+          projectSettings.language = language;
+          callback();
+        }
+      ),
+      vscode.commands.registerCommand(
+        "shiny.assistant.continueAfterClaudeSuggestion",
+        (switchedToClaude: boolean) =>
+          hasConfirmedClaude.resolve(switchedToClaude)
+      ),
+      vscode.commands.registerCommand(
+        "shiny.assistant.continueAfterWorkspaceFolderSuggestion",
+        () => hasContinuedAfterWorkspaceFolderSuggestion.resolve()
+      ),
+      vscode.commands.registerCommand(
+        "shiny.assistant.setAppSubdir",
+        setAppSubdirDialog
+      ),
+
+      vscode.workspace.registerTextDocumentContentProvider(
+        "proposed-files",
+        proposedFilePreviewProvider
+      ),
+      registerShinyChatParticipant(extensionContext),
+    ]
+  );
 
   // Add the assistant disposables to the extension's subscriptions
   assistantDisposables.forEach((d) => extensionContext.subscriptions.push(d));
@@ -91,7 +112,7 @@ export function deactivateAssistant() {
 
   // Dispose of all assistant-specific disposables
   assistantDisposables.forEach((d) => d.dispose());
-  assistantDisposables = [];
+  assistantDisposables.length = 0;
 }
 
 export function registerShinyChatParticipant(
@@ -167,15 +188,13 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       }
     }
 
-    let showedLanguageButtons = false;
-
     // Tell the user this works best if they have a workspace folder
     if (!vscode.workspace.workspaceFolders?.[0]) {
       stream.markdown(
-        "You currently do not have an active workspace folder.\n\n"
+        "You currently do not have an active workspace folder. You need an active workspace folder to use Shiny Assistant.\n\n"
       );
       stream.markdown(
-        "Please open a folder by clicking on the **Open Folder** button in the sidebar, or by clicking on the **File** menu and then **Open Folder...** (You can continue without an open folder, but I won't be able to save files to disk and you won't be able to run apps.)\n\n"
+        "Please open a folder by clicking on the **Open Folder** button in the sidebar, or by clicking on the **File** menu and then **Open Folder...** \n\n"
       );
       stream.button({
         title: `Got it, continue`,
@@ -185,24 +204,27 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       await hasContinuedAfterWorkspaceFolderSuggestion;
       if (!vscode.workspace.workspaceFolders?.[0]) {
         stream.markdown(
-          "Continuing without an active workspace folder. Not all features will work.\n\n"
+          "I'm sorry, I can't continue wirhout an active workspace folder.\n\n"
         );
+        // TODO: Can we provide a followup here that opens a dialog for the the
+        // user to select a folder?
+        return chatResult;
       }
     }
 
     // Infer the language of the project if it hasn't been set yet.
-    if (!projectLanguage.isSet()) {
+    if (projectSettings.language === null) {
       const languageGuess = await guessWorkspaceLanguage();
       stream.markdown("Based on the files in your workspace, ");
 
       if (languageGuess === "definitely_r") {
         stream.markdown("it looks like you are using R.\n\n");
         stream.progress("");
-        projectLanguage.set("r");
+        projectSettings.language = "r";
       } else if (languageGuess === "definitely_python") {
         stream.markdown("it looks like you are using Python.\n\n");
         stream.progress("");
-        projectLanguage.set("python");
+        projectSettings.language = "python";
       } else {
         // If we're don't know for sure what language is being used, prompt the
         // user.
@@ -215,29 +237,100 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
             " I can't infer what language you want to use for Shiny.\n\n"
           );
         }
+        const setProjectLanguagePromise = createPromiseWithStatus<void>();
 
         stream.button({
           title: "I'm using R",
           command: "shiny.assistant.setProjectLanguage",
-          arguments: ["r"],
+          arguments: ["r", setProjectLanguagePromise.resolve],
         });
         stream.button({
           title: "I'm using Python",
           command: "shiny.assistant.setProjectLanguage",
-          arguments: ["python"],
+          arguments: ["python", setProjectLanguagePromise.resolve],
         });
 
-        showedLanguageButtons = true;
+        // Block until user chooses a language.
+        await setProjectLanguagePromise;
+        // There can be a long pause at this point. Show progress so the user knows
+        // something is still happening.
+        stream.progress("");
       }
     }
 
-    // If we prompted the user for language, this will block until they choose.
-    await projectLanguage.promise;
+    // If request.references contain an item where
+    // id==='vscode.implicit.viewport', that is the currently active file. We'll
+    // check if that file's subdir is the same as the current
+    // projectSettings.appSubdir. If it isn't then we need to prompt the user to
+    // choose which subdir they want to use.
+    const activeFileReference = request.references.find(
+      (ref) => ref.id === "vscode.implicit.viewport"
+    );
+    if (activeFileReference) {
+      // Get the active file URI
+      const activeFileReferenceValue =
+        activeFileReference.value as vscode.Location;
 
-    // If we had shown the language buttons, there can be a long pause at this
-    // point. Show progress so the user knows something is still happening.
-    if (showedLanguageButtons) {
-      stream.progress("");
+      // Check that the active file is a Shiny app file
+      if (
+        activeFileReferenceValue.uri &&
+        isShinyAppFilename(
+          activeFileReferenceValue.uri.fsPath,
+          projectSettings.language!
+        )
+      ) {
+        // If it is a Shiny app file, check if the subdir matches the current
+        // projectSettings.appSubdir.
+        const activeFileSubdir = path.relative(
+          vscode.workspace.workspaceFolders![0].uri.fsPath,
+          path.dirname(activeFileReferenceValue.uri.fsPath)
+        );
+
+        if (activeFileSubdir !== projectSettings.appSubdir) {
+          function formatSubdirMarkdown(subdir: string): string {
+            return subdir === ""
+              ? "the top-level directory"
+              : `subdirectory \`${subdir}/\``;
+          }
+          // Prompt the user to choose which subdir to use
+          stream.markdown(
+            `The active file is in ${formatSubdirMarkdown(activeFileSubdir)} but the current app is in ${formatSubdirMarkdown(projectSettings.appSubdir)}. `
+          );
+          stream.markdown("Which would you like to use?\n");
+
+          const setAppSubdirPromise = createPromiseWithStatus<void>();
+
+          function formatSubdirButton(subdir: string): string {
+            return subdir === "" ? "the top-level directory" : `${subdir}/`;
+          }
+          stream.button({
+            title: `I want to use ${formatSubdirButton(activeFileSubdir)}`,
+            command: "shiny.assistant.setAppSubdir",
+            arguments: [activeFileSubdir, setAppSubdirPromise.resolve],
+          });
+
+          stream.button({
+            title: `I want to use ${formatSubdirButton(projectSettings.appSubdir)}`,
+            command: "shiny.assistant.setAppSubdir",
+            arguments: [projectSettings.appSubdir, setAppSubdirPromise.resolve],
+          });
+
+          stream.button({
+            title: "I want to choose a different directory",
+            command: "shiny.assistant.setAppSubdir",
+            arguments: [null, setAppSubdirPromise.resolve],
+          });
+
+          // Block until user chooses a subdir.
+          await setAppSubdirPromise;
+          stream.markdown(
+            `You have set the app subdirectory to \`${projectSettings.appSubdir}/\`.\n\n`
+          );
+          // There can be a long pause at this point. Show progress so the user knows
+          // something is still happening.
+          stream.progress("");
+        }
+      }
     }
 
     // Convert the chat history to message format.
@@ -272,7 +365,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // Prepend system prompt to the messages.
     const systemPrompt = await loadSystemPrompt(
       extensionContext,
-      projectLanguage.value()
+      projectSettings
     );
     messages.unshift(vscode.LanguageModelChatMessage.User(systemPrompt));
 
@@ -416,7 +509,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
                     stream.markdown(
                       new vscode.MarkdownString(
-                        `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(projectLanguage.value())} editor panel to run the app.\n\n`,
+                        `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(projectSettings.language!)} editor panel to run the app.\n\n`,
                         true
                       )
                     );
@@ -774,9 +867,41 @@ async function closeAllProposedChangesTabs() {
  * @returns Promise resolving to an array of formatted context block strings
  */
 async function createContextBlocks(
-  refs: readonly vscode.ChatPromptReference[]
+  refs: Readonly<vscode.ChatPromptReference[]>
 ): Promise<string[]> {
   return Promise.all(refs.map(createContextBlock));
+}
+
+async function setAppSubdirDialog(
+  subdir: string | null,
+  callback: (success: boolean) => void
+): Promise<void> {
+  if (subdir === null) {
+    const dialogOptions: vscode.OpenDialogOptions = {
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: "Select App Directory",
+      title: "Select Shiny App Directory",
+    };
+
+    const folderUri = await vscode.window.showOpenDialog(dialogOptions);
+
+    // If user selected a folder, set it as the app subdirectory
+    if (folderUri && folderUri.length > 0) {
+      // Get the selected folder path
+      const workspaceRoot = vscode.workspace.workspaceFolders![0].uri.fsPath;
+      const relativePath = path.relative(workspaceRoot, folderUri[0].fsPath);
+
+      // Set the selected folder as the app subdirectory
+      projectSettings.appSubdir = relativePath;
+      callback(true);
+    }
+  } else {
+    projectSettings.appSubdir = subdir;
+    callback(true);
+  }
+  callback(false);
 }
 
 /**
@@ -791,7 +916,7 @@ async function createContextBlocks(
  * @throws Error if the reference value type is not supported
  */
 async function createContextBlock(
-  ref: vscode.ChatPromptReference
+  ref: Readonly<vscode.ChatPromptReference>
 ): Promise<string> {
   const value = ref.value;
 

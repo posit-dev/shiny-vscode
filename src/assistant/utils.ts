@@ -11,11 +11,16 @@ export function capitalizeFirst(str: string): string {
 /**
  * A container for a value that may not be immediately available.
  *
- * This class provides a way to handle values that will be set at some point in the future.
+ * This class provides a way to handle values that will be set at some point in
+ * the future.
+ *
  * It allows consumers to:
  * - Check if the value has been set
  * - Safely access the value once it's available
  * - Wait for the value to be set via a promise
+ *
+ * The value can also later be changed by calling `set` again. However, this
+ * will not update the promise; the promise will only resolve once.
  *
  * @template T The type of the value being contained
  */
@@ -28,9 +33,9 @@ export class PromisedValueContainer<T> {
   /**
    * A promise that resolves when the value has been set.
    *
-   * Note: This promise resolves with void, not the value itself.
-   * This design prevents consumers from using `await x.promise` to get the value,
-   * which would return stale data if the value is later changed.
+   * Note: This promise resolves with void, not the value itself. This design
+   * prevents consumers from using `await x.promise` to get the value, which
+   * would return stale data if the value is later changed.
    */
   promise: PromiseWithStatus<void> = createPromiseWithStatus<void>();
 
@@ -140,4 +145,63 @@ function promiseWithResolvers<T>(): {
   );
 
   return { promise, resolve: resolve!, reject: reject! };
+}
+
+/**
+ * Finds the relative path from one absolute path to another.
+ * 
+ * This function calculates the relative path needed to navigate from one
+ * absolute path to another. It handles both file and directory paths.
+ * 
+ * @param from The source absolute path
+ * @param to The target absolute path
+ * @returns The relative path from the source to the target
+ */
+export function findRelativePath(from: string, to: string): string {
+  // Normalize paths to use forward slashes and remove trailing slashes
+  const normalizePathForComparison = (path: string): string => {
+    return path.replace(/\\/g, '/').replace(/\/$/, '');
+  };
+
+  const normalizedFrom = normalizePathForComparison(from);
+  const normalizedTo = normalizePathForComparison(to);
+
+  // If paths are identical, return current directory marker
+  if (normalizedFrom === normalizedTo) {
+    return '.';
+  }
+
+  // Split paths into segments
+  const fromSegments = normalizedFrom.split('/');
+  const toSegments = normalizedTo.split('/');
+
+  // Find the common prefix length
+  let commonPrefixLength = 0;
+  const minLength = Math.min(fromSegments.length, toSegments.length);
+  
+  for (let i = 0; i < minLength; i++) {
+    if (fromSegments[i] === toSegments[i]) {
+      commonPrefixLength++;
+    } else {
+      break;
+    }
+  }
+
+  // Build the relative path
+  const upCount = fromSegments.length - commonPrefixLength;
+  const remainingToSegments = toSegments.slice(commonPrefixLength);
+  
+  // Create path segments
+  const pathSegments: string[] = [];
+  
+  // Add "../" for each level we need to go up
+  for (let i = 0; i < upCount; i++) {
+    pathSegments.push('..');
+  }
+  
+  // Add the remaining segments from the target path
+  pathSegments.push(...remainingToSegments);
+  
+  // Join the segments to form the relative path
+  return pathSegments.join('/') || '.';
 }

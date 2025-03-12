@@ -8,10 +8,11 @@ import { getSelectedPythonInterpreter } from "../run";
 import { callPythonFunction } from "./call-python";
 import { callRFunction } from "./call-r";
 import type { RunCommandWithTerminalResult } from "./call-types";
-import { projectLanguage } from "./extension";
+import { projectSettings } from "./extension";
 import { langNameToProperName, type LangName } from "./language";
 
 import type { JSONifiable } from "./types";
+import { createPromiseWithStatus } from "./utils";
 
 // TODO: Fix types so that we can get rid of the `any`, because it disables
 // type checking for the `params` argument of all `invoke()` methods -- they
@@ -93,8 +94,64 @@ tools.push({
     opts.stream.markdown(
       `\n\nSetting project language to ${langNameToProperName(language)}...\n\n`
     );
-    projectLanguage.set(language);
+    projectSettings.language = language;
     return `The project language has been set to ${langNameToProperName(language)}`;
+  },
+});
+
+tools.push({
+  name: "shiny-assistant_askUserForAppSubdirTool",
+  description:
+    "Ask the user which subdirectory of the workspace they want to use for their app.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      defaultDir: {
+        type: "string",
+        description:
+          'Default subdirectory to display to the user. This is your guess, based on your available information. The user can change it if they want. If you don\'t have a guess, use "/", the top-level directory of the workspace.',
+      },
+    },
+    required: ["language"],
+    additionalProperties: false,
+  },
+  invoke: async (
+    {
+      defaultDir,
+    }: {
+      defaultDir: string;
+    },
+    opts: InvokeOptions
+  ): Promise<string> => {
+    opts.stream.markdown(
+      `\n\nBased on the information I can see, I think you want to put your app in the in the \`${defaultDir}\` subdirectory of the project workspace. Is that correct?\n\n`
+    );
+
+    const setAppSubdirPromise = createPromiseWithStatus<boolean>();
+
+    opts.stream.button({
+      title: `Yes, use ${defaultDir}`,
+      command: "shiny.assistant.setAppSubdir",
+      arguments: [defaultDir, setAppSubdirPromise.resolve],
+    });
+
+    opts.stream.button({
+      title: "No, I want to choose another subdirectory",
+      command: "shiny.assistant.setAppSubdir",
+      arguments: [null, setAppSubdirPromise.resolve],
+    });
+
+    const setAppSubdirSuccess = await setAppSubdirPromise;
+
+    if (!setAppSubdirSuccess) {
+      opts.stream.markdown(`You did not set the app subdirectory.\n\n`);
+      return "User did not set the app subdirectory.";
+    }
+
+    opts.stream.markdown(
+      `You have set the app subdirectory to \`${projectSettings.appSubdir}/\`.\n\n`
+    );
+    return `User has set app subdirectory to: ${projectSettings.appSubdir}/.\n\n`;
   },
 });
 

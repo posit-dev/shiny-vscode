@@ -1,6 +1,9 @@
+/* eslint-disable @typescript-eslint/naming-convention */
+
 import * as fs from "fs/promises";
 import * as path from "path";
 import type * as vscode from "vscode";
+import { type ProjectSettings } from "./extension";
 import { type LangName } from "./language";
 
 // The system prompt directory relative to the extension
@@ -8,7 +11,7 @@ const SYSTEM_PROMPT_DIR = "assistant-prompts";
 
 interface PromptVariables {
   language: string;
-  // eslint-disable-next-line @typescript-eslint/naming-convention
+  project_settings: string;
   language_specific_prompt: string;
   verbosity: string;
 }
@@ -32,9 +35,13 @@ async function loadLanguageSpecificPrompt(
 
 export async function loadSystemPrompt(
   context: vscode.ExtensionContext,
-  language: LangName
+  projectSettings: ProjectSettings
 ): Promise<string> {
   try {
+    if (!projectSettings.language) {
+      throw new Error("Project language not set");
+    }
+
     const promptPath = path.join(
       context.extensionPath,
       SYSTEM_PROMPT_DIR,
@@ -45,13 +52,13 @@ export async function loadSystemPrompt(
     // Load language-specific prompt
     const languageSpecificPrompt = await loadLanguageSpecificPrompt(
       context,
-      language
+      projectSettings.language
     );
 
     // Substitute variables
     const variables: PromptVariables = {
-      language,
-      // eslint-disable-next-line @typescript-eslint/naming-convention
+      language: projectSettings.language,
+      project_settings: JSON.stringify(projectSettings, null, 2),
       language_specific_prompt: languageSpecificPrompt,
       verbosity: "Be very concise in the text.",
     };

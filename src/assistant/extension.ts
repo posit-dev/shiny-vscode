@@ -353,10 +353,32 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     );
     messages.unshift(vscode.LanguageModelChatMessage.User(systemPrompt));
 
+    // ========================================================================
+
+    // Make a copy because we might mutate it.
+    const requestReferences: vscode.ChatPromptReference[] = [
+      ...request.references,
+    ];
+
+    // If there's an active file editor, the createContextBlock function would
+    // normally only include the visible portion of the file. We want to include
+    // the entire file in the context, so we'll add a reference to the entire
+    // file. We don't remove the existing reference because the LLM might use
+    // it to determine the visible portion of the file.
+    if (activeFileReference) {
+      const activeFileUri = (activeFileReference.value as vscode.Location).uri;
+      const activeFileFullRef: vscode.ChatPromptReference = {
+        id: activeFileUri.toString(),
+        range: undefined,
+        modelDescription: "file:" + path.basename(activeFileRelativePath!),
+        value: activeFileUri,
+      };
+      requestReferences.push(activeFileFullRef);
+    }
+
     // Construct a user message from the <context> blocks for the references.
-    const requestReferenceContextBlocks: string[] = await createContextBlocks(
-      request.references
-    );
+    const requestReferenceContextBlocks: string[] =
+      await createContextBlocks(requestReferences);
     messages.push(
       vscode.LanguageModelChatMessage.User(
         requestReferenceContextBlocks.join("\n")

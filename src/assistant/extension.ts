@@ -616,6 +616,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
         // Loop until there are no more tool calls
         stream.markdown("\n\n");
+        stream.progress("");
         // Add line breaks between tool call loop iterations.
         rawResponseText += "\n\n";
         return runWithTools();

@@ -109,7 +109,7 @@ tools.push({
       defaultDir: {
         type: "string",
         description:
-          'Default subdirectory to display to the user. This is your guess, based on your available information. The user can change it if they want. If you don\'t have a guess, use "/", the top-level directory of the workspace.',
+          'Default subdirectory to display to the user. For example, "/".',
       },
     },
     required: ["language"],
@@ -123,8 +123,15 @@ tools.push({
     },
     opts: InvokeOptions
   ): Promise<string> => {
+    let defaultDirString: string;
+    if (defaultDir === "/") {
+      defaultDirString = "top level directory";
+    } else {
+      defaultDirString = `\`${defaultDir}\` subdirectory`;
+    }
+
     opts.stream.markdown(
-      `\n\nBased on the information I can see, I think you want to put your app in the in the \`${defaultDir}\` subdirectory of the project workspace. Is that correct?\n\n`
+      `\n\nWould you like to put your app in the ${defaultDirString} of the project workspace?\n\n`
     );
 
     const setAppSubdirPromise = createPromiseWithStatus<boolean>();
@@ -151,7 +158,7 @@ tools.push({
     opts.stream.markdown(
       `You have set the app subdirectory to \`${projectSettings.appSubdir}/\`.\n\n`
     );
-    opts.stream.progress("");
+
     return `User has set app subdirectory to: ${projectSettings.appSubdir}/.\n\n`;
   },
 });

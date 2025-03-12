@@ -151,6 +151,7 @@ tools.push({
     opts.stream.markdown(
       `You have set the app subdirectory to \`${projectSettings.appSubdir}/\`.\n\n`
     );
+    opts.stream.progress("");
     return `User has set app subdirectory to: ${projectSettings.appSubdir}/.\n\n`;
   },
 });

@@ -1,11 +1,13 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
-import { inferFileType, langNameToFileExt, type LangName } from "./language";
 import {
-  checkPythonEnvironment,
-  guessWorkspaceLanguage,
-} from "./project-language";
+  inferFileType,
+  langNameToFileExt,
+  langNameToProperName,
+  type LangName,
+} from "./language";
+import { checkPythonEnvironment } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
@@ -28,11 +30,14 @@ export const assistantDisposables: vscode.Disposable[] = [];
 
 export type ProjectSettings = {
   language: LangName | null;
-  appSubdir: string;
+  // Current app subdirectory, relative to the workspace root, without leading
+  // or trailing slashes. If null, the user has not yet chosen a subdirectory.
+  appSubdir: string | null;
 };
+
 export const projectSettings: ProjectSettings = {
   language: null,
-  appSubdir: "",
+  appSubdir: null,
 };
 
 // export const projectLanguage = new PromisedValueContainer<LangName>();
@@ -132,6 +137,9 @@ export function registerShinyChatParticipant(
       },
     };
 
+    // ========================================================================
+    // Commands
+    // ========================================================================
     if (request.command === "start") {
       stream.markdown(`Shiny Assistant can help you with building and deploying Shiny applications. You can ask me to:
 
@@ -153,7 +161,9 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       return chatResult;
     }
 
+    // ========================================================================
     // If the user isn't using Claude 3.5 Sonnet, prompt them to switch.
+    // ========================================================================
     if (
       request.model.id !== "claude-3.5-sonnet" &&
       !hasConfirmedClaude.isResolved()
@@ -188,7 +198,9 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       }
     }
 
-    // Tell the user this works best if they have a workspace folder
+    // ========================================================================
+    // Tell the user they need a workspace folder
+    // ========================================================================
     if (!vscode.workspace.workspaceFolders?.[0]) {
       stream.markdown(
         "You currently do not have an active workspace folder. You need an active workspace folder to use Shiny Assistant.\n\n"
@@ -204,7 +216,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       await hasContinuedAfterWorkspaceFolderSuggestion;
       if (!vscode.workspace.workspaceFolders?.[0]) {
         stream.markdown(
-          "I'm sorry, I can't continue wirhout an active workspace folder.\n\n"
+          "I'm sorry, I can't continue without an active workspace folder.\n\n"
         );
         // TODO: Can we provide a followup here that opens a dialog for the the
         // user to select a folder?
@@ -212,128 +224,94 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       }
     }
 
-    // Infer the language of the project if it hasn't been set yet.
-    if (projectSettings.language === null) {
-      const languageGuess = await guessWorkspaceLanguage();
-      stream.markdown("Based on the files in your workspace, ");
-
-      if (languageGuess === "definitely_r") {
-        stream.markdown("it looks like you are using R.\n\n");
-        stream.progress("");
-        projectSettings.language = "r";
-      } else if (languageGuess === "definitely_python") {
-        stream.markdown("it looks like you are using Python.\n\n");
-        stream.progress("");
-        projectSettings.language = "python";
-      } else {
-        // If we're don't know for sure what language is being used, prompt the
-        // user.
-        if (languageGuess === "probably_r") {
-          stream.markdown(" it looks like you are probably using R.\n\n");
-        } else if (languageGuess === "probably_python") {
-          stream.markdown(" it looks like you are probably using Python.\n\n");
-        } else {
-          stream.markdown(
-            " I can't infer what language you want to use for Shiny.\n\n"
-          );
-        }
-        const setProjectLanguagePromise = createPromiseWithStatus<void>();
-
-        stream.button({
-          title: "I'm using R",
-          command: "shiny.assistant.setProjectLanguage",
-          arguments: ["r", setProjectLanguagePromise.resolve],
-        });
-        stream.button({
-          title: "I'm using Python",
-          command: "shiny.assistant.setProjectLanguage",
-          arguments: ["python", setProjectLanguagePromise.resolve],
-        });
-
-        // Block until user chooses a language.
-        await setProjectLanguagePromise;
-        // There can be a long pause at this point. Show progress so the user knows
-        // something is still happening.
-        stream.progress("");
-      }
-    }
-
-    // If request.references contain an item where
-    // id==='vscode.implicit.viewport', that is the currently active file. We'll
-    // check if that file's subdir is the same as the current
-    // projectSettings.appSubdir. If it isn't then we need to prompt the user to
-    // choose which subdir they want to use.
+    // ========================================================================
+    // If the currently-active file is an R or Python file, set the project
+    // language to that language.
+    // ========================================================================
     const activeFileReference = request.references.find(
       (ref) => ref.id === "vscode.implicit.viewport"
     );
-    if (activeFileReference) {
-      // Get the active file URI
-      const activeFileReferenceValue =
-        activeFileReference.value as vscode.Location;
-
-      // Check that the active file is a Shiny app file
-      if (
-        activeFileReferenceValue.uri &&
-        isShinyAppFilename(
-          activeFileReferenceValue.uri.fsPath,
-          projectSettings.language!
-        )
-      ) {
-        // If it is a Shiny app file, check if the subdir matches the current
-        // projectSettings.appSubdir.
-        const activeFileSubdir = path.relative(
+    const activeFileRelativePath = activeFileReference
+      ? path.relative(
           vscode.workspace.workspaceFolders![0].uri.fsPath,
-          path.dirname(activeFileReferenceValue.uri.fsPath)
+          (activeFileReference.value as vscode.Location).uri.fsPath
+        )
+      : undefined;
+
+    if (activeFileRelativePath) {
+      // Check that the active file is a Shiny app file
+      const activeFileName = path.basename(activeFileRelativePath);
+
+      let activeFileLanguage: LangName | "other";
+      if (activeFileName.toLowerCase().endsWith(".r")) {
+        activeFileLanguage = "r";
+      } else if (activeFileName.toLowerCase().endsWith(".py")) {
+        activeFileLanguage = "python";
+      } else {
+        activeFileLanguage = "other";
+      }
+
+      // If we're changing the current language, let the user know.
+      if (
+        activeFileLanguage !== "other" &&
+        projectSettings.language !== activeFileLanguage
+      ) {
+        projectSettings.language = activeFileLanguage;
+        stream.markdown(
+          `Based on the current file \`${activeFileRelativePath}\`, I see you are using ${langNameToProperName(projectSettings.language!)}.\n\n`
         );
-
-        if (activeFileSubdir !== projectSettings.appSubdir) {
-          function formatSubdirMarkdown(subdir: string): string {
-            return subdir === ""
-              ? "the top-level directory"
-              : `subdirectory \`${subdir}/\``;
-          }
-          // Prompt the user to choose which subdir to use
-          stream.markdown(
-            `The active file is in ${formatSubdirMarkdown(activeFileSubdir)} but the current app is in ${formatSubdirMarkdown(projectSettings.appSubdir)}. `
-          );
-          stream.markdown("Which would you like to use?\n");
-
-          const setAppSubdirPromise = createPromiseWithStatus<void>();
-
-          function formatSubdirButton(subdir: string): string {
-            return subdir === "" ? "the top-level directory" : `${subdir}/`;
-          }
-          stream.button({
-            title: `I want to use ${formatSubdirButton(activeFileSubdir)}`,
-            command: "shiny.assistant.setAppSubdir",
-            arguments: [activeFileSubdir, setAppSubdirPromise.resolve],
-          });
-
-          stream.button({
-            title: `I want to use ${formatSubdirButton(projectSettings.appSubdir)}`,
-            command: "shiny.assistant.setAppSubdir",
-            arguments: [projectSettings.appSubdir, setAppSubdirPromise.resolve],
-          });
-
-          stream.button({
-            title: "I want to choose a different directory",
-            command: "shiny.assistant.setAppSubdir",
-            arguments: [null, setAppSubdirPromise.resolve],
-          });
-
-          // Block until user chooses a subdir.
-          await setAppSubdirPromise;
-          stream.markdown(
-            `You have set the app subdirectory to \`${projectSettings.appSubdir}/\`.\n\n`
-          );
-          // There can be a long pause at this point. Show progress so the user knows
-          // something is still happening.
-          stream.progress("");
-        }
       }
     }
 
-    // Convert the chat history to message format.
+    // ========================================================================
+    // If the language hasn't been set yet, ask the user what they want.
+    // ========================================================================
+    if (projectSettings.language === null) {
+      stream.markdown("What language you want to use for your Shiny app?\n\n");
+      const setProjectLanguagePromise = createPromiseWithStatus<void>();
+
+      stream.button({
+        title: "I'm using R",
+        command: "shiny.assistant.setProjectLanguage",
+        arguments: ["r", setProjectLanguagePromise.resolve],
+      });
+      stream.button({
+        title: "I'm using Python",
+        command: "shiny.assistant.setProjectLanguage",
+        arguments: ["python", setProjectLanguagePromise.resolve],
+      });
+
+      // Block until user chooses a language.
+      await setProjectLanguagePromise;
+      // There can be a long pause at this point. Show progress so the user knows
+      // something is still happening.
+      stream.progress("");
+    }
+
+    // ========================================================================
+    // Possibly set the current app subdirectory
+    // ========================================================================
+    // If it is a Shiny app file, use its directory as the appSubdir.
+    // After this point, if the user has not set the appSubdir, the LLM will
+    // use a tool call to ask the user which subdirectory to use.
+    if (
+      activeFileRelativePath &&
+      isShinyAppFilename(activeFileRelativePath, projectSettings.language!)
+    ) {
+      const activeFileSubdir = path.dirname(activeFileRelativePath);
+      if (projectSettings.appSubdir !== activeFileSubdir) {
+        projectSettings.appSubdir = activeFileSubdir;
+
+        stream.markdown(
+          `Based on the current file \`${activeFileRelativePath}\`, the app subdirectory has been set to \`${projectSettings.appSubdir}/\`.\n\n`
+        );
+        stream.progress("");
+      }
+    }
+
+    // ========================================================================
+    // Construct conversation data structure
+    // ========================================================================
     const messages = chatContext.history.map((message) => {
       if (message instanceof vscode.ChatRequestTurn) {
         return vscode.LanguageModelChatMessage.User(message.prompt);
@@ -381,15 +359,20 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
     messages.push(vscode.LanguageModelChatMessage.User(request.prompt));
 
+    // ========================================================================
+    // Send the request to the LLM and process the response
+    // ========================================================================
     const options: vscode.LanguageModelChatRequestOptions = {
       tools: tools,
     };
-
     let responseContainsShinyApp = false;
     // Collect all the raw text from the LLM. This will include the text
     // spanning multiple tool calls, if present.
     let rawResponseText = "";
 
+    // If there are any tool calls in the response, this function loops by
+    // calling itself recursively until there are no more tool calls in the
+    // response.
     async function runWithTools() {
       const chatResponse = await request.model.sendRequest(
         messages,
@@ -898,6 +881,9 @@ async function setAppSubdirDialog(
       callback(true);
     }
   } else {
+    // Strip leading and trailing slashes
+    subdir = subdir.replace(/^\/|\/$/g, "");
+
     projectSettings.appSubdir = subdir;
     callback(true);
   }

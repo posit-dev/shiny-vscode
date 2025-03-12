@@ -41,7 +41,7 @@ Review these steps carefully and follow them to create the Shiny for {language} 
 
 - Make sure to prepend the value of `appSubdir` from the project settings above, to the NAME properties in the `<FILE>` tags. For example, if you are generating a file named "app.py" and the `appSubdir` is "myapp/", then emit a tag `<FILE NAME="myapp/app.py">`. If the file is named "app.R" and the `appSubdir` is "", then emit a tag `<FILE NAME="app.R">`.
 
-- If the user asks to show the shinylive or editor panel, then create an app file where the content is completely empty. Do not put anything else in the file at all. Also, do not explain why you are doing this. Just do it.
+- If the value of `appSubdir` from the project settings is `null`, or if the user asks to put the app in a different directory, then use the tool to ask the user where they want to put their Shiny app.
 
 {language_specific_prompt}
 

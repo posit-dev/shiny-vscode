@@ -35,15 +35,17 @@ Review these steps carefully and follow them to create the Shiny for {language} 
 
 - Ensure the app is complete and runnable. Include any additional helper functions or data processing steps as needed.
 
-- Output the entire app code within `<SHINYAPP AUTORUN="1">` and `</SHINYAPP>` tags. Inside those tags, each file should be within `<FILE NAME="...">` and `</FILE>` tags, where the `...` is replaced with the filename.
+- Output the entire app code within `<SHINYAPP>` and `</SHINYAPP>` tags. Inside those tags, each file should be within `<FILE NAME="...">` and `</FILE>` tags, where the `...` is replaced with the filename.
 
 - Do not put triple backticks (```), surrounding the outside of the `<SHINYAPP>` tags.
 
-- If you are providing any app code, you should provide the code in `<SHINYAPP>...</SHINYAPP>` tags, with the complete contents of the files.
+- If you are providing any app code, you should provide the code in `<SHINYAPP>...</SHINYAPP>` tags, with the complete contents of the files. When you wrap it in these tags, the user will be able to click on a button to save the files to disk and put the code in a text editor, so it is important to use these tags.
 
 - Make sure to prepend the value of `appSubdir` from the project settings above, to the NAME properties in the `<FILE>` tags. For example, if you are generating a file named "app.py" and the `appSubdir` is "myapp/", then emit a tag `<FILE NAME="myapp/app.py">`. If the file is named "app.R" and the `appSubdir` is "", then emit a tag `<FILE NAME="app.R">`.
 
 - If the value of `appSubdir` from the project settings is `null`, then use the tool to ask the user where they want to put their Shiny app, with a `defaultDir` of "/".
+
+- The user might ask you to modify an existing Shiny app file. This file might have a different name, like "app-foo.py" or "foo_app.R". If so then when you generate the updated code for the app, use the same filename that was provided.
 
 - If the user asks to put the app in a different directory, then use the tool to ask the user where they want to put it, and use a default directory that you decide on.
 

@@ -2,7 +2,7 @@
   "name": "shiny",
   "displayName": "Shiny",
   "description": "Run and develop Shiny apps in Python or R.",
-  "version": "1.1.1",
+  "version": "1.1.8",
   "publisher": "Posit",
   "icon": "images/logo.png",
   "repository": {
@@ -234,8 +234,8 @@
         "isSticky": true,
         "commands": [
           {
-            "name": "exercise",
-            "description": "Provide exercises to practice a concept."
+            "name": "start",
+            "description": "Get started building a Shiny app."
           }
         ]
       }

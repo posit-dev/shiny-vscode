@@ -332,7 +332,7 @@ async function checkForPythonExtension(): Promise<boolean> {
  * Gets the currently selected Python interpreter, according to the Python extension.
  * @returns A path, or false if no interpreter is selected.
  */
-async function getSelectedPythonInterpreter(): Promise<string | false> {
+export async function getSelectedPythonInterpreter(): Promise<string | false> {
   // Gather details of the current Python interpreter. We want to make sure
   // only to re-use a terminal if it's using the same interpreter.
   const pythonAPI: PythonExtension = await PythonExtension.api();
@@ -382,7 +382,7 @@ function getExtensionPath(): string | undefined {
   return extensionPath;
 }
 
-async function getRBinPath(bin: string): Promise<string> {
+export async function getRBinPath(bin: string): Promise<string> {
   return (
     (await getRPathFromPositron(bin)) ||
     getRPathFromConfig(bin) ||

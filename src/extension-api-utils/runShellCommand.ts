@@ -1,13 +1,12 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 // From https://github.com/rstudio/shinyuieditor/blob/392659a0d936e4e38ac99660e89b0327db45b3a9/inst/vscode-extension/src/extension-api-utils/runShellCommand.ts
-
+// With some modifications
 import { spawn } from "child_process";
 
 type ProcOutput = {
   stdout: string[];
   stderr: string[];
 };
-type CommandOutput = (
+export type CommandOutput = (
   | {
       status: "success";
     }
@@ -18,24 +17,32 @@ type CommandOutput = (
 ) &
   ProcOutput;
 
-type CommandExecOptions = {
+export type CommandExecOptions = {
   cmd: string;
   args?: string[];
-  timeout_ms?: number;
+  cwd?: string | URL;
+  env?: NodeJS.ProcessEnv;
+  stdout?: (s: string) => void;
+  stderr?: (s: string) => void;
+  timeoutMs?: number;
   verbose?: boolean;
 };
 export async function runShellCommand({
   cmd,
   args,
+  cwd,
+  env,
+  stdout,
+  stderr,
+  timeoutMs = 1500,
   verbose = false,
-  timeout_ms = 1500,
 }: CommandExecOptions): Promise<CommandOutput> {
   const logger = makeLogger(verbose, "runShellCommand: ");
 
   return new Promise<CommandOutput>((resolve) => {
     const output: ProcOutput = { stdout: [], stderr: [] };
 
-    const spawnedProcess = spawn(cmd, args);
+    const spawnedProcess = spawn(cmd, args, { cwd, env, timeout: timeoutMs });
     function onSpawn() {
       logger("Spawned");
     }
@@ -53,11 +60,17 @@ export async function runShellCommand({
     function onStdout(d: any) {
       logger(`stdout: ${d.toString()}`);
       output.stdout.push(d.toString());
+      if (stdout) {
+        stdout(d.toString());
+      }
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function onStderr(d: any) {
       logger(`stderr: ${d.toString()}`);
       output.stderr.push(d.toString());
+      if (stderr) {
+        stderr(d.toString());
+      }
     }
 
     function cleanup() {
@@ -72,13 +85,13 @@ export async function runShellCommand({
     const startTimeout = setTimeout(() => {
       resolve({
         status: "error",
-        errorMsgs: `Command, no response from run command within ${timeout_ms}ms:\n${cmd} ${args?.join(
+        errorMsgs: `Command, no response from run command within ${timeoutMs}ms:\n${cmd} ${args?.join(
           " "
         )}`,
         ...output,
       });
       cleanup();
-    }, timeout_ms);
+    }, timeoutMs);
 
     spawnedProcess.on("spawn", onSpawn);
     spawnedProcess.on("error", onError);

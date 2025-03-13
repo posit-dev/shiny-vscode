@@ -1,12 +1,19 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { checkPythonEnvironment, guessWorkspaceLanguage } from "./language";
-import { projectLanguage, SetProjectLanguageTool } from "./project-language";
+import { isShinyAppFilename } from "../extension";
+import {
+  inferFileType,
+  langNameToFileExt,
+  langNameToProperName,
+  type LangName,
+} from "./language";
+import { checkPythonEnvironment } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
+import { tools, wrapToolInvocationResult } from "./tools";
 import type { FileContentJson } from "./types";
-import { inferFileType } from "./utils";
+import { createPromiseWithStatus } from "./utils";
 
 const proposedFilePreviewProvider = new ProposedFilePreviewProvider();
 
@@ -17,35 +24,84 @@ let proposedFilePreviewCounter = 0;
 const PROPOSED_CHANGES_TAB_LABEL = "Proposed changes";
 
 // Track assistant-specific disposables
-let assistantDisposables: vscode.Disposable[] = [];
+export const assistantDisposables: vscode.Disposable[] = [];
 
-let hasEmittedClaudeSuggestionMessage = false;
+// Variables that relate to the state of the assistant.
+
+export type ProjectSettings = {
+  language: LangName | null;
+  // Current app subdirectory, relative to the workspace root, without leading
+  // or trailing slashes. If null, the user has not yet chosen a subdirectory.
+  appSubdir: string | null;
+};
+
+export const projectSettings: ProjectSettings = {
+  language: null,
+  appSubdir: null,
+};
+
+// export const projectLanguage = new PromisedValueContainer<LangName>();
+const hasConfirmedClaude = createPromiseWithStatus<boolean>();
+const hasContinuedAfterWorkspaceFolderSuggestion =
+  createPromiseWithStatus<void>();
+
+const dummyCancellationToken: vscode.CancellationToken =
+  new vscode.CancellationTokenSource().token;
+
+interface ShinyAssistantChatResult extends vscode.ChatResult {
+  metadata: {
+    command: string | undefined;
+    followups: Array<string | vscode.ChatFollowup>;
+    // This is the raw response text from the LLM, before we do some
+    // transformations and send it to the UI.
+    rawResponseText: string;
+  };
+}
 
 export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   // Clean up any existing disposables
   deactivateAssistant();
 
   // Create new disposables
-  assistantDisposables = [
-    vscode.commands.registerCommand(
-      "shiny.assistant.saveFilesToWorkspace",
-      saveFilesToWorkspace
-    ),
-    vscode.commands.registerCommand(
-      "shiny.assistant.applyChangesToWorkspaceFromDiffView",
-      applyChangesToWorkspaceFromDiffView
-    ),
-    vscode.commands.registerCommand("shiny.assistant.showDiff", showDiff),
-    vscode.commands.registerCommand(
-      "shiny.assistant.setProjectLanguage",
-      (language: "r" | "python") => projectLanguage.setValue(language)
-    ),
-    vscode.workspace.registerTextDocumentContentProvider(
-      "proposed-files",
-      proposedFilePreviewProvider
-    ),
-    registerShinyChatParticipant(extensionContext),
-  ];
+  assistantDisposables.push(
+    ...[
+      vscode.commands.registerCommand(
+        "shiny.assistant.saveFilesToWorkspace",
+        saveFilesToWorkspace
+      ),
+      vscode.commands.registerCommand(
+        "shiny.assistant.applyChangesToWorkspaceFromDiffView",
+        applyChangesToWorkspaceFromDiffView
+      ),
+      vscode.commands.registerCommand("shiny.assistant.showDiff", showDiff),
+      vscode.commands.registerCommand(
+        "shiny.assistant.setProjectLanguage",
+        (language: LangName, callback) => {
+          projectSettings.language = language;
+          callback();
+        }
+      ),
+      vscode.commands.registerCommand(
+        "shiny.assistant.continueAfterClaudeSuggestion",
+        (switchedToClaude: boolean) =>
+          hasConfirmedClaude.resolve(switchedToClaude)
+      ),
+      vscode.commands.registerCommand(
+        "shiny.assistant.continueAfterWorkspaceFolderSuggestion",
+        () => hasContinuedAfterWorkspaceFolderSuggestion.resolve()
+      ),
+      vscode.commands.registerCommand(
+        "shiny.assistant.setAppSubdir",
+        setAppSubdirDialog
+      ),
+
+      vscode.workspace.registerTextDocumentContentProvider(
+        "proposed-files",
+        proposedFilePreviewProvider
+      ),
+      registerShinyChatParticipant(extensionContext),
+    ]
+  );
 
   // Add the assistant disposables to the extension's subscriptions
   assistantDisposables.forEach((d) => extensionContext.subscriptions.push(d));
@@ -61,7 +117,7 @@ export function deactivateAssistant() {
 
   // Dispose of all assistant-specific disposables
   assistantDisposables.forEach((d) => d.dispose());
-  assistantDisposables = [];
+  assistantDisposables.length = 0;
 }
 
 export function registerShinyChatParticipant(
@@ -72,276 +128,536 @@ export function registerShinyChatParticipant(
     chatContext: vscode.ChatContext,
     stream: vscode.ChatResponseStream,
     token: vscode.CancellationToken
-  ) => {
-    if (
-      request.model.id !== "claude-3.5-sonnet" &&
-      !hasEmittedClaudeSuggestionMessage
-    ) {
-      stream.markdown(
-        `It looks like you are using **${request.model.name}** for Copilot. ` +
-          "For best results with `@shiny`, switch to **Claude 3.5 Sonnet**.\n\n"
-      );
-      hasEmittedClaudeSuggestionMessage = true;
-    }
-
-    if (projectLanguage.value() === null) {
-      const languageGuess = await guessWorkspaceLanguage();
-
-      if (languageGuess === "definitely_r") {
-        stream.markdown(
-          "Based on the files in your workspace, it looks like you are using R.\n\n"
-        );
-        projectLanguage.setValue("r");
-      } else if (languageGuess === "definitely_python") {
-        stream.markdown(
-          "Based on the files in your workspace, it looks like you are using Python.\n\n"
-        );
-        projectLanguage.setValue("python");
-      } else {
-        // If we're don't know for sure what language is being used, prompt the
-        // user.
-        if (languageGuess === "probably_r") {
-          stream.markdown(
-            "Based on the files in your workspace, it looks like you are probably using R.\n\n"
-          );
-        } else if (languageGuess === "probably_python") {
-          stream.markdown(
-            "Based on the files in your workspace, it looks like you are probably using Python.\n\n"
-          );
-        } else {
-          stream.markdown(
-            "Based on the files in your workspace, I can't infer what language you want to use for Shiny.\n\n"
-          );
-        }
-
-        stream.button({
-          title: "I'm using R",
-          command: "shiny.assistant.setProjectLanguage",
-          arguments: ["r"],
-        });
-        stream.button({
-          title: "I'm using Python",
-          command: "shiny.assistant.setProjectLanguage",
-          arguments: ["python"],
-        });
-      }
-    }
-
-    // If we prompted the user for language, this will block until they choose.
-    await projectLanguage.promise;
-
-    // TODO: Don't show if the user has already set the language
-    stream.progress("");
-
-    const systemPrompt = await loadSystemPrompt(
-      extensionContext,
-      projectLanguage.value()!
-    );
-
-    // Initialize the messages array with the prompt
-    const messages = [vscode.LanguageModelChatMessage.User(systemPrompt)];
-
-    // Get all the previous participant messages
-    const previousMessages = chatContext.history.filter(
-      (h) => h instanceof vscode.ChatResponseTurn
-    );
-
-    // Add the previous messages to the messages array
-    previousMessages.forEach((m) => {
-      let fullMessage = "";
-      m.response.forEach((r) => {
-        const mdPart = r as vscode.ChatResponseMarkdownPart;
-        fullMessage += mdPart.value.value;
-      });
-      messages.push(vscode.LanguageModelChatMessage.Assistant(fullMessage));
-    });
-
-    // Construct the user message from the <context> blocks for the references,
-    // and the literal user-submitted prompt.
-    const requestReferenceContextBlocks: string[] = await createContextBlocks(
-      request.references
-    );
-    const requestPrompt =
-      requestReferenceContextBlocks.join("\n") + "\n" + request.prompt;
-
-    messages.push(vscode.LanguageModelChatMessage.User(requestPrompt));
-
-    const options: vscode.LanguageModelChatRequestOptions = {
-      // // TODO: Make tool calls work
-      // tools: [
-      //   {
-      //     name: "shiny-assistant_setProjectLanguageTool",
-      //     description: "Set the language of the project to R or Python",
-      //   },
-      // ],
+  ): Promise<ShinyAssistantChatResult> => {
+    const chatResult: ShinyAssistantChatResult = {
+      metadata: {
+        command: undefined,
+        followups: [],
+        rawResponseText: "",
+      },
     };
 
-    const chatResponse = await request.model.sendRequest(
-      messages,
-      options,
-      token
+    // ========================================================================
+    // Commands
+    // ========================================================================
+    if (request.command === "start") {
+      stream.markdown(`Shiny Assistant can help you with building and deploying Shiny applications. You can ask me to:
+
+  - Create a Shiny app
+  - Modify an existing Shiny app
+  - Install packages needed for your app
+  - Troubleshoot a Shiny app
+
+You can also ask me to explain the code in your Shiny app, or to help you with any other questions you have about Shiny.
+        `);
+      chatResult.metadata.followups.push("Create a simple Shiny app.");
+      // chatResult.metadata.followups.push(
+      //   "Help me set up a development environment for Shiny apps."
+      // );
+      chatResult.metadata.followups.push(
+        "Install the packages needed for my app."
+      );
+      // chatResult.metadata.followups.push("Help me deploy my app.");
+      return chatResult;
+    }
+
+    // ========================================================================
+    // If the user isn't using Claude 3.5 Sonnet, prompt them to switch.
+    // ========================================================================
+    if (
+      request.model.id !== "claude-3.5-sonnet" &&
+      !hasConfirmedClaude.isResolved()
+    ) {
+      // The text displays much more quickly if we call markdown() twice instead
+      // of just once.
+      stream.markdown(
+        `It looks like you are using **${request.model.name}** for Copilot. `
+      );
+      if (request.model.id.startsWith("claude-3.7-sonnet")) {
+        stream.markdown(
+          "**Claude 3.7 Sonnet** currently doesn't work with chat participants like `@shiny`.\n\n"
+        );
+      } else {
+        stream.markdown(
+          "For best results with `@shiny`, please switch to **Claude 3.5 Sonnet**.\n\n"
+        );
+      }
+      stream.button({
+        title: "I'll switch to Claude 3.5 Sonnet",
+        command: "shiny.assistant.continueAfterClaudeSuggestion",
+        arguments: [true],
+      });
+      stream.button({
+        title: `No thanks, I'll continue with ${request.model.name}`,
+        command: "shiny.assistant.continueAfterClaudeSuggestion",
+        arguments: [false],
+      });
+
+      if (await hasConfirmedClaude) {
+        stream.markdown(
+          new vscode.MarkdownString(
+            "Great! In the text input box, switch to Claude 3.5 Sonnet and then click on the $(refresh) button.\n\n",
+            true
+          )
+        );
+        return chatResult;
+      }
+    }
+
+    // ========================================================================
+    // Tell the user they need a workspace folder
+    // ========================================================================
+    if (!vscode.workspace.workspaceFolders?.[0]) {
+      stream.markdown(
+        "You currently do not have an active workspace folder. You need an active workspace folder to use Shiny Assistant.\n\n"
+      );
+      stream.markdown(
+        "Please open a folder by clicking on the **Open Folder** button in the sidebar, or by clicking on the **File** menu and then **Open Folder...** \n\n"
+      );
+      stream.button({
+        title: `Got it, continue`,
+        command: "shiny.assistant.continueAfterWorkspaceFolderSuggestion",
+      });
+
+      await hasContinuedAfterWorkspaceFolderSuggestion;
+      if (!vscode.workspace.workspaceFolders?.[0]) {
+        stream.markdown(
+          "I'm sorry, I can't continue without an active workspace folder.\n\n"
+        );
+        // TODO: Can we provide a followup here that opens a dialog for the the
+        // user to select a folder?
+        return chatResult;
+      }
+    }
+
+    // ========================================================================
+    // If the currently-active file is an R or Python file, set the project
+    // language to that language.
+    // ========================================================================
+    const activeFileReference = request.references.find(
+      (ref) => ref.id === "vscode.implicit.viewport"
+    );
+    const activeFileRelativePath = activeFileReference
+      ? path.relative(
+          vscode.workspace.workspaceFolders![0].uri.fsPath,
+          (activeFileReference.value as vscode.Location).uri.fsPath
+        )
+      : undefined;
+
+    if (activeFileRelativePath) {
+      // Check that the active file is a Shiny app file
+      const activeFileName = path.basename(activeFileRelativePath);
+
+      let activeFileLanguage: LangName | "other";
+      if (activeFileName.toLowerCase().endsWith(".r")) {
+        activeFileLanguage = "r";
+      } else if (activeFileName.toLowerCase().endsWith(".py")) {
+        activeFileLanguage = "python";
+      } else {
+        activeFileLanguage = "other";
+      }
+
+      // If we're changing the current language, let the user know.
+      if (
+        activeFileLanguage !== "other" &&
+        projectSettings.language !== activeFileLanguage
+      ) {
+        projectSettings.language = activeFileLanguage;
+        stream.markdown(
+          `Based on the current file \`${activeFileRelativePath}\`, I see you are using ${langNameToProperName(projectSettings.language!)}.\n\n`
+        );
+      }
+    }
+
+    // ========================================================================
+    // If the language hasn't been set yet, ask the user what they want.
+    // ========================================================================
+    if (projectSettings.language === null) {
+      stream.markdown("What language you want to use for your Shiny app?\n\n");
+      const setProjectLanguagePromise = createPromiseWithStatus<void>();
+
+      stream.button({
+        title: "I'm using R",
+        command: "shiny.assistant.setProjectLanguage",
+        arguments: ["r", setProjectLanguagePromise.resolve],
+      });
+      stream.button({
+        title: "I'm using Python",
+        command: "shiny.assistant.setProjectLanguage",
+        arguments: ["python", setProjectLanguagePromise.resolve],
+      });
+
+      // Block until user chooses a language.
+      await setProjectLanguagePromise;
+      // There can be a long pause at this point. Show progress so the user knows
+      // something is still happening.
+      stream.progress("");
+    }
+
+    // ========================================================================
+    // Possibly set the current app subdirectory
+    // ========================================================================
+    // If it is a Shiny app file, use its directory as the appSubdir.
+    // After this point, if the user has not set the appSubdir, the LLM will
+    // use a tool call to ask the user which subdirectory to use.
+    if (
+      activeFileRelativePath &&
+      isShinyAppFilename(activeFileRelativePath, projectSettings.language!)
+    ) {
+      const activeFileSubdir = path.dirname(activeFileRelativePath);
+      if (projectSettings.appSubdir !== activeFileSubdir) {
+        projectSettings.appSubdir = activeFileSubdir;
+
+        stream.markdown(
+          `Based on the current file \`${activeFileRelativePath}\`, the app subdirectory has been set to \`${projectSettings.appSubdir}/\`.\n\n`
+        );
+        stream.progress("");
+      }
+    }
+
+    // ========================================================================
+    // Construct conversation data structure
+    // ========================================================================
+    const messages = chatContext.history.map((message) => {
+      if (message instanceof vscode.ChatRequestTurn) {
+        return vscode.LanguageModelChatMessage.User(message.prompt);
+      } else if (message instanceof vscode.ChatResponseTurn) {
+        let messageText = "";
+        if (message.result.metadata?.rawResponseText) {
+          // If the response has saved the raw text from the LLM, use that.
+          messageText = message.result.metadata.rawResponseText;
+        } else {
+          // Otherwise, construct the message from the response parts. (There
+          // might be multiple parts to the response if, for example, the LLM
+          // calls tools.) Note that this message will consist of the text parts
+          // that were streamed to the UI, which may have been transformed from
+          // the raw LLM response. Additionally these text parts may include
+          // content that was streamed to the UI without being part of the LLM
+          // response at all, like if `stream.markdown("...")` is called
+          // directly.
+          message.response.forEach((r) => {
+            if (r instanceof vscode.ChatResponseMarkdownPart) {
+              messageText += r.value.value;
+            }
+          });
+        }
+        return vscode.LanguageModelChatMessage.Assistant(messageText);
+      }
+      throw new Error(`Unknown message type in chat history: ${message}`);
+    });
+
+    // Prepend system prompt to the messages.
+    const systemPrompt = await loadSystemPrompt(
+      extensionContext,
+      projectSettings
+    );
+    messages.unshift(vscode.LanguageModelChatMessage.User(systemPrompt));
+
+    // ========================================================================
+
+    // Make a copy because we might mutate it.
+    const requestReferences: vscode.ChatPromptReference[] = [
+      ...request.references,
+    ];
+
+    // If there's an active file editor, the createContextBlock function would
+    // normally only include the visible portion of the file. We want to include
+    // the entire file in the context, so we'll add a reference to the entire
+    // file. We don't remove the existing reference because the LLM might use
+    // it to determine the visible portion of the file.
+    if (activeFileReference) {
+      const activeFileUri = (activeFileReference.value as vscode.Location).uri;
+      const activeFileFullRef: vscode.ChatPromptReference = {
+        id: activeFileUri.toString(),
+        range: undefined,
+        modelDescription: "file:" + path.basename(activeFileRelativePath!),
+        value: activeFileUri,
+      };
+      requestReferences.push(activeFileFullRef);
+    }
+
+    // Construct a user message from the <context> blocks for the references.
+    const requestReferenceContextBlocks: string[] =
+      await createContextBlocks(requestReferences);
+    messages.push(
+      vscode.LanguageModelChatMessage.User(
+        requestReferenceContextBlocks.join("\n")
+      )
     );
 
-    // Stream the response
-    const tagProcessor = new StreamingTagProcessor(["SHINYAPP", "FILE"]);
-    let shinyAppFiles: FileContentJson[] | null = null;
-    // States of a state machine to handle the response
-    let state: "TEXT" | "SHINYAPP" | "FILE" = "TEXT";
-    // When processing text in the FILE state, the first chunk of text may have
-    // a leading \n that needs to be removed;
-    let fileStateProcessedFirstChunk = false;
+    messages.push(vscode.LanguageModelChatMessage.User(request.prompt));
 
-    for await (const fragment of chatResponse.text) {
-      const processedFragment = tagProcessor.process(fragment);
+    // ========================================================================
+    // Send the request to the LLM and process the response
+    // ========================================================================
+    const options: vscode.LanguageModelChatRequestOptions = {
+      tools: tools,
+    };
+    let responseContainsShinyApp = false;
+    // Collect all the raw text from the LLM. This will include the text
+    // spanning multiple tool calls, if present.
+    let rawResponseText = "";
 
-      for (const part of processedFragment) {
-        // TODO: flush at the end?
-        if (state === "TEXT") {
-          if (part.type === "text") {
-            stream.markdown(part.text);
-          } else if (part.type === "tag") {
-            if (part.kind === "open") {
-              if (part.name === "SHINYAPP") {
-                state = "SHINYAPP";
-                // TODO: handle multiple shiny apps? Or just error?
-                shinyAppFiles = [];
-              } else if (part.name === "FILE") {
-                console.log(
-                  "Parse error: <FILE> tag found, but not in <SHINYAPP> block."
-                );
-              }
-            } else if (part.kind === "close") {
-              console.log("Parse error: Unexpected closing tag in TEXT state.");
-            }
-          } else {
-            console.log("Parse error: Unexpected part type in TEXT state.");
-          }
-        } else if (state === "SHINYAPP") {
-          if (part.type === "text") {
-            // console.log(
-            //   "Parse error: Unexpected text in SHINYAPP state.",
-            //   part.text,
-            //   "."
-            // );
-            stream.markdown(part.text);
-          } else if (part.type === "tag") {
-            if (part.kind === "open") {
-              if (part.name === "SHINYAPP") {
-                console.log(
-                  "Parse error: Nested <SHINYAPP> tags are not supported."
-                );
-              } else if (part.name === "FILE") {
-                state = "FILE";
-                fileStateProcessedFirstChunk = false;
+    // If there are any tool calls in the response, this function loops by
+    // calling itself recursively until there are no more tool calls in the
+    // response.
+    async function runWithTools() {
+      const chatResponse = await request.model.sendRequest(
+        messages,
+        options,
+        token
+      );
 
-                // TODO: Handle case when NAME attribute is missing
-                shinyAppFiles!.push({
-                  name: part.attributes["NAME"],
-                  content: "",
-                });
-                stream.markdown("\n### " + part.attributes["NAME"] + "\n");
-                stream.markdown("```");
-                const fileType = inferFileType(part.attributes["NAME"]);
-                if (fileType !== "text") {
-                  stream.markdown(fileType);
-                }
-                stream.markdown("\n");
-              }
-            } else if (part.kind === "close") {
-              if (part.name === "SHINYAPP") {
-                if (shinyAppFiles) {
-                  // Render the file tree control at a base location
-                  proposedFilePreviewCounter++;
-                  const proposedFilesPrefixDir =
-                    "/app-preview-" + proposedFilePreviewCounter;
-                  proposedFilePreviewProvider?.addFiles(
-                    shinyAppFiles,
-                    proposedFilesPrefixDir
+      // Stream the response
+      const toolCalls: vscode.LanguageModelToolCallPart[] = [];
+      const tagProcessor = new StreamingTagProcessor(["SHINYAPP", "FILE"]);
+      let shinyAppFiles: FileContentJson[] | null = null;
+      // States of a state machine to handle the response
+      let state: "TEXT" | "SHINYAPP" | "FILE" = "TEXT";
+      // When processing text in the FILE state, the first chunk of text may have
+      // a leading \n that needs to be removed;
+      let fileStateProcessedFirstChunk = false;
+      // The response text streamed in from the LLM.
+      let thisTurnResponseText = "";
+
+      for await (const part of chatResponse.stream) {
+        if (part instanceof vscode.LanguageModelTextPart) {
+          rawResponseText += part.value;
+        } else if (part instanceof vscode.LanguageModelToolCallPart) {
+          toolCalls.push(part);
+          continue;
+        } else {
+          console.log("Unknown part type: ", part);
+          continue;
+        }
+
+        thisTurnResponseText += part.value;
+        const processedFragment = tagProcessor.process(part.value);
+
+        for (const part of processedFragment) {
+          // TODO: flush at the end?
+          if (state === "TEXT") {
+            if (part.type === "text") {
+              stream.markdown(part.text);
+            } else if (part.type === "tag") {
+              if (part.kind === "open") {
+                if (part.name === "SHINYAPP") {
+                  state = "SHINYAPP";
+                  // TODO: handle multiple shiny apps? Or just error?
+                  shinyAppFiles = [];
+                  responseContainsShinyApp = true;
+                } else if (part.name === "FILE") {
+                  console.log(
+                    "Parse error: <FILE> tag found, but not in <SHINYAPP> block."
                   );
-
-                  // const tree: vscode.ChatResponseFileTree[] = [
-                  //   {
-                  //     name: "/",
-                  //     children: shinyAppFiles.map((f) => {
-                  //       return { name: f.name };
-                  //     }),
-                  //   },
-                  // ];
-
-                  // stream.markdown("These are the proposed files:\n");
-
-                  // stream.filetree(
-                  //   tree,
-                  //   vscode.Uri.parse(
-                  //     "proposed-files://" + proposedFilesPrefixDir
-                  //   )
-                  // );
-
-                  stream.button({
-                    title: "View changes as diff",
-                    command: "shiny.assistant.showDiff",
-                    arguments: [
-                      shinyAppFiles,
-                      vscode.workspace.workspaceFolders?.[0],
-                      proposedFilesPrefixDir,
-                    ],
-                  });
-
-                  stream.button({
-                    title: "Apply changes",
-                    command: "shiny.assistant.saveFilesToWorkspace",
-                    arguments: [shinyAppFiles, true],
-                  });
                 }
-                state = "TEXT";
-              } else {
+              } else if (part.kind === "close") {
                 console.log(
-                  "Parse error: Unexpected closing tag in SHINYAPP state."
+                  "Parse error: Unexpected closing tag in TEXT state."
                 );
               }
+            } else {
+              console.log("Parse error: Unexpected part type in TEXT state.");
             }
-          } else {
-            console.log("Parse error: Unexpected part type in SHINYAPP state.");
-          }
-        } else if (state === "FILE") {
-          if (part.type === "text") {
-            if (!fileStateProcessedFirstChunk) {
-              fileStateProcessedFirstChunk = true;
-              // "<FILE>" may be followed by "\n", which needs to be removed.
-              if (part.text.startsWith("\n")) {
-                part.text = part.text.slice(1);
+          } else if (state === "SHINYAPP") {
+            if (part.type === "text") {
+              // console.log(
+              //   "Parse error: Unexpected text in SHINYAPP state.",
+              //   part.text,
+              //   "."
+              // );
+              stream.markdown(part.text);
+            } else if (part.type === "tag") {
+              if (part.kind === "open") {
+                if (part.name === "SHINYAPP") {
+                  console.log(
+                    "Parse error: Nested <SHINYAPP> tags are not supported."
+                  );
+                } else if (part.name === "FILE") {
+                  state = "FILE";
+                  fileStateProcessedFirstChunk = false;
+
+                  // TODO: Handle case when NAME attribute is missing
+                  shinyAppFiles!.push({
+                    name: part.attributes["NAME"],
+                    content: "",
+                  });
+                  stream.markdown("\n### " + part.attributes["NAME"] + "\n");
+                  stream.markdown("```");
+                  const fileType = inferFileType(part.attributes["NAME"]);
+                  if (fileType !== "text") {
+                    stream.markdown(fileType);
+                  }
+                  stream.markdown("\n");
+                }
+              } else if (part.kind === "close") {
+                if (part.name === "SHINYAPP") {
+                  if (shinyAppFiles) {
+                    // Render the file tree control at a base location
+                    proposedFilePreviewCounter++;
+                    const proposedFilesPrefixDir =
+                      "/app-preview-" + proposedFilePreviewCounter;
+                    proposedFilePreviewProvider?.addFiles(
+                      shinyAppFiles,
+                      proposedFilesPrefixDir
+                    );
+
+                    stream.button({
+                      title: "View changes as diff",
+                      command: "shiny.assistant.showDiff",
+                      arguments: [
+                        shinyAppFiles,
+                        vscode.workspace.workspaceFolders?.[0],
+                        proposedFilesPrefixDir,
+                      ],
+                    });
+
+                    stream.button({
+                      title: "Apply changes",
+                      command: "shiny.assistant.saveFilesToWorkspace",
+                      arguments: [shinyAppFiles, true],
+                    });
+
+                    stream.markdown(
+                      new vscode.MarkdownString(
+                        `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(projectSettings.language!)} editor panel to run the app.\n\n`,
+                        true
+                      )
+                    );
+                  }
+                  state = "TEXT";
+                } else {
+                  console.log(
+                    "Parse error: Unexpected closing tag in SHINYAPP state."
+                  );
+                }
               }
-            }
-            stream.markdown(part.text);
-            // Add text to the current file content
-            shinyAppFiles![shinyAppFiles!.length - 1].content += part.text;
-          } else if (part.type === "tag") {
-            if (part.kind === "open") {
+            } else {
               console.log(
-                "Parse error: tags inside of <FILE> are not supported."
+                "Parse error: Unexpected part type in SHINYAPP state."
               );
-            } else if (part.kind === "close") {
-              if (part.name === "FILE") {
-                stream.markdown("```");
-                state = "SHINYAPP";
-              } else {
+            }
+          } else if (state === "FILE") {
+            if (part.type === "text") {
+              if (!fileStateProcessedFirstChunk) {
+                fileStateProcessedFirstChunk = true;
+                // "<FILE>" may be followed by "\n", which needs to be removed.
+                if (part.text.startsWith("\n")) {
+                  part.text = part.text.slice(1);
+                }
+              }
+              stream.markdown(part.text);
+              // Add text to the current file content
+              shinyAppFiles![shinyAppFiles!.length - 1].content += part.text;
+            } else if (part.type === "tag") {
+              if (part.kind === "open") {
                 console.log(
-                  "Parse error: Unexpected closing tag in FILE state."
+                  "Parse error: tags inside of <FILE> are not supported."
                 );
+              } else if (part.kind === "close") {
+                if (part.name === "FILE") {
+                  stream.markdown("```");
+                  state = "SHINYAPP";
+                } else {
+                  console.log(
+                    "Parse error: Unexpected closing tag in FILE state."
+                  );
+                }
               }
             }
           }
         }
       }
+
+      messages.push(
+        vscode.LanguageModelChatMessage.Assistant([
+          new vscode.LanguageModelTextPart(thisTurnResponseText),
+          ...toolCalls,
+        ])
+      );
+
+      if (toolCalls.length > 0) {
+        const toolCallsResults: Array<vscode.LanguageModelToolResultPart> = [];
+        for (const toolCall of toolCalls) {
+          const tool = tools.find((tool) => tool.name === toolCall.name);
+          if (!tool) {
+            console.log(`Tool not found: ${toolCall.name}`);
+            continue;
+          }
+          const result = await tool.invoke(toolCall.input, {
+            stream: stream,
+            newTerminalName: "Shiny Assistant tool calls",
+            // By leaving this undefined, the first tool call that needs a terminal
+            // will create the Terminal, and future tool calls will reuse it.
+            terminal: undefined,
+            extensionContext: extensionContext,
+            cancellationToken: dummyCancellationToken,
+          });
+
+          if (result === undefined) {
+            console.log(`Tool returned undefined: ${toolCall.name}`);
+            continue;
+          }
+
+          const resultWrapped = wrapToolInvocationResult(result);
+          const toolCallResult = new vscode.LanguageModelToolResultPart(
+            toolCall.callId,
+            resultWrapped.content
+          );
+          toolCallsResults.push(toolCallResult);
+        }
+        messages.push(vscode.LanguageModelChatMessage.User(toolCallsResults));
+
+        messages.push(
+          vscode.LanguageModelChatMessage.User(
+            "The messages above contain the results from one or more tool calls. The user can't see these results, so you should explain to the user if you reference them in your response."
+          )
+        );
+
+        // Loop until there are no more tool calls
+        stream.markdown("\n\n");
+        stream.progress("");
+        // Add line breaks between tool call loop iterations.
+        rawResponseText += "\n\n";
+        return runWithTools();
+      }
     }
 
-    return;
+    await runWithTools();
+
+    chatResult.metadata.rawResponseText = rawResponseText;
+    if (responseContainsShinyApp) {
+      chatResult.metadata.followups.push(
+        "Install the packages needed for my app."
+      );
+    }
+
+    return chatResult;
   };
 
   const shinyAssistant = vscode.chat.createChatParticipant(
     "chat.shiny-assistant",
     handler
   );
+
+  shinyAssistant.followupProvider = {
+    provideFollowups: (
+      result: ShinyAssistantChatResult,
+      context: vscode.ChatContext,
+      token: vscode.CancellationToken
+    ): vscode.ChatFollowup[] => {
+      const followups: vscode.ChatFollowup[] = result.metadata.followups.map(
+        (item) => {
+          if (typeof item === "string") {
+            return { prompt: item, command: "" };
+          } else {
+            return item;
+          }
+        }
+      );
+      return followups;
+    },
+  };
 
   shinyAssistant.iconPath = vscode.Uri.joinPath(
     extensionContext.extensionUri,
@@ -370,86 +686,89 @@ async function saveFilesToWorkspace(
 ): Promise<boolean> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
-  if (workspaceFolder) {
-    if (closeProposedChangesTabs) {
-      await closeAllProposedChangesTabs();
-    }
-
-    try {
-      const changedUris: vscode.Uri[] = [];
-      const workspaceEdit = new vscode.WorkspaceEdit();
-
-      // If we have a workspace, save files to disk.
-      for (const newFile of newFiles) {
-        const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, newFile.name);
-
-        try {
-          // Try to open existing file. If it exists, then replace its content.
-          await vscode.workspace.fs.stat(fileUri);
-          const document = await vscode.workspace.openTextDocument(fileUri);
-
-          // Replace the content only if it's different.
-          if (document.getText() !== newFile.content) {
-            workspaceEdit.set(fileUri, [
-              vscode.TextEdit.replace(
-                new vscode.Range(
-                  document.positionAt(0),
-                  document.positionAt(document.getText().length)
-                ),
-                newFile.content
-              ),
-            ]);
-            changedUris.push(fileUri);
-          }
-        } catch (err) {
-          // File does not exist; create it.
-          workspaceEdit.createFile(fileUri, {
-            overwrite: false,
-            contents: Buffer.from(newFile.content, "utf-8"),
-          });
-          changedUris.push(fileUri);
-        }
-      }
-
-      await vscode.workspace.applyEdit(workspaceEdit);
-
-      let appFileDocument: vscode.TextDocument | null = null;
-      // Open all the changed files in editors
-      for (const uri of changedUris) {
-        const document = await vscode.workspace.openTextDocument(uri);
-        if (["app.R", "app.py"].includes(path.basename(uri.fsPath))) {
-          appFileDocument = document;
-        }
-        await vscode.window.showTextDocument(document, {
-          preserveFocus: false,
-        });
-      }
-
-      // If there was an app.py/R, then focus on it. The reason we didn't simply
-      // sort the file list and put the app.py/R last is because it usually
-      // makes sense to have it first in the list of editors.
-      if (appFileDocument) {
-        await vscode.window.showTextDocument(appFileDocument, {
-          preserveFocus: false,
-        });
-      }
-
-      return true;
-    } catch (error) {
-      if (error instanceof Error) {
-        vscode.window.showErrorMessage(
-          `Failed to handle files: ${error.message}`
-        );
-      }
-      return false;
-    }
-  } else {
-    // If no workspace, create untitled editors
+  if (!workspaceFolder) {
     vscode.window.showErrorMessage(
       "You currently do not have an active workspace folder. Please open a workspace folder and try again."
     );
+    return false;
   }
-  return false;
+
+  if (closeProposedChangesTabs) {
+    await closeAllProposedChangesTabs();
+  }
+
+  try {
+    const changedUris: vscode.Uri[] = [];
+    const createdUris: vscode.Uri[] = [];
+    const workspaceEdit = new vscode.WorkspaceEdit();
+
+    // If we have a workspace, save files to disk.
+    for (const newFile of newFiles) {
+      const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, newFile.name);
+
+      try {
+        // Try to open existing file. If it exists, then replace its content.
+        await vscode.workspace.fs.stat(fileUri);
+        const document = await vscode.workspace.openTextDocument(fileUri);
+
+        // Replace the content only if it's different.
+        if (document.getText() !== newFile.content) {
+          workspaceEdit.set(fileUri, [
+            vscode.TextEdit.replace(
+              new vscode.Range(
+                document.positionAt(0),
+                document.positionAt(document.getText().length)
+              ),
+              newFile.content
+            ),
+          ]);
+          changedUris.push(fileUri);
+        }
+      } catch (err) {
+        // File does not exist; create it.
+        workspaceEdit.createFile(fileUri, {
+          overwrite: false,
+          contents: Buffer.from(newFile.content, "utf-8"),
+        });
+        createdUris.push(fileUri);
+      }
+    }
+
+    // Apply the edit
+    await vscode.workspace.applyEdit(workspaceEdit);
+
+    // Open all the changed files in editors
+    let appFileDocument: vscode.TextDocument | null = null;
+    for (const uri of [...changedUris, ...createdUris]) {
+      const document = await vscode.workspace.openTextDocument(uri);
+      if (["app.R", "app.py"].includes(path.basename(uri.fsPath))) {
+        appFileDocument = document;
+      }
+      await vscode.window.showTextDocument(document, {
+        preserveFocus: false,
+      });
+      // Save changed files to disk (file must be open in an editor to save).
+      await vscode.workspace.save(uri);
+    }
+
+    // If there was an app.py/R, then focus on it. The reason we didn't simply
+    // sort the file list and put the app.py/R last is because it usually
+    // makes sense to have it first in the list of editors.
+    if (appFileDocument) {
+      await vscode.window.showTextDocument(appFileDocument, {
+        preserveFocus: false,
+      });
+    }
+
+    return true;
+  } catch (error) {
+    if (error instanceof Error) {
+      vscode.window.showErrorMessage(
+        `Failed to handle files: ${error.message}`
+      );
+    }
+    return false;
+  }
 }
 
 // Store the proposed changes that are in the current diff view in a global
@@ -477,12 +796,6 @@ async function showDiff(
     );
     return false;
   }
-
-  // Close all other proposed changes tabs - this is necessary because if the
-  // clicks the "Apply changes" button, that button can't pass arguments -- we
-  // can only call the command, and if there are multiple proposed changes tabs,
-  // it won't know which one to apply.
-  await closeAllProposedChangesTabs();
 
   // We need to set some state for if the user clicks on the "Apply changes"
   // button in the diff view title bar. That calls the command
@@ -533,7 +846,7 @@ async function showDiff(
         proposedUri,
       ]);
     }
-    vscode.commands.executeCommand(
+    await vscode.commands.executeCommand(
       "vscode.changes",
       PROPOSED_CHANGES_TAB_LABEL,
       changes
@@ -566,9 +879,44 @@ async function closeAllProposedChangesTabs() {
  * @returns Promise resolving to an array of formatted context block strings
  */
 async function createContextBlocks(
-  refs: readonly vscode.ChatPromptReference[]
+  refs: Readonly<vscode.ChatPromptReference[]>
 ): Promise<string[]> {
   return Promise.all(refs.map(createContextBlock));
+}
+
+async function setAppSubdirDialog(
+  subdir: string | null,
+  callback: (success: boolean) => void
+): Promise<void> {
+  if (subdir === null) {
+    const dialogOptions: vscode.OpenDialogOptions = {
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: "Select App Directory",
+      title: "Select Shiny App Directory",
+    };
+
+    const folderUri = await vscode.window.showOpenDialog(dialogOptions);
+
+    // If user selected a folder, set it as the app subdirectory
+    if (folderUri && folderUri.length > 0) {
+      // Get the selected folder path
+      const workspaceRoot = vscode.workspace.workspaceFolders![0].uri.fsPath;
+      const relativePath = path.relative(workspaceRoot, folderUri[0].fsPath);
+
+      // Set the selected folder as the app subdirectory
+      projectSettings.appSubdir = relativePath;
+      callback(true);
+    }
+  } else {
+    // Strip leading and trailing slashes
+    subdir = subdir.replace(/^\/|\/$/g, "");
+
+    projectSettings.appSubdir = subdir;
+    callback(true);
+  }
+  callback(false);
 }
 
 /**
@@ -583,7 +931,7 @@ async function createContextBlocks(
  * @throws Error if the reference value type is not supported
  */
 async function createContextBlock(
-  ref: vscode.ChatPromptReference
+  ref: Readonly<vscode.ChatPromptReference>
 ): Promise<string> {
   const value = ref.value;
 

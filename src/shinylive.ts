@@ -2,7 +2,7 @@ import { isBinary } from "istextorbinary";
 import * as lzstring from "lz-string";
 import * as path from "path";
 import * as vscode from "vscode";
-import { isShinyAppUsername } from "./extension";
+import { isShinyAppFilename } from "./extension";
 
 type ShinyliveFile = {
   name: string;
@@ -250,18 +250,18 @@ export async function shinyliveCreateFromExplorer(
     // Push shiny app file to the start of the list
     .sort((a, b) => {
       const aIsAppFile =
-        isShinyAppUsername(a.path, "python") || isShinyAppUsername(a.path, "r");
+        isShinyAppFilename(a.path, "python") || isShinyAppFilename(a.path, "r");
 
       const bIsAppFile =
-        isShinyAppUsername(b.path, "python") || isShinyAppUsername(b.path, "r");
+        isShinyAppFilename(b.path, "python") || isShinyAppFilename(b.path, "r");
 
       // A first (-1) or B first (+1) or same
       return -aIsAppFile + +bIsAppFile;
     });
 
   const primaryFile = allFilesSorted[0].path;
-  const isPythonApp = isShinyAppUsername(primaryFile, "python");
-  const isRApp = isShinyAppUsername(primaryFile, "r");
+  const isPythonApp = isShinyAppFilename(primaryFile, "python");
+  const isRApp = isShinyAppFilename(primaryFile, "r");
 
   if (!isPythonApp && !isRApp) {
     vscode.window.showErrorMessage(

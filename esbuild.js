@@ -19,7 +19,7 @@ const esbuildProblemMatcherPlugin = {
 
     build.onStart(() => {
       console.log(
-        `[${watch ? "watch " : ""}${new Date().toISOString()}] build ${entryPoints.join(
+        `[${watch ? "watch " : ""}${new Date().toISOString()}] build started ${entryPoints.join(
           ", "
         )}`
       );
@@ -32,7 +32,11 @@ const esbuildProblemMatcherPlugin = {
           `    ${location.file}:${location.line}:${location.column}:`
         );
       });
-      console.log("[watch] build finished");
+      console.log(
+        `[${watch ? "watch " : ""}${new Date().toISOString()}] build finished ${entryPoints.join(
+          ", "
+        )}`
+      );
     });
   },
 };

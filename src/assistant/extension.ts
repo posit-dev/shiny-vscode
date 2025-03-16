@@ -237,12 +237,17 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     const activeFileReference = request.references.find(
       (ref) => ref.id === "vscode.implicit.viewport"
     );
-    const activeFileRelativePath = activeFileReference
+    let activeFileRelativePath = activeFileReference
       ? path.relative(
           vscode.workspace.workspaceFolders![0].uri.fsPath,
           (activeFileReference.value as vscode.Location).uri.fsPath
         )
       : undefined;
+
+    // Prepend "./" if the path doesn't contain a subdir.
+    if (activeFileRelativePath && !activeFileRelativePath.match("/")) {
+      activeFileRelativePath = "./" + activeFileRelativePath;
+    }
 
     if (activeFileRelativePath) {
       // Check that the active file is a Shiny app file

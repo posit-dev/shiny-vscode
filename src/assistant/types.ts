@@ -10,6 +10,18 @@ export type FileContent = {
   type: "text" | "binary";
 };
 
+export type FileSetDiff = {
+  format: "diff";
+  files: FileContent[];
+};
+
+export type FileSetComplete = {
+  format: "complete";
+  files: FileContent[];
+};
+
+export type FileSet = FileSetDiff | FileSetComplete;
+
 export type JSONifiable =
   | string
   | number

@@ -109,7 +109,7 @@ tools.push({
       defaultDir: {
         type: "string",
         description:
-          'Default subdirectory to display to the user. For example, "/".',
+          'Default subdirectory to display to the user. For example, "./" or "myapp/". It should not have a leading slash.',
       },
     },
     required: ["language"],
@@ -124,7 +124,7 @@ tools.push({
     opts: InvokeOptions
   ): Promise<string> => {
     let defaultDirString: string;
-    if (defaultDir === "/") {
+    if (defaultDir === "./") {
       defaultDirString = "top level directory";
     } else {
       defaultDirString = `\`${defaultDir}\` subdirectory`;

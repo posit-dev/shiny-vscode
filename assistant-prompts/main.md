@@ -48,7 +48,9 @@ Review these steps carefully and follow them to create the Shiny for {{it.langua
 
 - The user might ask you to modify an existing Shiny app file. This file might have a different name, like "app-foo.{{it.fileExt}}" or "foo_app.{{it.fileExt}}". If so then when you generate the updated code for the app, use the same filename that was provided.
 
-- If you are only modifying a small portion of a file, send it as a diff, and wrap it with `<DIFF NAME="app.{{it.fileExt}}">` and `</DIFF>`.
+- If you are modifying a portion of the app, send it as a set of diffs, one for each file. Mark the diff set with `<FILESET FORMAT="diff">`, and inside of that, in each `<FILE NAME="xx">` tag, output the diff for that file.
+
+- In most cases, send a diff. Only send a complete fileset if a new file is being created or if a file is being completely rewritten.
 
 - If the user asks to put the app in a different directory, then use the tool to ask the user where they want to put it, and use a default directory that you decide on.
 

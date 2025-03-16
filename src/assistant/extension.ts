@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
+import { applyFileSetDiff } from "./diff";
 import {
   inferFileType,
   langNameToFileExt,
@@ -12,7 +13,7 @@ import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
 import { tools, wrapToolInvocationResult } from "./tools";
-import type { FileContentJson } from "./types";
+import type { FileContent, FileSet } from "./types";
 import { createPromiseWithStatus } from "./utils";
 
 const proposedFilePreviewProvider = new ProposedFilePreviewProvider();
@@ -207,7 +208,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // ========================================================================
     // Tell the user they need a workspace folder
     // ========================================================================
-    if (!vscode.workspace.workspaceFolders?.[0]) {
+    let workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
       stream.markdown(
         "You currently do not have an active workspace folder. You need an active workspace folder to use Shiny Assistant.\n\n"
       );
@@ -220,7 +222,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       });
 
       await hasContinuedAfterWorkspaceFolderSuggestion;
-      if (!vscode.workspace.workspaceFolders?.[0]) {
+      workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
         stream.markdown(
           "I'm sorry, I can't continue without an active workspace folder.\n\n"
         );
@@ -229,6 +232,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
         return chatResult;
       }
     }
+
+    const workspaceFolderUri = workspaceFolder.uri;
 
     // ========================================================================
     // If the currently-active file is an R or Python file, set the project
@@ -239,7 +244,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     );
     let activeFileRelativePath = activeFileReference
       ? path.relative(
-          vscode.workspace.workspaceFolders![0].uri.fsPath,
+          workspaceFolderUri.fsPath,
           (activeFileReference.value as vscode.Location).uri.fsPath
         )
       : undefined;
@@ -416,7 +421,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       // Stream the response
       const toolCalls: vscode.LanguageModelToolCallPart[] = [];
       const tagProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
-      let fileSet: FileContentJson[] | null = null;
+      let fileSet: FileSet | null = null;
       // States of a state machine to handle the response
       let state: "TEXT" | "FILESET" | "FILE" = "TEXT";
       // When processing text in the FILE state, the first chunk of text may have
@@ -448,9 +453,18 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               if (part.kind === "open") {
                 if (part.name === "FILESET") {
                   state = "FILESET";
-                  // TODO: handle multiple shiny apps? Or just error?
-                  fileSet = [];
+                  // TODO: handle multiple filesets? Or just error?
                   responseContainsFileSet = true;
+
+                  let format: "complete" | "diff" = "complete";
+                  if (part.attributes["FORMAT"] === "diff") {
+                    format = "diff";
+                  }
+
+                  fileSet = {
+                    format: format,
+                    files: [],
+                  };
                 } else if (part.name === "FILE") {
                   console.log(
                     "Parse error: <FILE> tag found, but not in <FILESET> block."
@@ -476,34 +490,52 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               if (part.kind === "open") {
                 if (part.name === "FILESET") {
                   console.log(
-                    "Parse error: Nested <FILESET> tags are not supported."
+                    `Parse error: <FILESET> cannot have child tag <${part.name}>.`
                   );
                 } else if (part.name === "FILE") {
                   state = "FILE";
                   fileStateProcessedFirstChunk = false;
 
-                  // TODO: Handle case when NAME attribute is missing
-                  fileSet!.push({
+                  if (!part.attributes["NAME"]) {
+                    console.log(
+                      "Parse error: <FILE> tag found without NAME attribute."
+                    );
+                  }
+                  fileSet!.files.push({
                     name: part.attributes["NAME"],
                     content: "",
+                    type: "text",
                   });
                   stream.markdown("\n### " + part.attributes["NAME"] + "\n");
                   stream.markdown("```");
-                  const fileType = inferFileType(part.attributes["NAME"]);
-                  if (fileType !== "text") {
-                    stream.markdown(fileType);
+                  if (fileSet!.format === "diff") {
+                    stream.markdown("diff");
+                  } else {
+                    const fileType = inferFileType(part.attributes["NAME"]);
+                    if (fileType !== "text") {
+                      stream.markdown(fileType);
+                    }
                   }
                   stream.markdown("\n");
                 }
               } else if (part.kind === "close") {
                 if (part.name === "FILESET") {
                   if (fileSet) {
-                    // Render the file tree control at a base location
+                    // Add files to the proposedFilePreviewProvider
                     proposedFilePreviewCounter++;
                     const proposedFilesPrefixDir =
                       "/app-preview-" + proposedFilePreviewCounter;
+
+                    if (fileSet.format === "diff") {
+                      fileSet = await applyFileSetDiff(
+                        fileSet,
+                        workspaceFolderUri.fsPath
+                      );
+                    }
+
+                    // TODO: Remove question mark from proposedFilePreviewProvider
                     proposedFilePreviewProvider?.addFiles(
-                      fileSet,
+                      fileSet.files,
                       proposedFilesPrefixDir
                     );
 
@@ -512,7 +544,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                       command: "shiny.assistant.showDiff",
                       arguments: [
                         fileSet,
-                        vscode.workspace.workspaceFolders?.[0],
+                        workspaceFolderUri,
                         proposedFilesPrefixDir,
                       ],
                     });
@@ -520,7 +552,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                     stream.button({
                       title: "Apply changes",
                       command: "shiny.assistant.saveFilesToWorkspace",
-                      arguments: [fileSet, true],
+                      arguments: [fileSet.files, true],
                     });
 
                     stream.markdown(
@@ -553,7 +585,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               }
               stream.markdown(part.text);
               // Add text to the current file content
-              fileSet![fileSet!.length - 1].content += part.text;
+              fileSet!.files[fileSet!.files.length - 1].content += part.text;
             } else if (part.type === "tag") {
               if (part.kind === "open") {
                 console.log(
@@ -681,17 +713,17 @@ async function applyChangesToWorkspaceFromDiffView(): Promise<boolean> {
  * or creating untitled editors (if no workspace).
  * Returns true if all operations are successful, false otherwise.
  *
- * @param newFiles - The files to handle
+ * @param files - The files to handle
  * @param closeProposedChangesTabs - Whether to close the tabs with proposed files.
  * @returns boolean indicating if all operations were successful
  */
 async function saveFilesToWorkspace(
-  newFiles: FileContentJson[],
+  files: FileContent[],
   closeProposedChangesTabs: boolean = false
 ): Promise<boolean> {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  const workspaceFolderUri = vscode.workspace.workspaceFolders?.[0]?.uri;
 
-  if (!workspaceFolder) {
+  if (!workspaceFolderUri) {
     vscode.window.showErrorMessage(
       "You currently do not have an active workspace folder. Please open a workspace folder and try again."
     );
@@ -708,8 +740,14 @@ async function saveFilesToWorkspace(
     const workspaceEdit = new vscode.WorkspaceEdit();
 
     // If we have a workspace, save files to disk.
-    for (const newFile of newFiles) {
-      const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, newFile.name);
+    for (const file of files) {
+      if (file.type === "binary") {
+        vscode.window.showErrorMessage(
+          `Failed to handle file ${file.name}: Binary files are not supported at this time.`
+        );
+        return false;
+      }
+      const fileUri = vscode.Uri.joinPath(workspaceFolderUri, file.name);
 
       try {
         // Try to open existing file. If it exists, then replace its content.
@@ -717,14 +755,14 @@ async function saveFilesToWorkspace(
         const document = await vscode.workspace.openTextDocument(fileUri);
 
         // Replace the content only if it's different.
-        if (document.getText() !== newFile.content) {
+        if (document.getText() !== file.content) {
           workspaceEdit.set(fileUri, [
             vscode.TextEdit.replace(
               new vscode.Range(
                 document.positionAt(0),
                 document.positionAt(document.getText().length)
               ),
-              newFile.content
+              file.content
             ),
           ]);
           changedUris.push(fileUri);
@@ -733,7 +771,7 @@ async function saveFilesToWorkspace(
         // File does not exist; create it.
         workspaceEdit.createFile(fileUri, {
           overwrite: false,
-          contents: Buffer.from(newFile.content, "utf-8"),
+          contents: Buffer.from(file.content, "utf-8"),
         });
         createdUris.push(fileUri);
       }
@@ -779,7 +817,7 @@ async function saveFilesToWorkspace(
 // Store the proposed changes that are in the current diff view in a global
 // variable, so that they can be saved when the user clicks the "Apply changes"
 // button.
-let currentDiffViewFiles: FileContentJson[] = [];
+let currentDiffViewFiles: FileContent[] = [];
 
 /**
  * Shows a diff view with the proposed changes.
@@ -790,11 +828,11 @@ let currentDiffViewFiles: FileContentJson[] = [];
  * @returns boolean indicating if the operation was successful
  */
 async function showDiff(
-  proposedFiles: FileContentJson[],
-  workspaceFolder: vscode.WorkspaceFolder | undefined,
+  proposedFiles: FileSet,
+  workspaceFolderUri: vscode.Uri | undefined,
   proposedFilesPrefixDir: string
 ): Promise<boolean> {
-  if (!workspaceFolder) {
+  if (!workspaceFolderUri) {
     // TODO: Better handling here
     vscode.window.showErrorMessage(
       "You currently do not have an active workspace folder. Please open a workspace folder and try again."
@@ -807,17 +845,19 @@ async function showDiff(
   // shiny.assistant.applyChangesToWorkspaceFromDiffView, but we can't pass
   // arguments to that command. So we'll save the new files in a global
   // variable.
-  currentDiffViewFiles = proposedFiles;
+  currentDiffViewFiles = proposedFiles.files;
+
+  // TODO: Error on binary files
 
   try {
     // Add files to the preview provider
-    proposedFilePreviewProvider?.addFiles(proposedFiles);
+    proposedFilePreviewProvider?.addFiles(proposedFiles.files);
 
     const changes: Array<[vscode.Uri, vscode.Uri, vscode.Uri]> = [];
 
-    for (const proposedFile of proposedFiles) {
+    for (const proposedFile of proposedFiles.files) {
       const existingUri = vscode.Uri.joinPath(
-        workspaceFolder.uri,
+        workspaceFolderUri,
         proposedFile.name
       );
       let sourceUri: vscode.Uri;

@@ -393,7 +393,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     const options: vscode.LanguageModelChatRequestOptions = {
       tools: tools,
     };
-    let responseContainsShinyApp = false;
+    let responseContainsFileSet = false;
     // Collect all the raw text from the LLM. This will include the text
     // spanning multiple tool calls, if present.
     let rawResponseText = "";
@@ -410,10 +410,10 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
       // Stream the response
       const toolCalls: vscode.LanguageModelToolCallPart[] = [];
-      const tagProcessor = new StreamingTagProcessor(["SHINYAPP", "FILE"]);
-      let shinyAppFiles: FileContentJson[] | null = null;
+      const tagProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
+      let fileSet: FileContentJson[] | null = null;
       // States of a state machine to handle the response
-      let state: "TEXT" | "SHINYAPP" | "FILE" = "TEXT";
+      let state: "TEXT" | "FILESET" | "FILE" = "TEXT";
       // When processing text in the FILE state, the first chunk of text may have
       // a leading \n that needs to be removed;
       let fileStateProcessedFirstChunk = false;
@@ -441,14 +441,14 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               stream.markdown(part.text);
             } else if (part.type === "tag") {
               if (part.kind === "open") {
-                if (part.name === "SHINYAPP") {
-                  state = "SHINYAPP";
+                if (part.name === "FILESET") {
+                  state = "FILESET";
                   // TODO: handle multiple shiny apps? Or just error?
-                  shinyAppFiles = [];
-                  responseContainsShinyApp = true;
+                  fileSet = [];
+                  responseContainsFileSet = true;
                 } else if (part.name === "FILE") {
                   console.log(
-                    "Parse error: <FILE> tag found, but not in <SHINYAPP> block."
+                    "Parse error: <FILE> tag found, but not in <FILESET> block."
                   );
                 }
               } else if (part.kind === "close") {
@@ -459,26 +459,26 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
             } else {
               console.log("Parse error: Unexpected part type in TEXT state.");
             }
-          } else if (state === "SHINYAPP") {
+          } else if (state === "FILESET") {
             if (part.type === "text") {
               // console.log(
-              //   "Parse error: Unexpected text in SHINYAPP state.",
+              //   "Parse error: Unexpected text in FILESET state.",
               //   part.text,
               //   "."
               // );
               stream.markdown(part.text);
             } else if (part.type === "tag") {
               if (part.kind === "open") {
-                if (part.name === "SHINYAPP") {
+                if (part.name === "FILESET") {
                   console.log(
-                    "Parse error: Nested <SHINYAPP> tags are not supported."
+                    "Parse error: Nested <FILESET> tags are not supported."
                   );
                 } else if (part.name === "FILE") {
                   state = "FILE";
                   fileStateProcessedFirstChunk = false;
 
                   // TODO: Handle case when NAME attribute is missing
-                  shinyAppFiles!.push({
+                  fileSet!.push({
                     name: part.attributes["NAME"],
                     content: "",
                   });
@@ -491,14 +491,14 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                   stream.markdown("\n");
                 }
               } else if (part.kind === "close") {
-                if (part.name === "SHINYAPP") {
-                  if (shinyAppFiles) {
+                if (part.name === "FILESET") {
+                  if (fileSet) {
                     // Render the file tree control at a base location
                     proposedFilePreviewCounter++;
                     const proposedFilesPrefixDir =
                       "/app-preview-" + proposedFilePreviewCounter;
                     proposedFilePreviewProvider?.addFiles(
-                      shinyAppFiles,
+                      fileSet,
                       proposedFilesPrefixDir
                     );
 
@@ -506,7 +506,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                       title: "View changes as diff",
                       command: "shiny.assistant.showDiff",
                       arguments: [
-                        shinyAppFiles,
+                        fileSet,
                         vscode.workspace.workspaceFolders?.[0],
                         proposedFilesPrefixDir,
                       ],
@@ -515,7 +515,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                     stream.button({
                       title: "Apply changes",
                       command: "shiny.assistant.saveFilesToWorkspace",
-                      arguments: [shinyAppFiles, true],
+                      arguments: [fileSet, true],
                     });
 
                     stream.markdown(
@@ -528,13 +528,13 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                   state = "TEXT";
                 } else {
                   console.log(
-                    "Parse error: Unexpected closing tag in SHINYAPP state."
+                    "Parse error: Unexpected closing tag in FILESET state."
                   );
                 }
               }
             } else {
               console.log(
-                "Parse error: Unexpected part type in SHINYAPP state."
+                "Parse error: Unexpected part type in FILESET state."
               );
             }
           } else if (state === "FILE") {
@@ -548,7 +548,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               }
               stream.markdown(part.text);
               // Add text to the current file content
-              shinyAppFiles![shinyAppFiles!.length - 1].content += part.text;
+              fileSet![fileSet!.length - 1].content += part.text;
             } else if (part.type === "tag") {
               if (part.kind === "open") {
                 console.log(
@@ -557,7 +557,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               } else if (part.kind === "close") {
                 if (part.name === "FILE") {
                   stream.markdown("```");
-                  state = "SHINYAPP";
+                  state = "FILESET";
                 } else {
                   console.log(
                     "Parse error: Unexpected closing tag in FILE state."
@@ -626,7 +626,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     await runWithTools();
 
     chatResult.metadata.rawResponseText = rawResponseText;
-    if (responseContainsShinyApp) {
+    if (responseContainsFileSet) {
       chatResult.metadata.followups.push(
         "Install the packages needed for my app."
       );

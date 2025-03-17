@@ -534,6 +534,19 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                       "/app-preview-" + proposedFilePreviewCounter;
 
                     if (fileSet.format === "diff") {
+                      // For each file, if it ends with a trailing "\n", remove
+                      // it. This is because the LLM usually puts a "\n" before
+                      // "</FILE>", but that "\n" shouldn't actually be part of
+                      // the diff context.
+                      for (const file of fileSet.files) {
+                        if (
+                          file.type === "text" &&
+                          file.content.endsWith("\n")
+                        ) {
+                          file.content = file.content.replace(/\n$/, "");
+                        }
+                      }
+
                       fileSet = await applyFileSetDiff(
                         fileSet,
                         workspaceFolderUri.fsPath

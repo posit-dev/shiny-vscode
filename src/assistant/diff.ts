@@ -2,6 +2,38 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type { FileContent, FileSetComplete, FileSetDiff } from "./types";
 
+/*
+This is what the diff format looks like:
+---------------------------
+@@ ... @@
+ from shiny import App, ui, render
+
+ app_ui = ui.page_fluid(
+-    ui.output_text("message")
++    ui.output_code("greeting")
+     )
+
+ def server(input, output, session):
+-    @render.text
+-    def message():
+-        return "Hello Shiny!"
++    @render.code
++    def greeting():
++        return "Hello Shiny!"
+
+ app = App(app_ui, server)
+---------------------------
+
+It is similar to aunified diff, but lacks line numbers.
+
+One limitation to this diff format is that if there are multiple matches for the
+pattern (starting after the previous hunk), then it will always be the first one
+that is replaced, even if the actual target was supposed to be a later match.
+This is a limitation of the diff format. It would be better to require line
+numbers like a traditional unified diff, but unfortunately, LLMs have trouble
+generating accurate line numbers.
+*/
+
 /**
  * Applies a diff string to an original string.
  *
@@ -14,7 +46,14 @@ import type { FileContent, FileSetComplete, FileSetDiff } from "./types";
  * @returns The resulting string after applying the diff
  */
 export function applyDiff(original: string, diff: string): string {
+  if (diff === "") {
+    return original;
+  }
+
   const hunks = parseDiff(diff);
+  if (hunks.length === 0) {
+    return original;
+  }
 
   // Split the original text into lines
   const originalLines = original.split("\n");
@@ -25,39 +64,73 @@ export function applyDiff(original: string, diff: string): string {
 
   // Process each hunk in order
   for (const hunk of hunks) {
-    // Copy lines up to the start of the current hunk
-    while (currentLine < hunk.origStart - 1) {
-      resultLines.push(originalLines[currentLine]);
-      currentLine++;
+    // Extract pattern to search for (context + removed lines)
+    const searchPattern: string[] = [];
+    // Extract replacement (context + added lines)
+    const replacement: string[] = [];
+
+    // Build the search pattern and replacement
+    for (const line of hunk) {
+      if (line.type === "context" || line.type === "remove") {
+        searchPattern.push(line.content);
+      }
+
+      if (line.type === "context" || line.type === "add") {
+        replacement.push(line.content);
+      }
     }
 
-    // Verify that the result line count matches the expected new line start
-    // The hunk.newStart is 1-indexed, but resultLines.length is 0-indexed
-    if (resultLines.length + 1 !== hunk.newStart) {
-      throw new Error(
-        `Line number mismatch: expected new line ${hunk.newStart}, but got ${
-          resultLines.length + 1
-        }`
-      );
-    }
+    // If we have a search pattern, try to find it in the original
+    if (searchPattern.length > 0) {
+      let patternFound = false;
 
-    // Process the lines in the hunk
-    for (const line of hunk.lines) {
-      switch (line.type) {
-        case "context":
-          // Context lines are present in both original and new versions
+      // Start searching from the current position
+      for (
+        let i = currentLine;
+        i <= originalLines.length - searchPattern.length;
+        i++
+      ) {
+        let found = true;
+        for (let j = 0; j < searchPattern.length; j++) {
+          if (originalLines[i + j] !== searchPattern[j]) {
+            found = false;
+            break;
+          }
+        }
+
+        if (found) {
+          // Copy lines up to the pattern
+          while (currentLine < i) {
+            resultLines.push(originalLines[currentLine]);
+            currentLine++;
+          }
+
+          // Add the replacement lines
+          for (const line of replacement) {
+            resultLines.push(line);
+          }
+
+          // Skip past the pattern in the original
+          currentLine += searchPattern.length;
+          patternFound = true;
+          break;
+        }
+      }
+
+      if (!patternFound) {
+        console.log(
+          `Could not find pattern in hunk: ${searchPattern.join("\n")}`
+        );
+        console.log(`Original: ${originalLines.join("\n")}`);
+        throw new DiffApplicationError("Could not find pattern to apply hunk");
+      }
+    } else if (hunk.length > 0) {
+      // If there's no search pattern but we have added lines, just add them at
+      // the current position
+      for (const line of hunk) {
+        if (line.type === "add") {
           resultLines.push(line.content);
-          currentLine++;
-          break;
-        case "add":
-          // Added lines are only in the new version
-          resultLines.push(line.content);
-          break;
-        case "remove":
-          // Removed lines are only in the original version
-          // Skip them in the result, but advance the current line
-          currentLine++;
-          break;
+        }
       }
     }
   }
@@ -88,7 +161,17 @@ export async function applyDiffToFile(
   const originalFile = (
     await vscode.workspace.fs.readFile(vscode.Uri.file(fileName))
   ).toString();
-  return applyDiff(originalFile, diff);
+  try {
+    return applyDiff(originalFile, diff);
+  } catch (error) {
+    // TODO: Don't throw error? Maybe stream a message
+    if (error instanceof DiffApplicationError) {
+      throw new Error(
+        `Error applying diff to file ${fileName}: ${error.message}.\n\nDid you include the file as context?`
+      );
+    }
+    throw error;
+  }
 }
 
 /**
@@ -114,7 +197,7 @@ export async function applyFileSetDiff(
   for (const file of fileSet.files) {
     // Error on binary
     if (file.type === "binary") {
-      throw new Error(`Diff for binary file ${file.name} is not supported.`);
+      throw new BinaryFileDiffError(file.name);
     }
 
     const newContent = await applyDiffToFile(
@@ -137,18 +220,35 @@ export async function applyFileSetDiff(
  *
  * A hunk is a section of a diff that represents a contiguous set of changes.
  */
-type Hunk = {
-  /** The 1-indexed line number where the hunk starts in the original file */
-  origStart: number;
-  /** The number of lines from the original file included in this hunk */
-  origLength: number;
-  /** The 1-indexed line number where the hunk starts in the new file */
-  newStart: number;
-  /** The number of lines in the new file after applying this hunk */
-  newLength: number;
-  /** The lines in the hunk, each with a type and content */
-  lines: Array<{ type: "add" | "remove" | "context"; content: string }>;
-};
+type Hunk = Array<DiffLine>;
+
+/**
+ * Represents a single line in a diff.
+ *
+ * Each line has a type indicating whether it's being added, removed, or is context,
+ * and the content of the line (without the leading +, -, or space character).
+ */
+type DiffLine = { type: "add" | "remove" | "context"; content: string };
+
+/**
+ * Error thrown when attempting to apply a diff to a binary file.
+ */
+export class BinaryFileDiffError extends Error {
+  constructor(fileName: string) {
+    super(`Diff for binary file ${fileName} is not supported.`);
+    this.name = "BinaryFileDiffError";
+  }
+}
+
+/**
+ * Error thrown when a diff pattern cannot be found in the original text.
+ */
+export class DiffApplicationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DiffApplicationError";
+  }
+}
 
 /**
  * Parses a unified diff string into an array of hunks.
@@ -166,7 +266,7 @@ function parseDiff(diff: string): Array<Hunk> {
   let currentHunk: Hunk | null = null;
 
   // Sometimes the LLM will generate a diff with headers that show the filename.
-  // If present, just remove them.
+  // If present, just ignore them.
   // For example:
   // --- app/ui.R
   // +++ app/ui.R
@@ -180,26 +280,14 @@ function parseDiff(diff: string): Array<Hunk> {
   }
 
   for (const line of lines) {
-    const newHunkMatch = line.match(/^@@ -(\d+)(,(\d+))? \+(\d+)(,(\d+))? @@$/);
-
-    if (newHunkMatch) {
+    if (line === "@@ ... @@") {
       if (currentHunk) {
         // Finished the previous hunk
         hunks.push(currentHunk);
       }
-      // Extract the numbers from the match
-      const origStart = parseInt(newHunkMatch[1], 10);
-      const origLength = newHunkMatch[3] ? parseInt(newHunkMatch[3], 10) : 1;
-      const newStart = parseInt(newHunkMatch[4], 10);
-      const newLength = newHunkMatch[6] ? parseInt(newHunkMatch[6], 10) : 1;
 
-      currentHunk = {
-        origStart,
-        origLength,
-        newStart,
-        newLength,
-        lines: [],
-      };
+      currentHunk = [];
+      //
     } else if (currentHunk) {
       // Add a line to the current hunk
       let lineType: "add" | "remove" | "context";
@@ -219,14 +307,14 @@ function parseDiff(diff: string): Array<Hunk> {
           lineType = "context";
           break;
         default:
-          throw new Error(`Unknown line type: ${line[0]}`);
+          throw new DiffApplicationError(`Unknown line type: ${line[0]}`);
       }
 
       const content = line.slice(1);
-      currentHunk.lines.push({ type: lineType, content });
+      currentHunk.push({ type: lineType, content });
     } else {
       // Error because we're not in a hunk and we're not starting one
-      throw new Error(`Invalid diff format: ${line}`);
+      throw new DiffApplicationError(`Invalid diff format: ${line}`);
     }
   }
   if (currentHunk) hunks.push(currentHunk);

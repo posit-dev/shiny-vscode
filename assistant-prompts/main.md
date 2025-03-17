@@ -50,6 +50,39 @@ Review these steps carefully and follow them to create the Shiny for {{it.langua
 
 - If you are modifying a portion of the app, send it as a set of diffs, one for each file. Mark the diff set with `<FILESET FORMAT="diff">`, and inside of that, in each `<FILE NAME="xx">` tag, output the diff for that file.
 
+- The diff format should be similar to a unified diff, but with some small changes, as shown in the example below:
+
+```
+<FILE NAME="foo/app.py>
+@@ ... @@
+ from shiny import App, ui, render
+ 
+ app_ui = ui.page_fluid(
+-    ui.output_text("message")
++    ui.output_code("greeting")
+ )
+ 
+ def server(input, output, session):
+-    @render.text
+-    def message():
+-        return "Hello Shiny!"
++    @render.code
++    def greeting():
++        return "Hello Shiny!"
+ 
+ app = App(app_ui, server)
+</FILE>
+```
+
+  - The format should be like the output `diff -U1`.
+  - For the diffs, include one line of context above and below.
+  - Do NOT include line numbers for each hunk. Instead, use `...`, so each hunk should start with the line `@@ ... @@`. The user's diff tool does not need line numbers to apply the patch.
+  - At the end of the last hunk, just stop and add the closing `</FILE>` tag. Do NOT add `@@ ... @@` with empty content.
+  - The context lines must have a leading space, " ". You must include this leading space.
+  - Whitespace is important. Use correct, exact indentation.
+  - If one file is provided as a diff, you must provide all files as diffs.
+  - If you change function, loop, or other block, replace the entire block.
+
 - In most cases, send a diff. Only send a complete fileset if a new file is being created or if a file is being completely rewritten.
 
 - If the user asks to put the app in a different directory, then use the tool to ask the user where they want to put it, and use a default directory that you decide on.

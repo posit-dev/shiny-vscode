@@ -16,6 +16,7 @@
   "files.insertFinalNewline": true,
   "[markdown]": {
     "editor.formatOnSave": false,
+    "files.trimTrailingWhitespace": false
   },
   "[javascript]": {
     "editor.formatOnSave": true,

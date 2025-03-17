@@ -240,7 +240,12 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // language to that language.
     // ========================================================================
     const activeFileReference = request.references.find(
-      (ref) => ref.id === "vscode.implicit.viewport"
+      (ref) =>
+        // This is when a file open in the editor
+        (ref.id === "vscode.implicit.viewport" ||
+          // This when a file is open with lines selected
+          ref.id === "vscode.implicit.selection") &&
+        ref.value instanceof vscode.Location
     );
     let activeFileRelativePath = activeFileReference
       ? path.relative(
@@ -387,8 +392,10 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     }
 
     // Construct a user message from the <context> blocks for the references.
-    const requestReferenceContextBlocks: string[] =
-      await createContextBlocks(requestReferences);
+    const requestReferenceContextBlocks: string[] = await createContextBlocks(
+      requestReferences,
+      workspaceFolderUri
+    );
     messages.push(
       vscode.LanguageModelChatMessage.User(
         requestReferenceContextBlocks.join("\n")
@@ -915,20 +922,6 @@ async function closeAllProposedChangesTabs() {
   }
 }
 
-/**
- * Creates `<context>` blocks for an array of chat prompt references. Each
- * reference is converted into a formatted string block containing relevant
- * context information.
- *
- * @param refs - Array of ChatPromptReference objects to process
- * @returns Promise resolving to an array of formatted context block strings
- */
-async function createContextBlocks(
-  refs: Readonly<vscode.ChatPromptReference[]>
-): Promise<string[]> {
-  return Promise.all(refs.map(createContextBlock));
-}
-
 async function setAppSubdirDialog(
   subdir: string | null,
   callback: (success: boolean) => void
@@ -965,6 +958,23 @@ async function setAppSubdirDialog(
 }
 
 /**
+ * Creates `<context>` blocks for an array of chat prompt references. Each
+ * reference is converted into a formatted string block containing relevant
+ * context information.
+ *
+ * @param refs - Array of ChatPromptReference objects to process
+ * @returns Promise resolving to an array of formatted context block strings
+ */
+async function createContextBlocks(
+  refs: Readonly<vscode.ChatPromptReference[]>,
+  workspaceFolderUri: vscode.Uri
+): Promise<string[]> {
+  return Promise.all(
+    refs.map((ref) => createContextBlock(ref, workspaceFolderUri))
+  );
+}
+
+/**
  * Creates a single `<context>` block for a chat prompt reference. Handles
  * different types of references:
  * - Uri: Includes full file contents
@@ -976,27 +986,33 @@ async function setAppSubdirDialog(
  * @throws Error if the reference value type is not supported
  */
 async function createContextBlock(
-  ref: Readonly<vscode.ChatPromptReference>
+  ref: Readonly<vscode.ChatPromptReference>,
+  workspaceFolderUri: vscode.Uri
 ): Promise<string> {
   const value = ref.value;
 
   if (value instanceof vscode.Uri) {
+    const relativePath = path.relative(workspaceFolderUri.fsPath, value.fsPath);
     const fileContents = (await vscode.workspace.fs.readFile(value)).toString();
     return `
 <context>
-${value.fsPath}:
+${relativePath}:
 \`\`\`
 ${fileContents}
 \`\`\`
 </context>
 `;
   } else if (value instanceof vscode.Location) {
+    const relativePath = path.relative(
+      workspaceFolderUri.fsPath,
+      value.uri.fsPath
+    );
     const rangeText = (
       await vscode.workspace.openTextDocument(value.uri)
     ).getText(value.range);
     return `
 <context>
-${value.uri.fsPath}:${value.range.start.line + 1}-${value.range.end.line + 1}:
+${relativePath}:${value.range.start.line + 1}-${value.range.end.line + 1}:
 \`\`\`
 ${rangeText}
 \`\`\`

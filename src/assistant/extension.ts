@@ -245,7 +245,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
         (ref.id === "vscode.implicit.viewport" ||
           // This when a file is open with lines selected
           ref.id === "vscode.implicit.selection") &&
-        ref.value instanceof vscode.Location
+        ref.value instanceof vscode.Location &&
+        ref.value.uri.scheme === "file"
     );
     let activeFileRelativePath = activeFileReference
       ? path.relative(

@@ -34,6 +34,17 @@ numbers like a traditional unified diff, but unfortunately, LLMs have trouble
 generating accurate line numbers.
 */
 
+export type DiffResult = {
+  status: "success";
+  value: string;
+};
+
+export type DiffError = {
+  status: "error";
+  message: string;
+  extra: Record<string, string>;
+};
+
 /**
  * Applies a diff string to an original string.
  *
@@ -45,14 +56,17 @@ generating accurate line numbers.
  * @param diff The diff string to apply
  * @returns The resulting string after applying the diff
  */
-export function applyDiff(original: string, diff: string): string {
+export function applyDiff(
+  original: string,
+  diff: string
+): DiffResult | DiffError {
   if (diff === "") {
-    return original;
+    return { status: "success", value: original };
   }
 
   const hunks = parseDiff(diff);
-  if (hunks.length === 0) {
-    return original;
+  if (!(hunks instanceof Array)) {
+    return hunks;
   }
 
   // Split the original text into lines
@@ -122,7 +136,11 @@ export function applyDiff(original: string, diff: string): string {
           `Could not find pattern in hunk: ${searchPattern.join("\n")}`
         );
         console.log(`Original: ${originalLines.join("\n")}`);
-        throw new DiffApplicationError("Could not find pattern to apply hunk");
+        return {
+          status: "error",
+          message: "Could not find pattern to apply in hunk",
+          extra: { pattern: searchPattern.join("\n") },
+        };
       }
     } else if (hunk.length > 0) {
       // If there's no search pattern but we have added lines, just add them at
@@ -142,7 +160,7 @@ export function applyDiff(original: string, diff: string): string {
   }
 
   // Join the result lines back into a single string
-  return resultLines.join("\n");
+  return { status: "success", value: resultLines.join("\n") };
 }
 
 /**
@@ -157,21 +175,16 @@ export function applyDiff(original: string, diff: string): string {
 export async function applyDiffToFile(
   diff: string,
   fileName: string
-): Promise<string> {
-  const originalFile = (
+): Promise<DiffResult | DiffError> {
+  const originalFileContent = (
     await vscode.workspace.fs.readFile(vscode.Uri.file(fileName))
   ).toString();
-  try {
-    return applyDiff(originalFile, diff);
-  } catch (error) {
-    // TODO: Don't throw error? Maybe stream a message
-    if (error instanceof DiffApplicationError) {
-      throw new Error(
-        `Error applying diff to file ${fileName}: ${error.message}.\n\nDid you include the file as context?`
-      );
-    }
-    throw error;
+
+  const result = applyDiff(originalFileContent, diff);
+  if (result.status === "error") {
+    result.extra.fileName = fileName;
   }
+  return result;
 }
 
 /**
@@ -189,30 +202,40 @@ export async function applyDiffToFile(
 export async function applyFileSetDiff(
   fileSet: FileSetDiff,
   originalDir: string
-): Promise<FileSetComplete> {
+): Promise<{ fileSet: FileSetComplete; diffErrors: Array<DiffError> }> {
   const newFileSet: FileSetComplete = {
     format: "complete",
     files: [],
   };
+  const diffErrors: Array<DiffError> = [];
   for (const file of fileSet.files) {
-    // Error on binary
+    // Error on binary file
     if (file.type === "binary") {
-      throw new BinaryFileDiffError(file.name);
+      diffErrors.push({
+        status: "error",
+        message: `Diff for binary file ${file.name} is not supported.`,
+        extra: { filename: file.name },
+      });
+      continue;
     }
 
-    const newContent = await applyDiffToFile(
+    const diffResult = await applyDiffToFile(
       file.content,
       path.join(originalDir, file.name)
     );
 
-    const newFile: FileContent = {
-      name: file.name,
-      content: newContent,
-      type: "text",
-    };
-    newFileSet.files.push(newFile);
+    if (diffResult.status === "success") {
+      const newFile: FileContent = {
+        name: file.name,
+        content: diffResult.value,
+        type: "text",
+      };
+      newFileSet.files.push(newFile);
+    } else if (diffResult.status === "error") {
+      diffErrors.push(diffResult);
+    }
   }
-  return newFileSet;
+  return { fileSet: newFileSet, diffErrors };
 }
 
 /**
@@ -231,26 +254,6 @@ type Hunk = Array<DiffLine>;
 type DiffLine = { type: "add" | "remove" | "context"; content: string };
 
 /**
- * Error thrown when attempting to apply a diff to a binary file.
- */
-export class BinaryFileDiffError extends Error {
-  constructor(fileName: string) {
-    super(`Diff for binary file ${fileName} is not supported.`);
-    this.name = "BinaryFileDiffError";
-  }
-}
-
-/**
- * Error thrown when a diff pattern cannot be found in the original text.
- */
-export class DiffApplicationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "DiffApplicationError";
-  }
-}
-
-/**
  * Parses a unified diff string into an array of hunks.
  *
  * This function takes a diff string in the unified diff format and parses it
@@ -260,7 +263,7 @@ export class DiffApplicationError extends Error {
  * @returns An array of Hunk objects
  * @throws Error if an unknown line type is encountered
  */
-function parseDiff(diff: string): Array<Hunk> {
+function parseDiff(diff: string): Array<Hunk> | DiffError {
   const hunks: Array<Hunk> = [];
   const lines = diff.split("\n");
   let currentHunk: Hunk | null = null;
@@ -307,14 +310,22 @@ function parseDiff(diff: string): Array<Hunk> {
           lineType = "context";
           break;
         default:
-          throw new DiffApplicationError(`Unknown line type: ${line[0]}`);
+          return {
+            status: "error",
+            message: `Unknown line type: ${line[0]}`,
+            extra: {},
+          };
       }
 
       const content = line.slice(1);
       currentHunk.push({ type: lineType, content });
     } else {
       // Error because we're not in a hunk and we're not starting one
-      throw new DiffApplicationError(`Invalid diff format: ${line}`);
+      return {
+        status: "error",
+        message: `Invalid diff format: ${line}`,
+        extra: {},
+      };
     }
   }
   if (currentHunk) hunks.push(currentHunk);

@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
-import { applyFileSetDiff } from "./diff";
+import { applyFileSetDiff, type DiffError } from "./diff";
 import {
   inferFileType,
   langNameToFileExt,
@@ -429,6 +429,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       const toolCalls: vscode.LanguageModelToolCallPart[] = [];
       const tagProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
       let fileSet: FileSet | null = null;
+      let diffErrors: DiffError[] = [];
       // States of a state machine to handle the response
       let state: "TEXT" | "FILESET" | "FILE" = "TEXT";
       // When processing text in the FILE state, the first chunk of text may have
@@ -547,10 +548,13 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                         }
                       }
 
-                      fileSet = await applyFileSetDiff(
+                      const result = await applyFileSetDiff(
                         fileSet,
                         workspaceFolderUri.fsPath
                       );
+
+                      fileSet = result.fileSet;
+                      diffErrors = result.diffErrors;
                     }
 
                     // TODO: Remove question mark from proposedFilePreviewProvider
@@ -632,6 +636,14 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           ...toolCalls,
         ])
       );
+
+      if (diffErrors.length > 0) {
+        // TODO: Send error messages back to LLM
+        stream.markdown(
+          "The following errors occurred while applying the diff:\n\n"
+        );
+        stream.markdown(diffErrors.map((error) => error.message).join("\n\n"));
+      }
 
       if (toolCalls.length > 0) {
         const toolCallsResults: Array<vscode.LanguageModelToolResultPart> = [];

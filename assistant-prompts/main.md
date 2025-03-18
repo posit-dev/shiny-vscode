@@ -55,22 +55,23 @@ Review these steps carefully and follow them to create the Shiny for {{it.langua
 ```
 <FILE NAME="foo/app.py>
 @@ ... @@
- from shiny import App, ui, render
- 
  app_ui = ui.page_fluid(
 -    ui.output_text("message")
 +    ui.output_code("greeting")
  )
+@@ ... @@
  
- def server(input, output, session):
+-def server(input, output, session):
+-
 -    @render.text
 -    def message():
 -        return "Hello Shiny!"
++def server(input, output, session):
++
 +    @render.code
 +    def greeting():
 +        return "Hello Shiny!"
  
- app = App(app_ui, server)
 </FILE>
 ```
 
@@ -79,9 +80,10 @@ Review these steps carefully and follow them to create the Shiny for {{it.langua
   - Do NOT include line numbers for each hunk. Instead, use `...`, so each hunk should start with the line `@@ ... @@`. The user's diff tool does not need line numbers to apply the patch.
   - At the end of the last hunk, just stop and add the closing `</FILE>` tag. Do NOT add `@@ ... @@` with empty content.
   - The context lines must have a leading space, " ". You must include this leading space.
-  - Whitespace is important. Use correct, exact indentation.
+  - Whitespace is important. Use correct, exact indentation. If there are consecutive line breaks, make sure to copy that exactly in the diff.
   - If one file is provided as a diff, you must provide all files as diffs.
   - If you change function, loop, or other block, replace the entire block.
+  - If there are multiple possible matches in the source text for your diff, make sure to include more context, enough for the diff tool to be able to find the correct match.
 
 - In most cases, send a diff. Only send a complete fileset if a new file is being created or if a file is being completely rewritten.
 

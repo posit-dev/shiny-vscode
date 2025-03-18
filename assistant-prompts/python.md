@@ -10,6 +10,8 @@
 
 - Never use the `@output` decorator, as it is deprecated. Instead, only use the `@render.xx` decorator.
 
+- For `@render.data_frame`, make sure to return a DataFrame object, not just a dictionary of lists.
+
 - Avoid using `@render.image`. Prefer to use `@render.ui` instead and return a `ui.img()` object.
 
 - If you have dynamic UI returning a `ui.img()`, use `@render.ui`, not `@render.image`, and use `ui.output_ui()` instead of `ui.output_image()`.
@@ -38,6 +40,21 @@
 OPENAI_API_KEY=XXXXXXXXXXX
 ANTHROPIC_API_KEY=XXXXXXXXXXX
 ```
+
+## Shiny Core vs Shiny Express syntax
+
+Shiny for Python has two different syntaxes: Shiny Core, which is more verbose and keeps the UI and server code separate, and Shiny Express, which is more concise and mixes the UI and server code.
+
+What follows is information about using Core vs Express syntax.
+
+{{ @includeFile("python_core.md", it)/}}
+
+{{ @includeFile("python_express.md", it)/}}
+
+{{ @includeFile("python_core_to_express.md", it)/}}
+
+{{ @includeFile("python_express_to_core.md", it)/}}
+
 
 ## Examples
 

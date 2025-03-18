@@ -22,13 +22,13 @@ export class StreamingTagProcessor {
     | "TAG_START_SLASH" // We've seen "</"
     | "TAG_NAME" // We're in a potential tag name, like "<SH" or "</SH"
     | "WHITESPACE" // We're in whitespace after the tag name or betweent attrs
-    | "ATTR_NAME" // We're in an attribute name, like "<SHINYAPP F"
-    | "ATTR_NAME_END" // Finished attr name with whitespace, like "<SHINYAPP FOO " (doesn't always go into this state)
-    | "ATTR_EQUAL_FOUND" // Found = sign after attr name, like "<SHINYAPP FOO="
-    | "IN_ATTR_VALUE_DOUBLE_QUOTE" // Found opening double quote for attr value, like `<SHINYAPP FOO="`
-    | "IN_ATTR_VALUE_SINGLE_QUOTE" // Found opening single quote for attr value, like `<SHINYAPP FOO='`
-    | "ATTRIBUTE_VALUE_END" // Found closing quote for attr value, like `<SHINYAPP FOO="1"`
-    | "TAG_END" = "TEXT"; // Found closing angle bracket, like `<SHINYAPP>`
+    | "ATTR_NAME" // We're in an attribute name, like "<FILESET F"
+    | "ATTR_NAME_END" // Finished attr name with whitespace, like "<FILESET FOO " (doesn't always go into this state)
+    | "ATTR_EQUAL_FOUND" // Found = sign after attr name, like "<FILESET FOO="
+    | "IN_ATTR_VALUE_DOUBLE_QUOTE" // Found opening double quote for attr value, like `<FILESET FOO="`
+    | "IN_ATTR_VALUE_SINGLE_QUOTE" // Found opening single quote for attr value, like `<FILESET FOO='`
+    | "ATTRIBUTE_VALUE_END" // Found closing quote for attr value, like `<FILESET FOO="1"`
+    | "TAG_END" = "TEXT"; // Found closing angle bracket, like `<FILESET>`
 
   private scannedText: string = "";
 
@@ -55,7 +55,7 @@ export class StreamingTagProcessor {
   /**
    * Creates a new StreamingTagProcessor that looks for specified XML-style tags.
    * @param tagNames - Array of tag names without angle brackets or attributes
-   *                  (e.g., ["SHINYAPP", "FILE"])
+   *                  (e.g., ["FILESET", "FILE"])
    */
   constructor(tagNames: string[]) {
     // TODO: Validate tag names
@@ -147,8 +147,8 @@ export class StreamingTagProcessor {
 
         if (char === " " || char === ">") {
           // Filter out potentialTagNameMatches that aren't the correct length.
-          // So if the potentialTagNameMatches are ["SHINY", "SHINYAPP"], and
-          // the text up to here is "<SHINY>", we should remove "SHINYAPP" from
+          // So if the potentialTagNameMatches are ["SHINY", "FILESET"], and
+          // the text up to here is "<SHINY>", we should remove "FILESET" from
           // the potential matches. (For consistency, we're not using filter();
           // elsewhere in the code we're modifying the array in place.)
           for (let i = this.potentialTagNameMatches.length - 1; i >= 0; i--) {
@@ -159,10 +159,10 @@ export class StreamingTagProcessor {
           // If we hit the end of a tag name, we can transition to the next state.
           if (this.potentialTagNameMatches.length === 1) {
             if (char === " ") {
-              // "<SHINYAPP "
+              // "<FILESET "
               this.state = "WHITESPACE";
             } else if (char === ">") {
-              // "<SHINYAPP>"
+              // "<FILESET>"
               this.state = "TAG_END";
             } else {
               // Shouldn't get here, throw error
@@ -324,7 +324,7 @@ export class StreamingTagProcessor {
   }
 }
 
-// const testProcessor = new StreamingTagProcessor(["SHINY", "SHINYAPP", "FILE"]);
+// const testProcessor = new StreamingTagProcessor(["SHINY", "FILESET", "FILE"]);
 
 // function testTagMatches() {
 //   console.log("Testing tag matches:");
@@ -339,24 +339,24 @@ export class StreamingTagProcessor {
 //     "<SHINY FO",
 //     "<SHINYA",
 //     "</SHINYA",
-//     "<SHINYAPP",
-//     "<SHINYAPP>",
-//     "<SHINYAPP >",
-//     "</SHINYAPP>",
-//     "</SHINYAPP >",
-//     "<SHINYAPP ",
-//     "<SHINYAPP FOO",
-//     "<SHINYAPP FOO ",
-//     "<SHINYAPP FOO=",
-//     "<SHINYAPP FOO= ",
-//     "<SHINYAPP FOO =",
-//     "<SHINYAPP FOO = ",
-//     '<SHINYAPP FOO = "1"',
-//     "<SHINYAPP FOO='1'",
-//     "<SHINYAPP FOO='1'>",
-//     `<SHINYAPP FOO="1" >`,
-//     `<SHINYAPP FOO= "1" BAR ='2'`,
-//     `<SHINYAPP FOO= "1" BAR ='2'>`,
+//     "<FILESET",
+//     "<FILESET>",
+//     "<FILESET >",
+//     "</FILESET>",
+//     "</FILESET >",
+//     "<FILESET ",
+//     "<FILESET FOO",
+//     "<FILESET FOO ",
+//     "<FILESET FOO=",
+//     "<FILESET FOO= ",
+//     "<FILESET FOO =",
+//     "<FILESET FOO = ",
+//     '<FILESET FOO = "1"',
+//     "<FILESET FOO='1'",
+//     "<FILESET FOO='1'>",
+//     `<FILESET FOO="1" >`,
+//     `<FILESET FOO= "1" BAR ='2'`,
+//     `<FILESET FOO= "1" BAR ='2'>`,
 //     ">",
 //     "<>",
 //     "</ ",
@@ -365,16 +365,16 @@ export class StreamingTagProcessor {
 //     "<XH",
 //     "<SHIP",
 //     "<SHINYX",
-//     "<SHINYAPPX",
-//     "<SHINYAPPX>",
-//     "<SHINYAPP =",
-//     "<SHINYAPP -",
-//     "<SHINYAPP FOO=1",
-//     "<SHINYAPP FOO>",
-//     "<SHINYAPP FOO=>",
-//     `<SHINYAPP FOO=">`,
-//     "<SHINYAPP FOO=1",
-//     "<SHINYAPP FOO = 1 ",
+//     "<FILESETX",
+//     "<FILESETX>",
+//     "<FILESET =",
+//     "<FILESET -",
+//     "<FILESET FOO=1",
+//     "<FILESET FOO>",
+//     "<FILESET FOO=>",
+//     `<FILESET FOO=">`,
+//     "<FILESET FOO=1",
+//     "<FILESET FOO = 1 ",
 //   ];
 
 //   for (const s of testStrings) {

@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
+import { applyFileSetDiff, type DiffError } from "./diff";
 import {
   inferFileType,
   langNameToFileExt,
@@ -12,7 +13,7 @@ import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
 import { loadSystemPrompt } from "./system-prompt";
 import { tools, wrapToolInvocationResult } from "./tools";
-import type { FileContentJson } from "./types";
+import type { FileContent, FileSet } from "./types";
 import { createPromiseWithStatus } from "./utils";
 
 const proposedFilePreviewProvider = new ProposedFilePreviewProvider();
@@ -207,7 +208,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // ========================================================================
     // Tell the user they need a workspace folder
     // ========================================================================
-    if (!vscode.workspace.workspaceFolders?.[0]) {
+    let workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
       stream.markdown(
         "You currently do not have an active workspace folder. You need an active workspace folder to use Shiny Assistant.\n\n"
       );
@@ -220,7 +222,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       });
 
       await hasContinuedAfterWorkspaceFolderSuggestion;
-      if (!vscode.workspace.workspaceFolders?.[0]) {
+      workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
         stream.markdown(
           "I'm sorry, I can't continue without an active workspace folder.\n\n"
         );
@@ -230,19 +233,31 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       }
     }
 
+    const workspaceFolderUri = workspaceFolder.uri;
+
     // ========================================================================
     // If the currently-active file is an R or Python file, set the project
     // language to that language.
     // ========================================================================
     const activeFileReference = request.references.find(
-      (ref) => ref.id === "vscode.implicit.viewport"
+      (ref) =>
+        // This is when a file open in the editor
+        (ref.id === "vscode.implicit.viewport" ||
+          // This when a file is open with lines selected
+          ref.id === "vscode.implicit.selection") &&
+        ref.value instanceof vscode.Location
     );
-    const activeFileRelativePath = activeFileReference
+    let activeFileRelativePath = activeFileReference
       ? path.relative(
-          vscode.workspace.workspaceFolders![0].uri.fsPath,
+          workspaceFolderUri.fsPath,
           (activeFileReference.value as vscode.Location).uri.fsPath
         )
       : undefined;
+
+    // Prepend "./" if the path doesn't contain a subdir.
+    if (activeFileRelativePath && !activeFileRelativePath.match("/")) {
+      activeFileRelativePath = "./" + activeFileRelativePath;
+    }
 
     if (activeFileRelativePath) {
       // Check that the active file is a Shiny app file
@@ -377,8 +392,10 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     }
 
     // Construct a user message from the <context> blocks for the references.
-    const requestReferenceContextBlocks: string[] =
-      await createContextBlocks(requestReferences);
+    const requestReferenceContextBlocks: string[] = await createContextBlocks(
+      requestReferences,
+      workspaceFolderUri
+    );
     messages.push(
       vscode.LanguageModelChatMessage.User(
         requestReferenceContextBlocks.join("\n")
@@ -393,7 +410,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     const options: vscode.LanguageModelChatRequestOptions = {
       tools: tools,
     };
-    let responseContainsShinyApp = false;
+    let responseContainsFileSet = false;
     // Collect all the raw text from the LLM. This will include the text
     // spanning multiple tool calls, if present.
     let rawResponseText = "";
@@ -410,10 +427,11 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
       // Stream the response
       const toolCalls: vscode.LanguageModelToolCallPart[] = [];
-      const tagProcessor = new StreamingTagProcessor(["SHINYAPP", "FILE"]);
-      let shinyAppFiles: FileContentJson[] | null = null;
+      const tagProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
+      let fileSet: FileSet | null = null;
+      let diffErrors: DiffError[] = [];
       // States of a state machine to handle the response
-      let state: "TEXT" | "SHINYAPP" | "FILE" = "TEXT";
+      let state: "TEXT" | "FILESET" | "FILE" = "TEXT";
       // When processing text in the FILE state, the first chunk of text may have
       // a leading \n that needs to be removed;
       let fileStateProcessedFirstChunk = false;
@@ -441,14 +459,23 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               stream.markdown(part.text);
             } else if (part.type === "tag") {
               if (part.kind === "open") {
-                if (part.name === "SHINYAPP") {
-                  state = "SHINYAPP";
-                  // TODO: handle multiple shiny apps? Or just error?
-                  shinyAppFiles = [];
-                  responseContainsShinyApp = true;
+                if (part.name === "FILESET") {
+                  state = "FILESET";
+                  // TODO: handle multiple filesets? Or just error?
+                  responseContainsFileSet = true;
+
+                  let format: "complete" | "diff" = "complete";
+                  if (part.attributes["FORMAT"] === "diff") {
+                    format = "diff";
+                  }
+
+                  fileSet = {
+                    format: format,
+                    files: [],
+                  };
                 } else if (part.name === "FILE") {
                   console.log(
-                    "Parse error: <FILE> tag found, but not in <SHINYAPP> block."
+                    "Parse error: <FILE> tag found, but not in <FILESET> block."
                   );
                 }
               } else if (part.kind === "close") {
@@ -459,46 +486,80 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
             } else {
               console.log("Parse error: Unexpected part type in TEXT state.");
             }
-          } else if (state === "SHINYAPP") {
+          } else if (state === "FILESET") {
             if (part.type === "text") {
               // console.log(
-              //   "Parse error: Unexpected text in SHINYAPP state.",
+              //   "Parse error: Unexpected text in FILESET state.",
               //   part.text,
               //   "."
               // );
               stream.markdown(part.text);
             } else if (part.type === "tag") {
               if (part.kind === "open") {
-                if (part.name === "SHINYAPP") {
+                if (part.name === "FILESET") {
                   console.log(
-                    "Parse error: Nested <SHINYAPP> tags are not supported."
+                    `Parse error: <FILESET> cannot have child tag <${part.name}>.`
                   );
                 } else if (part.name === "FILE") {
                   state = "FILE";
                   fileStateProcessedFirstChunk = false;
 
-                  // TODO: Handle case when NAME attribute is missing
-                  shinyAppFiles!.push({
+                  if (!part.attributes["NAME"]) {
+                    console.log(
+                      "Parse error: <FILE> tag found without NAME attribute."
+                    );
+                  }
+                  fileSet!.files.push({
                     name: part.attributes["NAME"],
                     content: "",
+                    type: "text",
                   });
                   stream.markdown("\n### " + part.attributes["NAME"] + "\n");
                   stream.markdown("```");
-                  const fileType = inferFileType(part.attributes["NAME"]);
-                  if (fileType !== "text") {
-                    stream.markdown(fileType);
+                  if (fileSet!.format === "diff") {
+                    stream.markdown("diff");
+                  } else {
+                    const fileType = inferFileType(part.attributes["NAME"]);
+                    if (fileType !== "text") {
+                      stream.markdown(fileType);
+                    }
                   }
                   stream.markdown("\n");
                 }
               } else if (part.kind === "close") {
-                if (part.name === "SHINYAPP") {
-                  if (shinyAppFiles) {
-                    // Render the file tree control at a base location
+                if (part.name === "FILESET") {
+                  if (fileSet) {
+                    // Add files to the proposedFilePreviewProvider
                     proposedFilePreviewCounter++;
                     const proposedFilesPrefixDir =
                       "/app-preview-" + proposedFilePreviewCounter;
+
+                    if (fileSet.format === "diff") {
+                      // For each file, if it ends with a trailing "\n", remove
+                      // it. This is because the LLM usually puts a "\n" before
+                      // "</FILE>", but that "\n" shouldn't actually be part of
+                      // the diff context.
+                      for (const file of fileSet.files) {
+                        if (
+                          file.type === "text" &&
+                          file.content.endsWith("\n")
+                        ) {
+                          file.content = file.content.replace(/\n$/, "");
+                        }
+                      }
+
+                      const result = await applyFileSetDiff(
+                        fileSet,
+                        workspaceFolderUri.fsPath
+                      );
+
+                      fileSet = result.fileSet;
+                      diffErrors = result.diffErrors;
+                    }
+
+                    // TODO: Remove question mark from proposedFilePreviewProvider
                     proposedFilePreviewProvider?.addFiles(
-                      shinyAppFiles,
+                      fileSet.files,
                       proposedFilesPrefixDir
                     );
 
@@ -506,8 +567,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                       title: "View changes as diff",
                       command: "shiny.assistant.showDiff",
                       arguments: [
-                        shinyAppFiles,
-                        vscode.workspace.workspaceFolders?.[0],
+                        fileSet,
+                        workspaceFolderUri,
                         proposedFilesPrefixDir,
                       ],
                     });
@@ -515,7 +576,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                     stream.button({
                       title: "Apply changes",
                       command: "shiny.assistant.saveFilesToWorkspace",
-                      arguments: [shinyAppFiles, true],
+                      arguments: [fileSet.files, true],
                     });
 
                     stream.markdown(
@@ -528,13 +589,13 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                   state = "TEXT";
                 } else {
                   console.log(
-                    "Parse error: Unexpected closing tag in SHINYAPP state."
+                    "Parse error: Unexpected closing tag in FILESET state."
                   );
                 }
               }
             } else {
               console.log(
-                "Parse error: Unexpected part type in SHINYAPP state."
+                "Parse error: Unexpected part type in FILESET state."
               );
             }
           } else if (state === "FILE") {
@@ -548,7 +609,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               }
               stream.markdown(part.text);
               // Add text to the current file content
-              shinyAppFiles![shinyAppFiles!.length - 1].content += part.text;
+              fileSet!.files[fileSet!.files.length - 1].content += part.text;
             } else if (part.type === "tag") {
               if (part.kind === "open") {
                 console.log(
@@ -557,7 +618,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               } else if (part.kind === "close") {
                 if (part.name === "FILE") {
                   stream.markdown("```");
-                  state = "SHINYAPP";
+                  state = "FILESET";
                 } else {
                   console.log(
                     "Parse error: Unexpected closing tag in FILE state."
@@ -575,6 +636,14 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           ...toolCalls,
         ])
       );
+
+      if (diffErrors.length > 0) {
+        // TODO: Send error messages back to LLM
+        stream.markdown(
+          "The following errors occurred while applying the diff:\n\n"
+        );
+        stream.markdown(diffErrors.map((error) => error.message).join("\n\n"));
+      }
 
       if (toolCalls.length > 0) {
         const toolCallsResults: Array<vscode.LanguageModelToolResultPart> = [];
@@ -626,7 +695,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     await runWithTools();
 
     chatResult.metadata.rawResponseText = rawResponseText;
-    if (responseContainsShinyApp) {
+    if (responseContainsFileSet) {
       chatResult.metadata.followups.push(
         "Install the packages needed for my app."
       );
@@ -676,17 +745,17 @@ async function applyChangesToWorkspaceFromDiffView(): Promise<boolean> {
  * or creating untitled editors (if no workspace).
  * Returns true if all operations are successful, false otherwise.
  *
- * @param newFiles - The files to handle
+ * @param files - The files to handle
  * @param closeProposedChangesTabs - Whether to close the tabs with proposed files.
  * @returns boolean indicating if all operations were successful
  */
 async function saveFilesToWorkspace(
-  newFiles: FileContentJson[],
+  files: FileContent[],
   closeProposedChangesTabs: boolean = false
 ): Promise<boolean> {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  const workspaceFolderUri = vscode.workspace.workspaceFolders?.[0]?.uri;
 
-  if (!workspaceFolder) {
+  if (!workspaceFolderUri) {
     vscode.window.showErrorMessage(
       "You currently do not have an active workspace folder. Please open a workspace folder and try again."
     );
@@ -703,8 +772,14 @@ async function saveFilesToWorkspace(
     const workspaceEdit = new vscode.WorkspaceEdit();
 
     // If we have a workspace, save files to disk.
-    for (const newFile of newFiles) {
-      const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, newFile.name);
+    for (const file of files) {
+      if (file.type === "binary") {
+        vscode.window.showErrorMessage(
+          `Failed to handle file ${file.name}: Binary files are not supported at this time.`
+        );
+        return false;
+      }
+      const fileUri = vscode.Uri.joinPath(workspaceFolderUri, file.name);
 
       try {
         // Try to open existing file. If it exists, then replace its content.
@@ -712,14 +787,14 @@ async function saveFilesToWorkspace(
         const document = await vscode.workspace.openTextDocument(fileUri);
 
         // Replace the content only if it's different.
-        if (document.getText() !== newFile.content) {
+        if (document.getText() !== file.content) {
           workspaceEdit.set(fileUri, [
             vscode.TextEdit.replace(
               new vscode.Range(
                 document.positionAt(0),
                 document.positionAt(document.getText().length)
               ),
-              newFile.content
+              file.content
             ),
           ]);
           changedUris.push(fileUri);
@@ -728,7 +803,7 @@ async function saveFilesToWorkspace(
         // File does not exist; create it.
         workspaceEdit.createFile(fileUri, {
           overwrite: false,
-          contents: Buffer.from(newFile.content, "utf-8"),
+          contents: Buffer.from(file.content, "utf-8"),
         });
         createdUris.push(fileUri);
       }
@@ -774,7 +849,7 @@ async function saveFilesToWorkspace(
 // Store the proposed changes that are in the current diff view in a global
 // variable, so that they can be saved when the user clicks the "Apply changes"
 // button.
-let currentDiffViewFiles: FileContentJson[] = [];
+let currentDiffViewFiles: FileContent[] = [];
 
 /**
  * Shows a diff view with the proposed changes.
@@ -785,11 +860,11 @@ let currentDiffViewFiles: FileContentJson[] = [];
  * @returns boolean indicating if the operation was successful
  */
 async function showDiff(
-  proposedFiles: FileContentJson[],
-  workspaceFolder: vscode.WorkspaceFolder | undefined,
+  proposedFiles: FileSet,
+  workspaceFolderUri: vscode.Uri | undefined,
   proposedFilesPrefixDir: string
 ): Promise<boolean> {
-  if (!workspaceFolder) {
+  if (!workspaceFolderUri) {
     // TODO: Better handling here
     vscode.window.showErrorMessage(
       "You currently do not have an active workspace folder. Please open a workspace folder and try again."
@@ -802,17 +877,19 @@ async function showDiff(
   // shiny.assistant.applyChangesToWorkspaceFromDiffView, but we can't pass
   // arguments to that command. So we'll save the new files in a global
   // variable.
-  currentDiffViewFiles = proposedFiles;
+  currentDiffViewFiles = proposedFiles.files;
+
+  // TODO: Error on binary files
 
   try {
     // Add files to the preview provider
-    proposedFilePreviewProvider?.addFiles(proposedFiles);
+    proposedFilePreviewProvider?.addFiles(proposedFiles.files);
 
     const changes: Array<[vscode.Uri, vscode.Uri, vscode.Uri]> = [];
 
-    for (const proposedFile of proposedFiles) {
+    for (const proposedFile of proposedFiles.files) {
       const existingUri = vscode.Uri.joinPath(
-        workspaceFolder.uri,
+        workspaceFolderUri,
         proposedFile.name
       );
       let sourceUri: vscode.Uri;
@@ -870,20 +947,6 @@ async function closeAllProposedChangesTabs() {
   }
 }
 
-/**
- * Creates `<context>` blocks for an array of chat prompt references. Each
- * reference is converted into a formatted string block containing relevant
- * context information.
- *
- * @param refs - Array of ChatPromptReference objects to process
- * @returns Promise resolving to an array of formatted context block strings
- */
-async function createContextBlocks(
-  refs: Readonly<vscode.ChatPromptReference[]>
-): Promise<string[]> {
-  return Promise.all(refs.map(createContextBlock));
-}
-
 async function setAppSubdirDialog(
   subdir: string | null,
   callback: (success: boolean) => void
@@ -920,6 +983,23 @@ async function setAppSubdirDialog(
 }
 
 /**
+ * Creates `<context>` blocks for an array of chat prompt references. Each
+ * reference is converted into a formatted string block containing relevant
+ * context information.
+ *
+ * @param refs - Array of ChatPromptReference objects to process
+ * @returns Promise resolving to an array of formatted context block strings
+ */
+async function createContextBlocks(
+  refs: Readonly<vscode.ChatPromptReference[]>,
+  workspaceFolderUri: vscode.Uri
+): Promise<string[]> {
+  return Promise.all(
+    refs.map((ref) => createContextBlock(ref, workspaceFolderUri))
+  );
+}
+
+/**
  * Creates a single `<context>` block for a chat prompt reference. Handles
  * different types of references:
  * - Uri: Includes full file contents
@@ -931,27 +1011,33 @@ async function setAppSubdirDialog(
  * @throws Error if the reference value type is not supported
  */
 async function createContextBlock(
-  ref: Readonly<vscode.ChatPromptReference>
+  ref: Readonly<vscode.ChatPromptReference>,
+  workspaceFolderUri: vscode.Uri
 ): Promise<string> {
   const value = ref.value;
 
   if (value instanceof vscode.Uri) {
+    const relativePath = path.relative(workspaceFolderUri.fsPath, value.fsPath);
     const fileContents = (await vscode.workspace.fs.readFile(value)).toString();
     return `
 <context>
-${value.fsPath}:
+${relativePath}:
 \`\`\`
 ${fileContents}
 \`\`\`
 </context>
 `;
   } else if (value instanceof vscode.Location) {
+    const relativePath = path.relative(
+      workspaceFolderUri.fsPath,
+      value.uri.fsPath
+    );
     const rangeText = (
       await vscode.workspace.openTextDocument(value.uri)
     ).getText(value.range);
     return `
 <context>
-${value.uri.fsPath}:${value.range.start.line + 1}-${value.range.end.line + 1}:
+${relativePath}:${value.range.start.line + 1}-${value.range.end.line + 1}:
 \`\`\`
 ${rangeText}
 \`\`\`

@@ -32,7 +32,7 @@
 
 - If the user says that there is an error about a missing package, tell them to add requirements.txt with that package.
 
-- Put all required packages in a `requirements.txt` file, and present that file inside of the `<SHINYAPP>` tags. Include the shiny package.
+- Put all required packages in a `requirements.txt` file, and present that file inside of the `<FILESET>` tags. Include the shiny package.
 
 - If you use the `python-dotenv` package, tell the user they can create a `.env` file with their API keys, with the format:
 
@@ -58,7 +58,7 @@ What follows is information about using Core vs Express syntax.
 
 ## Examples
 
-This example shows the assistant creating an example app in the process of answering a question. Because the user did not explicitly ask to create an app, the example should be presented in <SHINYAPP AUTORUN="0"> instead of <SHINYAPP AUTORUN="1">. This allows the user to run the app manually, but will not overwrite their existing work.
+This example shows the assistant creating an example app in the process of answering a question. Because the user did not explicitly ask to create an app, the example should be presented in <FILESET AUTORUN="0"> instead of <FILESET AUTORUN="1">. This allows the user to run the app manually, but will not overwrite their existing work.
 
 [Example]
 [User]
@@ -73,7 +73,7 @@ To reset a `ui.input_text` to a default value in a Shiny for Python app, you can
 
 Here's a simple example that demonstrates this:
 
-<SHINYAPP AUTORUN="0">
+<FILESET AUTORUN="0">
 <FILE NAME="app.py">
 from shiny import App, reactive, render, ui
 
@@ -96,7 +96,7 @@ def server(input, output, session):
 
 app = App(app_ui, server)
 </FILE>
-</SHINYAPP>
+</FILESET>
 
 In this example:
 

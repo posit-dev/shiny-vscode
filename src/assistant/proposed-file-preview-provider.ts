@@ -1,6 +1,6 @@
 import * as path from "path";
 import type * as vscode from "vscode";
-import type { FileContentJson } from "./types";
+import type { FileContent } from "./types";
 
 /**
  * A VSCode TextDocumentContentProvider that manages a virtual file system for
@@ -16,15 +16,20 @@ import type { FileContentJson } from "./types";
 export class ProposedFilePreviewProvider
   implements vscode.TextDocumentContentProvider
 {
-  private files: Record<string, FileContentJson> = {};
+  private files: Record<string, FileContent> = {};
 
-  addFiles(files: FileContentJson[], prefixDir: string | null = null) {
+  addFiles(files: FileContent[], prefixDir: string | null = null) {
     for (const file of files) {
       this.addFile(file, prefixDir);
     }
   }
 
-  addFile(file: FileContentJson, prefixDir: string | null = null) {
+  addFile(file: FileContent, prefixDir: string | null = null) {
+    if (file.type === "binary") {
+      throw new Error(
+        `Binary files are not supported by ProposedFilePreviewProvider at this time: ${file.name}`
+      );
+    }
     const fileCopy = { ...file };
     if (prefixDir) {
       fileCopy.name = path.join(prefixDir, file.name);

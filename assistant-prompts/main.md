@@ -50,57 +50,72 @@ Review these steps carefully and follow them to create the Shiny for {{it.langua
 
 - If you are modifying a portion of the app, send it as a set of diffs, one for each file. Mark the diff set with `<FILESET FORMAT="diff">`, and inside of that, in each `<FILE NAME="xx">` tag, output the diff for that file.
 
-- The diff format should be similar to a unified diff, but with some small changes, as shown in the example below:
+- The diff format uses tags `<DIFFCHUNK>`, `<DIFFOLD>`, and `<DIFFNEW>`, as shown in the example below:
 
 ```
+<FILESET FORMAT="diff">
 <FILE NAME="foo/app.py>
-@@ ... @@
--app_ui = ui.page_fluid(
--    ui.output_text("message")
--)
-+app_ui = ui.page_fluid(
-+    ui.output_code("greeting")
-+)
-@@ ... @@
--def server(input, output, session):
--
--    @render.text
--    def message():
--        return "Hello Shiny!"
-+def server(input, output, session):
-+
-+    @render.code
-+    def greeting():
-+        return "Hello Shiny!"
+<DIFFCHUNK>
+<DIFFOLD>
+app_ui = ui.page_fluid(
+    ui.output_text("message")
+)
+</DIFFOLD>
+<DIFFNEW>
+app_ui = ui.page_fluid(
+    ui.output_code("greeting")
+)
+</DIFFNEW>
+</DIFFCHUNK>
+<DIFFCHUNK>
+<DIFFOLD>
+def server(input, output, session):
+
+    @render.text
+    def message():
+        return "Hello Shiny!"
+</DIFFOLD>
+<DIFFNEW>
+def server(input, output, session):
+
+    @render.code
+    def greeting():
+        return "Hello Shiny!"
+</DIFFNEW>
+</DIFFCHUNK>
 </FILE>
+</FILESET>
 ```
 
 Here is another example:
 
 ```
+<FILESET FORMAT="diff">
 <FILE NAME="my-app.py>
-@@ ... @@
--        choices={
--            "6": "d6 (6-sided)",
--            "12": "d12 (12-sided)",
--        },
--        value="6"
--    )
-+        choices={
-+            "6": "d6 (6-sided)",
-+            "10": "d10 (10-sided)",
-+            "12": "d12 (12-sided)",
-+        },
-+        selected="10"
-+    )
+<DIFFCHUNK>
+<DIFFOLD>
+        choices={
+            "6": "d6 (6-sided)",
+            "12": "d12 (12-sided)",
+        },
+        value="6"
+    )
+</DIFFOLD>
+<DIFFNEW>
+        choices={
+            "6": "d6 (6-sided)",
+            "10": "d10 (10-sided)",
+            "12": "d12 (12-sided)",
+        },
+        selected="10"
+    )
+</DIFFNEW>
+</DIFFCHUNK>
 </FILE>
+</FILESET>
 ```
 
-
-  - The format should be like the output `diff -U0`. Only include lines to remove and add, starting with a `-` or `+`. Do NOT include lines that start with ` `. Notice that in the examples, all the lines start with `-` or `+`, and none start with ` `.
-  - If you change a function, loop, or other block, rewrite the entire block. Notice that in the examples, we replaced whole blocks, even though many of the lines were the same before and after.
-  - Do NOT include line numbers for each hunk. Instead, use `...`, so each hunk should start with the line `@@ ... @@`. The user's diff tool does not need line numbers to apply the patch.
-  - At the end of the last hunk, just stop and add the closing `</FILE>` tag. Do NOT add `@@ ... @@` at the end.
+  - If you change a function, loop, or other block, also rewrite neighboring lines both above and below the change. Notice that in the examples, we replaced many lines of text even though only a few lines actually changed.
   - Whitespace is important. Use correct, exact indentation. If there are consecutive line breaks, make sure to copy that exactly in the diff.
   - Again, whitespace is important. Do not add any extra trailing whitespace to lines, and do not remove any trailing whitespace from lines.
   - If one file is provided as a diff, you must provide all files as diffs.

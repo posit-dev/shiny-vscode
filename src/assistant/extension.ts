@@ -707,15 +707,34 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               parsedError &&
               parsedError.error.code === "model_not_supported"
             ) {
-              stream.markdown(
-                `The requested model, ${request.model.name} is not enabled. You can enable it at [https://github.com/settings/copilot](https://github.com/settings/copilot). Scroll down to **Anthropic Claude 3.5 Sonnet in Copilot** and set it to **Enable**.\n\n`
-              );
-              stream.markdown(
-                `Or you can send another message in this chat without \`@shiny\`, like \`"Hello"\`, and Copilot will ask you if you want to enable ${request.model.name}. After you enable it, remember to start the next message with \`@shiny\` again.\n\n`
-              );
-              stream.markdown(
-                `After enabling the model, you may need to reload this window or restart VS Code to use it.`
-              );
+              if (
+                parsedError.error.message ===
+                "The requested model is not supported."
+              ) {
+                // We get here if the model is not enabled.
+                stream.markdown(
+                  `The requested model, ${request.model.name} is not enabled. You can enable it at [https://github.com/settings/copilot](https://github.com/settings/copilot). Scroll down to **Anthropic Claude 3.5 Sonnet in Copilot** and set it to **Enable**.\n\n`
+                );
+                stream.markdown(
+                  `Or you can send another message in this chat without \`@shiny\`, like \`"Hello"\`, and Copilot will ask you if you want to enable ${request.model.name}. After you enable it, remember to start the next message with \`@shiny\` again.\n\n`
+                );
+                stream.markdown(
+                  `After enabling the model, you may need to reload this window or restart VS Code to use it.`
+                );
+              } else if (
+                parsedError.error.message ===
+                "Model is not supported for this request."
+              ) {
+                // We get here if the model doesn't support requests from Chat
+                // Participants.
+                stream.markdown(
+                  `The requested model, ${request.model.name} does not accept requests for Chat Participants, like \`@shiny\`. Please use a different model.`
+                );
+              } else {
+                stream.markdown(
+                  `An error occurred while processing the response from the language model: ${err.message}.`
+                );
+              }
               return;
             }
           }
@@ -723,9 +742,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           errorMessage = err.message;
         }
 
-        console.error("Error processing response:", errorMessage ?? err);
         stream.markdown(
-          `An error occurred while processing the response from the language model: ${errorMessage ?? err}. Please try again.`
+          `An error occurred while processing the response from the language model: ${errorMessage ?? err}.`
         );
       }
     }

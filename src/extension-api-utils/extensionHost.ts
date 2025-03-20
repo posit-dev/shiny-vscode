@@ -1,9 +1,9 @@
+import type { LanguageRuntimeMetadata, PositronApi } from "positron";
 import * as vscode from "vscode";
 
-declare const globalThis: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
-};
+declare global {
+  function acquirePositronApi(): PositronApi;
+}
 
 export interface HostWebviewPanel extends vscode.Disposable {
   readonly webview: vscode.Webview;
@@ -13,28 +13,6 @@ export interface HostWebviewPanel extends vscode.Disposable {
   readonly onDidChangeViewState: vscode.Event<any>;
   readonly onDidDispose: vscode.Event<void>;
 }
-
-type LanguageRuntimeMetadata = Partial<{
-  // https://github.com/posit-dev/positron/blob/39a01b71/src/positron-dts/positron.d.ts#L357
-  /** The path to the runtime. */
-  runtimePath: string;
-
-  /**
-   * The fully qualified name of the runtime displayed to the user; e.g. "R 4.2 (64-bit)".
-   * Should be unique across languages.
-   */
-  runtimeName: string;
-
-  /**
-   * A language specific runtime name displayed to the user; e.g. "4.2 (64-bit)".
-   * Should be unique within a single language.
-   */
-  runtimeShortName: string;
-
-  /** The version of the runtime itself (e.g. kernel or extension version) as a string; e.g. "0.1" */
-  runtimeVersion: string;
-}>;
-
 export function getExtensionHostPreview():
   | void
   | ((url: string) => HostWebviewPanel) {
@@ -55,8 +33,7 @@ export async function getPositronPreferredRuntime(
   return await pst.runtime.getPreferredRuntime(languageId);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getPositronAPI(): undefined | any {
+function getPositronAPI(): undefined | PositronApi {
   if (typeof globalThis?.acquirePositronApi !== "function") {
     return;
   }
@@ -64,8 +41,12 @@ function getPositronAPI(): undefined | any {
   return globalThis.acquirePositronApi();
 }
 
+export function isPositron(): boolean {
+  return getPositronAPI() !== undefined;
+}
+
 export function getIdeName() {
-  if (getPositronAPI() !== undefined) {
+  if (isPositron()) {
     return "Positron";
   } else {
     return "VS Code";

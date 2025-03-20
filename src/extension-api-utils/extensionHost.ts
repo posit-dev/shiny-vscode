@@ -1,5 +1,7 @@
-import type { LanguageRuntimeMetadata, PositronApi } from "positron";
+import type * as positron from "positron";
 import * as vscode from "vscode";
+
+type PositronApi = typeof positron;
 
 declare global {
   function acquirePositronApi(): PositronApi;
@@ -25,7 +27,7 @@ export function getExtensionHostPreview():
 
 export async function getPositronPreferredRuntime(
   languageId: string
-): Promise<LanguageRuntimeMetadata | undefined> {
+): Promise<positron.LanguageRuntimeMetadata | undefined> {
   const pst = getPositronAPI();
   if (!pst) {
     return;

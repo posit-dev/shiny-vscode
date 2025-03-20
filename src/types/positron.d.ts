@@ -6,12 +6,6 @@
 // From https://github.com/posit-dev/positron/blob/2a33b2fe421adb799351960f6d05603594c11acc/src/positron-dts/positron.d.ts
 
 declare module "positron" {
-  export interface PositronApi {
-    version: string;
-    runtime: typeof runtime;
-    window: typeof window;
-  }
-
   /**
    * LanguageRuntimeMetadata contains information about a language runtime that is known
    * before the runtime is started.

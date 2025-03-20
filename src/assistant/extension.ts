@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
-import { getIdeName } from "../extension-api-utils/extensionHost";
+import { isPositron } from "../extension-api-utils/extensionHost";
 import { applyFileSetDiff, type DiffError } from "./diff";
 import {
   inferFileType,
@@ -420,7 +420,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // If there are any tool calls in the response, this function loops by
     // calling itself recursively until there are no more tool calls in the
     // response.
-    async function runWithTools() {
+    async function runWithTools(): Promise<void> {
       try {
         const chatResponse = await request.model.sendRequest(
           messages,
@@ -699,29 +699,34 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       } catch (err) {
         let errorMessage: string | null = null;
         if (err instanceof Error) {
-          const errorResult = parseCopilotRequestErrorMessage(err);
-          if (typeof errorResult === "string") {
-            errorMessage = errorResult;
-          } else if (errorResult.error.code === "model_not_supported") {
-            stream.markdown(
-              `The requested model, ${request.model.name} is not enabled. You can enable it at [https://github.com/settings/copilot](https://github.com/settings/copilot). Scroll down to **Anthropic Claude 3.5 Sonnet in Copilot** and set it to **Enable**.\n\n`
-            );
-            stream.markdown(
-              `Or you can send another message in this chat without \`@shiny\`, like \`"Hello"\`, and Copilot will ask you if you want to enable ${request.model.name}. After you enable it, remember to start the next message with \`@shiny\` again.\n\n`
-            );
-            stream.markdown(
-              `After enabling the model, you may need to reload this window or restart ${getIdeName()} to use it.`
-            );
+          if (!isPositron()) {
+            // In VS Code (not Positron), the error message may contain JSON
+            // which we can parse to get more information.
+            const parsedError = parseCopilotRequestErrorMessage(err);
+            if (
+              parsedError &&
+              parsedError.error.code === "model_not_supported"
+            ) {
+              stream.markdown(
+                `The requested model, ${request.model.name} is not enabled. You can enable it at [https://github.com/settings/copilot](https://github.com/settings/copilot). Scroll down to **Anthropic Claude 3.5 Sonnet in Copilot** and set it to **Enable**.\n\n`
+              );
+              stream.markdown(
+                `Or you can send another message in this chat without \`@shiny\`, like \`"Hello"\`, and Copilot will ask you if you want to enable ${request.model.name}. After you enable it, remember to start the next message with \`@shiny\` again.\n\n`
+              );
+              stream.markdown(
+                `After enabling the model, you may need to reload this window or restart VS Code to use it.`
+              );
+              return;
+            }
           }
-          return chatResult;
+          // If we got here, just get the message string from the Error object.
+          errorMessage = err.message;
         }
 
         console.error("Error processing response:", errorMessage ?? err);
         stream.markdown(
           `An error occurred while processing the response from the language model: ${errorMessage ?? err}. Please try again.`
         );
-
-        return chatResult;
       }
     }
 
@@ -1102,7 +1107,7 @@ type CopilotRequestError = {
 
 function parseCopilotRequestErrorMessage(
   err: Error
-): CopilotRequestError | string {
+): CopilotRequestError | null {
   // Attempt to parse error message.
   // The `for await (const part of chatResponse.stream)`
   // may throw an error that has a message like this:
@@ -1151,7 +1156,6 @@ function parseCopilotRequestErrorMessage(
     }
   }
 
-  // If we got here somehow, just return return the original message from the
-  // error object.
-  return err.message;
+  // If we got here somehow, just return null.
+  return null;
 }

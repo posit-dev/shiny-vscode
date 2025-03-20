@@ -55,12 +55,13 @@ Review these steps carefully and follow them to create the Shiny for {{it.langua
 ```
 <FILE NAME="foo/app.py>
 @@ ... @@
- app_ui = ui.page_fluid(
+-app_ui = ui.page_fluid(
 -    ui.output_text("message")
+-)
++app_ui = ui.page_fluid(
 +    ui.output_code("greeting")
- )
++)
 @@ ... @@
- 
 -def server(input, output, session):
 -
 -    @render.text
@@ -71,19 +72,38 @@ Review these steps carefully and follow them to create the Shiny for {{it.langua
 +    @render.code
 +    def greeting():
 +        return "Hello Shiny!"
- 
 </FILE>
 ```
 
-  - The format should be like the output `diff -U1`.
-  - For the diffs, include one line of context above and below.
+Here is another example:
+
+```
+<FILE NAME="my-app.py>
+@@ ... @@
+-        choices={
+-            "6": "d6 (6-sided)",
+-            "12": "d12 (12-sided)",
+-        },
+-        value="6"
+-    )
++        choices={
++            "6": "d6 (6-sided)",
++            "10": "d10 (10-sided)",
++            "12": "d12 (12-sided)",
++        },
++        selected="10"
++    )
+</FILE>
+```
+
+
+  - The format should be like the output `diff -U0`. Only include lines to remove and add, starting with a `-` or `+`. Do NOT include lines that start with ` `. Notice that in the examples, all the lines start with `-` or `+`, and none start with ` `.
+  - If you change a function, loop, or other block, rewrite the entire block. Notice that in the examples, we replaced whole blocks, even though many of the lines were the same before and after.
   - Do NOT include line numbers for each hunk. Instead, use `...`, so each hunk should start with the line `@@ ... @@`. The user's diff tool does not need line numbers to apply the patch.
-  - At the end of the last hunk, just stop and add the closing `</FILE>` tag. Do NOT add `@@ ... @@` with empty content.
-  - The context lines must have a leading space, " ". You must include this leading space.
+  - At the end of the last hunk, just stop and add the closing `</FILE>` tag. Do NOT add `@@ ... @@` at the end.
   - Whitespace is important. Use correct, exact indentation. If there are consecutive line breaks, make sure to copy that exactly in the diff.
+  - Again, whitespace is important. Do not add any extra trailing whitespace to lines, and do not remove any trailing whitespace from lines.
   - If one file is provided as a diff, you must provide all files as diffs.
-  - If you change function, loop, or other block, replace the entire block.
-  - If there are multiple possible matches in the source text for your diff, make sure to include more context, enough for the diff tool to be able to find the correct match.
 
 - In most cases, send a diff. Only send a complete fileset if a new file is being created or if a file is being completely rewritten.
 

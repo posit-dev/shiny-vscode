@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
+import { getIdeName } from "../extension-api-utils/extensionHost";
 import { applyFileSetDiff, type DiffError } from "./diff";
 import {
   inferFileType,
@@ -420,276 +421,307 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // calling itself recursively until there are no more tool calls in the
     // response.
     async function runWithTools() {
-      const chatResponse = await request.model.sendRequest(
-        messages,
-        options,
-        token
-      );
+      try {
+        const chatResponse = await request.model.sendRequest(
+          messages,
+          options,
+          token
+        );
 
-      // Stream the response
-      const toolCalls: vscode.LanguageModelToolCallPart[] = [];
-      const tagProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
-      let fileSet: FileSet | null = null;
-      let diffErrors: DiffError[] = [];
-      // States of a state machine to handle the response
-      let state: "TEXT" | "FILESET" | "FILE" = "TEXT";
-      // When processing text in the FILE state, the first chunk of text may have
-      // a leading \n that needs to be removed;
-      let fileStateProcessedFirstChunk = false;
-      // The response text streamed in from the LLM.
-      let thisTurnResponseText = "";
+        // Stream the response
+        const toolCalls: vscode.LanguageModelToolCallPart[] = [];
+        const tagProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
+        let fileSet: FileSet | null = null;
+        let diffErrors: DiffError[] = [];
+        // States of a state machine to handle the response
+        let state: "TEXT" | "FILESET" | "FILE" = "TEXT";
+        // When processing text in the FILE state, the first chunk of text may have
+        // a leading \n that needs to be removed;
+        let fileStateProcessedFirstChunk = false;
+        // The response text streamed in from the LLM.
+        let thisTurnResponseText = "";
 
-      for await (const part of chatResponse.stream) {
-        if (part instanceof vscode.LanguageModelTextPart) {
-          rawResponseText += part.value;
-        } else if (part instanceof vscode.LanguageModelToolCallPart) {
-          toolCalls.push(part);
-          continue;
-        } else {
-          console.log("Unknown part type: ", part);
-          continue;
-        }
+        for await (const part of chatResponse.stream) {
+          if (part instanceof vscode.LanguageModelTextPart) {
+            rawResponseText += part.value;
+          } else if (part instanceof vscode.LanguageModelToolCallPart) {
+            toolCalls.push(part);
+            continue;
+          } else {
+            console.log("Unknown part type: ", part);
+            continue;
+          }
 
-        thisTurnResponseText += part.value;
-        const processedFragment = tagProcessor.process(part.value);
+          thisTurnResponseText += part.value;
+          const processedFragment = tagProcessor.process(part.value);
 
-        for (const part of processedFragment) {
-          // TODO: flush at the end?
-          if (state === "TEXT") {
-            if (part.type === "text") {
-              stream.markdown(part.text);
-            } else if (part.type === "tag") {
-              if (part.kind === "open") {
-                if (part.name === "FILESET") {
-                  state = "FILESET";
-                  // TODO: handle multiple filesets? Or just error?
-                  responseContainsFileSet = true;
+          for (const part of processedFragment) {
+            // TODO: flush at the end?
+            if (state === "TEXT") {
+              if (part.type === "text") {
+                stream.markdown(part.text);
+              } else if (part.type === "tag") {
+                if (part.kind === "open") {
+                  if (part.name === "FILESET") {
+                    state = "FILESET";
+                    // TODO: handle multiple filesets? Or just error?
+                    responseContainsFileSet = true;
 
-                  let format: "complete" | "diff" = "complete";
-                  if (part.attributes["FORMAT"] === "diff") {
-                    format = "diff";
-                  }
+                    let format: "complete" | "diff" = "complete";
+                    if (part.attributes["FORMAT"] === "diff") {
+                      format = "diff";
+                    }
 
-                  fileSet = {
-                    format: format,
-                    files: [],
-                  };
-                } else if (part.name === "FILE") {
-                  console.log(
-                    "Parse error: <FILE> tag found, but not in <FILESET> block."
-                  );
-                }
-              } else if (part.kind === "close") {
-                console.log(
-                  "Parse error: Unexpected closing tag in TEXT state."
-                );
-              }
-            } else {
-              console.log("Parse error: Unexpected part type in TEXT state.");
-            }
-          } else if (state === "FILESET") {
-            if (part.type === "text") {
-              // console.log(
-              //   "Parse error: Unexpected text in FILESET state.",
-              //   part.text,
-              //   "."
-              // );
-              stream.markdown(part.text);
-            } else if (part.type === "tag") {
-              if (part.kind === "open") {
-                if (part.name === "FILESET") {
-                  console.log(
-                    `Parse error: <FILESET> cannot have child tag <${part.name}>.`
-                  );
-                } else if (part.name === "FILE") {
-                  state = "FILE";
-                  fileStateProcessedFirstChunk = false;
-
-                  if (!part.attributes["NAME"]) {
+                    fileSet = {
+                      format: format,
+                      files: [],
+                    };
+                  } else if (part.name === "FILE") {
                     console.log(
-                      "Parse error: <FILE> tag found without NAME attribute."
+                      "Parse error: <FILE> tag found, but not in <FILESET> block."
                     );
                   }
-                  fileSet!.files.push({
-                    name: part.attributes["NAME"],
-                    content: "",
-                    type: "text",
-                  });
-                  stream.markdown("\n### " + part.attributes["NAME"] + "\n");
-                  stream.markdown("```");
-                  if (fileSet!.format === "diff") {
-                    stream.markdown("diff");
-                  } else {
-                    const fileType = inferFileType(part.attributes["NAME"]);
-                    if (fileType !== "text") {
-                      stream.markdown(fileType);
-                    }
-                  }
-                  stream.markdown("\n");
+                } else if (part.kind === "close") {
+                  console.log(
+                    "Parse error: Unexpected closing tag in TEXT state."
+                  );
                 }
-              } else if (part.kind === "close") {
-                if (part.name === "FILESET") {
-                  if (fileSet) {
-                    // Add files to the proposedFilePreviewProvider
-                    proposedFilePreviewCounter++;
-                    const proposedFilesPrefixDir =
-                      "/app-preview-" + proposedFilePreviewCounter;
+              } else {
+                console.log("Parse error: Unexpected part type in TEXT state.");
+              }
+            } else if (state === "FILESET") {
+              if (part.type === "text") {
+                // console.log(
+                //   "Parse error: Unexpected text in FILESET state.",
+                //   part.text,
+                //   "."
+                // );
+                stream.markdown(part.text);
+              } else if (part.type === "tag") {
+                if (part.kind === "open") {
+                  if (part.name === "FILESET") {
+                    console.log(
+                      `Parse error: <FILESET> cannot have child tag <${part.name}>.`
+                    );
+                  } else if (part.name === "FILE") {
+                    state = "FILE";
+                    fileStateProcessedFirstChunk = false;
 
-                    if (fileSet.format === "diff") {
-                      // For each file, if it ends with a trailing "\n", remove
-                      // it. This is because the LLM usually puts a "\n" before
-                      // "</FILE>", but that "\n" shouldn't actually be part of
-                      // the diff context.
-                      for (const file of fileSet.files) {
-                        if (
-                          file.type === "text" &&
-                          file.content.endsWith("\n")
-                        ) {
-                          file.content = file.content.replace(/\n$/, "");
+                    if (!part.attributes["NAME"]) {
+                      console.log(
+                        "Parse error: <FILE> tag found without NAME attribute."
+                      );
+                    }
+                    fileSet!.files.push({
+                      name: part.attributes["NAME"],
+                      content: "",
+                      type: "text",
+                    });
+                    stream.markdown("\n### " + part.attributes["NAME"] + "\n");
+                    stream.markdown("```");
+                    if (fileSet!.format === "diff") {
+                      stream.markdown("diff");
+                    } else {
+                      const fileType = inferFileType(part.attributes["NAME"]);
+                      if (fileType !== "text") {
+                        stream.markdown(fileType);
+                      }
+                    }
+                    stream.markdown("\n");
+                  }
+                } else if (part.kind === "close") {
+                  if (part.name === "FILESET") {
+                    if (fileSet) {
+                      // Add files to the proposedFilePreviewProvider
+                      proposedFilePreviewCounter++;
+                      const proposedFilesPrefixDir =
+                        "/app-preview-" + proposedFilePreviewCounter;
+
+                      if (fileSet.format === "diff") {
+                        // For each file, if it ends with a trailing "\n", remove
+                        // it. This is because the LLM usually puts a "\n" before
+                        // "</FILE>", but that "\n" shouldn't actually be part of
+                        // the diff context.
+                        for (const file of fileSet.files) {
+                          if (
+                            file.type === "text" &&
+                            file.content.endsWith("\n")
+                          ) {
+                            file.content = file.content.replace(/\n$/, "");
+                          }
                         }
+
+                        const result = await applyFileSetDiff(
+                          fileSet,
+                          workspaceFolderUri.fsPath
+                        );
+
+                        fileSet = result.fileSet;
+                        diffErrors = result.diffErrors;
                       }
 
-                      const result = await applyFileSetDiff(
-                        fileSet,
-                        workspaceFolderUri.fsPath
+                      // TODO: Remove question mark from proposedFilePreviewProvider
+                      proposedFilePreviewProvider?.addFiles(
+                        fileSet.files,
+                        proposedFilesPrefixDir
                       );
 
-                      fileSet = result.fileSet;
-                      diffErrors = result.diffErrors;
+                      stream.button({
+                        title: "View changes as diff",
+                        command: "shiny.assistant.showDiff",
+                        arguments: [
+                          fileSet,
+                          workspaceFolderUri,
+                          proposedFilesPrefixDir,
+                        ],
+                      });
+
+                      stream.button({
+                        title: "Apply changes",
+                        command: "shiny.assistant.saveFilesToWorkspace",
+                        arguments: [fileSet.files, true],
+                      });
+
+                      stream.markdown(
+                        new vscode.MarkdownString(
+                          `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(projectSettings.language!)} editor panel to run the app.\n\n`,
+                          true
+                        )
+                      );
                     }
-
-                    // TODO: Remove question mark from proposedFilePreviewProvider
-                    proposedFilePreviewProvider?.addFiles(
-                      fileSet.files,
-                      proposedFilesPrefixDir
-                    );
-
-                    stream.button({
-                      title: "View changes as diff",
-                      command: "shiny.assistant.showDiff",
-                      arguments: [
-                        fileSet,
-                        workspaceFolderUri,
-                        proposedFilesPrefixDir,
-                      ],
-                    });
-
-                    stream.button({
-                      title: "Apply changes",
-                      command: "shiny.assistant.saveFilesToWorkspace",
-                      arguments: [fileSet.files, true],
-                    });
-
-                    stream.markdown(
-                      new vscode.MarkdownString(
-                        `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(projectSettings.language!)} editor panel to run the app.\n\n`,
-                        true
-                      )
+                    state = "TEXT";
+                  } else {
+                    console.log(
+                      "Parse error: Unexpected closing tag in FILESET state."
                     );
                   }
-                  state = "TEXT";
-                } else {
-                  console.log(
-                    "Parse error: Unexpected closing tag in FILESET state."
-                  );
                 }
-              }
-            } else {
-              console.log(
-                "Parse error: Unexpected part type in FILESET state."
-              );
-            }
-          } else if (state === "FILE") {
-            if (part.type === "text") {
-              if (!fileStateProcessedFirstChunk) {
-                fileStateProcessedFirstChunk = true;
-                // "<FILE>" may be followed by "\n", which needs to be removed.
-                if (part.text.startsWith("\n")) {
-                  part.text = part.text.slice(1);
-                }
-              }
-              stream.markdown(part.text);
-              // Add text to the current file content
-              fileSet!.files[fileSet!.files.length - 1].content += part.text;
-            } else if (part.type === "tag") {
-              if (part.kind === "open") {
+              } else {
                 console.log(
-                  "Parse error: tags inside of <FILE> are not supported."
+                  "Parse error: Unexpected part type in FILESET state."
                 );
-              } else if (part.kind === "close") {
-                if (part.name === "FILE") {
-                  stream.markdown("```");
-                  state = "FILESET";
-                } else {
+              }
+            } else if (state === "FILE") {
+              if (part.type === "text") {
+                if (!fileStateProcessedFirstChunk) {
+                  fileStateProcessedFirstChunk = true;
+                  // "<FILE>" may be followed by "\n", which needs to be removed.
+                  if (part.text.startsWith("\n")) {
+                    part.text = part.text.slice(1);
+                  }
+                }
+                stream.markdown(part.text);
+                // Add text to the current file content
+                fileSet!.files[fileSet!.files.length - 1].content += part.text;
+              } else if (part.type === "tag") {
+                if (part.kind === "open") {
                   console.log(
-                    "Parse error: Unexpected closing tag in FILE state."
+                    "Parse error: tags inside of <FILE> are not supported."
                   );
+                } else if (part.kind === "close") {
+                  if (part.name === "FILE") {
+                    stream.markdown("```");
+                    state = "FILESET";
+                  } else {
+                    console.log(
+                      "Parse error: Unexpected closing tag in FILE state."
+                    );
+                  }
                 }
               }
             }
           }
         }
-      }
-
-      messages.push(
-        vscode.LanguageModelChatMessage.Assistant([
-          new vscode.LanguageModelTextPart(thisTurnResponseText),
-          ...toolCalls,
-        ])
-      );
-
-      if (diffErrors.length > 0) {
-        // TODO: Send error messages back to LLM
-        stream.markdown(
-          "The following errors occurred while applying the diff:\n\n"
-        );
-        stream.markdown(diffErrors.map((error) => error.message).join("\n\n"));
-      }
-
-      if (toolCalls.length > 0) {
-        const toolCallsResults: Array<vscode.LanguageModelToolResultPart> = [];
-        for (const toolCall of toolCalls) {
-          const tool = tools.find((tool) => tool.name === toolCall.name);
-          if (!tool) {
-            console.log(`Tool not found: ${toolCall.name}`);
-            continue;
-          }
-          const result = await tool.invoke(toolCall.input, {
-            stream: stream,
-            newTerminalName: "Shiny Assistant tool calls",
-            // By leaving this undefined, the first tool call that needs a terminal
-            // will create the Terminal, and future tool calls will reuse it.
-            terminal: undefined,
-            extensionContext: extensionContext,
-            cancellationToken: dummyCancellationToken,
-          });
-
-          if (result === undefined) {
-            console.log(`Tool returned undefined: ${toolCall.name}`);
-            continue;
-          }
-
-          const resultWrapped = wrapToolInvocationResult(result);
-          const toolCallResult = new vscode.LanguageModelToolResultPart(
-            toolCall.callId,
-            resultWrapped.content
-          );
-          toolCallsResults.push(toolCallResult);
-        }
-        messages.push(vscode.LanguageModelChatMessage.User(toolCallsResults));
 
         messages.push(
-          vscode.LanguageModelChatMessage.User(
-            "The messages above contain the results from one or more tool calls. The user can't see these results, so you should explain to the user if you reference them in your response."
-          )
+          vscode.LanguageModelChatMessage.Assistant([
+            new vscode.LanguageModelTextPart(thisTurnResponseText),
+            ...toolCalls,
+          ])
         );
 
-        // Loop until there are no more tool calls
-        stream.markdown("\n\n");
-        stream.progress("");
-        // Add line breaks between tool call loop iterations.
-        rawResponseText += "\n\n";
-        return runWithTools();
+        if (diffErrors.length > 0) {
+          // TODO: Send error messages back to LLM
+          stream.markdown(
+            "The following errors occurred while applying the diff:\n\n"
+          );
+          stream.markdown(
+            diffErrors.map((error) => error.message).join("\n\n")
+          );
+        }
+
+        if (toolCalls.length > 0) {
+          const toolCallsResults: Array<vscode.LanguageModelToolResultPart> =
+            [];
+          for (const toolCall of toolCalls) {
+            const tool = tools.find((tool) => tool.name === toolCall.name);
+            if (!tool) {
+              console.log(`Tool not found: ${toolCall.name}`);
+              continue;
+            }
+            const result = await tool.invoke(toolCall.input, {
+              stream: stream,
+              newTerminalName: "Shiny Assistant tool calls",
+              // By leaving this undefined, the first tool call that needs a terminal
+              // will create the Terminal, and future tool calls will reuse it.
+              terminal: undefined,
+              extensionContext: extensionContext,
+              cancellationToken: dummyCancellationToken,
+            });
+
+            if (result === undefined) {
+              console.log(`Tool returned undefined: ${toolCall.name}`);
+              continue;
+            }
+
+            const resultWrapped = wrapToolInvocationResult(result);
+            const toolCallResult = new vscode.LanguageModelToolResultPart(
+              toolCall.callId,
+              resultWrapped.content
+            );
+            toolCallsResults.push(toolCallResult);
+          }
+          messages.push(vscode.LanguageModelChatMessage.User(toolCallsResults));
+
+          messages.push(
+            vscode.LanguageModelChatMessage.User(
+              "The messages above contain the results from one or more tool calls. The user can't see these results, so you should explain to the user if you reference them in your response."
+            )
+          );
+
+          // Loop until there are no more tool calls
+          stream.markdown("\n\n");
+          stream.progress("");
+          // Add line breaks between tool call loop iterations.
+          rawResponseText += "\n\n";
+          return runWithTools();
+        }
+      } catch (err) {
+        let errorMessage: string | null = null;
+        if (err instanceof Error) {
+          const errorResult = parseCopilotRequestErrorMessage(err);
+          if (typeof errorResult === "string") {
+            errorMessage = errorResult;
+          } else if (errorResult.error.code === "model_not_supported") {
+            stream.markdown(
+              `The requested model, ${request.model.name} is not enabled. You can enable it at [https://github.com/settings/copilot](https://github.com/settings/copilot). Scroll down to **Anthropic Claude 3.5 Sonnet in Copilot** and set it to **Enable**.\n\n`
+            );
+            stream.markdown(
+              `Or you can send another message in this chat without \`@shiny\`, like \`"Hello"\`, and Copilot will ask you if you want to enable ${request.model.name}. After you enable it, remember to start the next message with \`@shiny\` again.\n\n`
+            );
+            stream.markdown(
+              `After enabling the model, you may need to reload this window or restart ${getIdeName()} to use it.`
+            );
+          }
+          return chatResult;
+        }
+
+        console.error("Error processing response:", errorMessage ?? err);
+        stream.markdown(
+          `An error occurred while processing the response from the language model: ${errorMessage ?? err}. Please try again.`
+        );
+
+        return chatResult;
       }
     }
 
@@ -1053,4 +1085,73 @@ ${value}
   } else {
     throw new Error("Unsupported value type for context block.");
   }
+}
+
+// I am not sure this structure handles all possible errors -- I did not find
+// documentation about the Copilot API and what shape the errors could take.
+type CopilotRequestError = {
+  summary: string;
+  code: number;
+  error: {
+    message: string;
+    param: string;
+    code: string;
+    type: string;
+  };
+};
+
+function parseCopilotRequestErrorMessage(
+  err: Error
+): CopilotRequestError | string {
+  // Attempt to parse error message.
+  // The `for await (const part of chatResponse.stream)`
+  // may throw an error that has a message like this:
+  // 'Request Failed: 400 {"error":{"message":"The requested model is not supported.","param":"model","code":"model_not_supported","type":"invalid_request_error"}}'
+
+  let summary = "";
+  let jsonStr = "";
+
+  // Grab part before the JSON
+  const firstBraceIndex = err.message.indexOf("{");
+  if (firstBraceIndex !== -1) {
+    summary = err.message.substring(0, firstBraceIndex);
+    jsonStr = err.message.substring(firstBraceIndex);
+  }
+
+  const code = parseInt(summary.match(/\d+/)?.[0] || "-1");
+
+  if (jsonStr) {
+    try {
+      const errorJson = JSON.parse(jsonStr);
+
+      // Check if the expected properties exist
+      if (
+        errorJson &&
+        typeof errorJson === "object" &&
+        "error" in errorJson &&
+        typeof errorJson.error === "object" &&
+        "message" in errorJson.error &&
+        typeof errorJson.error.message === "string" &&
+        "param" in errorJson.error &&
+        typeof errorJson.error.param === "string" &&
+        "code" in errorJson.error &&
+        typeof errorJson.error.code === "string" &&
+        "type" in errorJson.error &&
+        typeof errorJson.error.type === "string"
+      ) {
+        // Yay! This matches the format we expected.
+        return {
+          summary,
+          code,
+          error: errorJson.error,
+        };
+      }
+    } catch (parseError) {
+      // If JSON parsing fails, just fall through
+    }
+  }
+
+  // If we got here somehow, just return return the original message from the
+  // error object.
+  return err.message;
 }

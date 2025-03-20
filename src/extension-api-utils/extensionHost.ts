@@ -63,3 +63,11 @@ function getPositronAPI(): undefined | any {
 
   return globalThis.acquirePositronApi();
 }
+
+export function getIdeName() {
+  if (getPositronAPI() !== undefined) {
+    return "Positron";
+  } else {
+    return "VS Code";
+  }
+}

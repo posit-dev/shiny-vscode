@@ -917,6 +917,9 @@ async function setAppSubdirDialog(
       // Set the selected folder as the app subdirectory
       projectSettings.appSubdir = relativePath;
       callback(true);
+    } else {
+      // User pressed Cancel
+      callback(false);
     }
   } else {
     // Strip leading and trailing slashes
@@ -925,7 +928,6 @@ async function setAppSubdirDialog(
     projectSettings.appSubdir = subdir;
     callback(true);
   }
-  callback(false);
 }
 
 /**

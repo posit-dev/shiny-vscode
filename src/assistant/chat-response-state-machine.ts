@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
-import type * as vscode from "vscode";
-import type { DiffError } from "./diff";
+import * as vscode from "vscode";
+import { applyFileSetDiff, type DiffError } from "./diff";
+import { inferFileType, type LangName, langNameToFileExt } from "./language";
 import type { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StateMachine } from "./state-machine";
 import type { FileSet } from "./types";
@@ -68,11 +69,11 @@ export type ChatResponseEventNames = ChatResponseEventObject["type"];
  */
 export type ChatResponseStateMachineConfig = {
   stream: vscode.ChatResponseStream;
-  workspaceFolderUri?: vscode.Uri;
-  proposedFilePreviewProvider?: ProposedFilePreviewProvider;
-  proposedFilePreviewCounter?: number;
-  incrementPreviewCounter?: () => number;
-  projectLanguage?: string;
+  workspaceFolderUri: vscode.Uri;
+  proposedFilePreviewProvider: ProposedFilePreviewProvider;
+  proposedFilePreviewCounter: number;
+  incrementPreviewCounter: () => number;
+  projectLanguage: LangName;
 };
 
 /**
@@ -89,6 +90,11 @@ export class ChatResponseStateMachine extends StateMachine<
 > {
   private config: ChatResponseStateMachineConfig;
   private fileSet: FileSet | null = null;
+  private diffErrors: DiffError[] = [];
+
+  // In the FILE state, the very first line of the file content is a spurious
+  // newline.
+  private fileStateHasRemovedFirstNewline = false;
 
   /**
    * Creates a new chat response state machine for processing chat responses.
@@ -127,7 +133,7 @@ export class ChatResponseStateMachine extends StateMachine<
       FILE: {
         on: {
           processText: {
-            action: this.renderText.bind(this),
+            action: this.renderFileText.bind(this),
           },
           closeFile: {
             target: "FILESET",
@@ -173,10 +179,24 @@ export class ChatResponseStateMachine extends StateMachine<
   }
 
   private renderText(eventObj: ChatResponseEventProcessText) {
-    if (eventObj.type === "processText") {
-      console.log(`Processing text: ${eventObj.text}`);
-    }
     this.config.stream.markdown(eventObj.text);
+  }
+
+  private renderFileText(eventObj: ChatResponseEventProcessText) {
+    const currentFile = this.fileSet!.files[this.fileSet!.files.length - 1];
+    let text = eventObj.text;
+
+    // The very first line of the FILE content is a spurious newline, because of
+    // the XML tag format.
+    if (!this.fileStateHasRemovedFirstNewline) {
+      // Remove the first newline from the file content
+      if (text.startsWith("\n")) {
+        text = text.slice(1);
+      }
+      this.fileStateHasRemovedFirstNewline = true;
+    }
+    currentFile.content += text;
+    this.config.stream.markdown(text);
   }
 
   private openFileset(eventObj: ChatResponseEventOpenFileset) {
@@ -186,7 +206,6 @@ export class ChatResponseStateMachine extends StateMachine<
       throw new Error(`Invalid fileset format: ${format}`);
     }
 
-    console.log(`Opening fileset with format: ${format}`);
     this.fileSet = {
       format,
       files: [],
@@ -194,25 +213,89 @@ export class ChatResponseStateMachine extends StateMachine<
   }
 
   private closeFileset(eventObj: ChatResponseEventCloseFileset) {
-    console.log("Closing fileset");
+    this.config.incrementPreviewCounter();
+    const proposedFilesPrefixDir =
+      "/app-preview-" + this.config.proposedFilePreviewCounter;
+
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    (async () => {
+      if (this.fileSet!.format === "diff") {
+        // For each file, if it ends with a trailing "\n", remove it. This is
+        // because the LLM usually puts a "\n" before "</FILE>", but that "\n"
+        // shouldn't actually be part of the diff context.
+        for (const file of this.fileSet!.files) {
+          if (file.type === "text" && file.content.endsWith("\n")) {
+            file.content = file.content.replace(/\n$/, "");
+          }
+        }
+
+        const result = await applyFileSetDiff(
+          this.fileSet!,
+          this.config.workspaceFolderUri.fsPath
+        );
+
+        this.fileSet = result.fileSet;
+        this.diffErrors = result.diffErrors;
+      }
+
+      this.config.proposedFilePreviewProvider.addFiles(
+        this.fileSet!.files,
+        proposedFilesPrefixDir
+      );
+
+      this.config.stream.button({
+        title: "View changes as diff",
+        command: "shiny.assistant.showDiff",
+        arguments: [
+          this.fileSet!,
+          this.config.workspaceFolderUri,
+          proposedFilesPrefixDir,
+        ],
+      });
+
+      this.config.stream.button({
+        title: "Apply changes",
+        command: "shiny.assistant.saveFilesToWorkspace",
+        arguments: [this.fileSet!.files, true],
+      });
+
+      this.config.stream.markdown(
+        new vscode.MarkdownString(
+          `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(this.config.projectLanguage)} editor panel to run the app.\n\n`,
+          true
+        )
+      );
+    })();
   }
 
   private openFile(eventObj: ChatResponseEventOpenFile) {
-    console.log(`Opening file: ${eventObj.name}`);
     if (!this.fileSet) {
       throw new Error("Fileset not initialized");
     }
+
+    this.fileStateHasRemovedFirstNewline = false;
 
     this.fileSet.files.push({
       name: eventObj.name,
       content: "",
       type: "text",
     });
+
+    this.config.stream.markdown("\n### " + eventObj.name + "\n");
+    this.config.stream.markdown("```");
+    if (this.fileSet!.format === "diff") {
+      this.config.stream.markdown("diff");
+    } else {
+      const fileType = inferFileType(eventObj.name);
+      if (fileType !== "text") {
+        this.config.stream.markdown(fileType);
+      }
+    }
+    this.config.stream.markdown("\n");
   }
 
   private closeFile(eventObj: ChatResponseEventCloseFile) {
-    console.log(
-      `Closing file: ${this.fileSet?.files[this.fileSet?.files.length - 1].name}`
-    );
+    this.config.stream.markdown("```");
+    this.config.stream.markdown("\n");
   }
 }

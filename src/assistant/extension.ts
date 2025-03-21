@@ -479,16 +479,20 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
             } else if (fragment.type === "tag") {
               if (fragment.kind === "open") {
                 if (fragment.name === "FILESET") {
+                  // Default to "complete" if no format is specified
+                  const format = fragment.attributes.FORMAT ?? "complete";
+                  if (format !== "complete" && format !== "diff") {
+                    throw new Error(`Invalid fileset format: ${format}`);
+                  }
+
                   stateMachine.send({
                     type: "openFileset",
-                    format: fragment.attributes["FORMAT"] as
-                      | "complete"
-                      | "diff",
+                    format: format,
                   });
                 } else if (fragment.name === "FILE") {
                   stateMachine.send({
                     type: "openFile",
-                    name: fragment.attributes["NAME"],
+                    name: fragment.attributes.NAME,
                   });
                 } else if (fragment.name === "DIFFCHUNK") {
                   stateMachine.send({ type: "openDiffChunk" });

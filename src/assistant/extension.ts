@@ -1,11 +1,10 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { AnyEventObject, AnyState, createMachine, interpret } from "xstate";
 import { isShinyAppFilename } from "../extension";
 import { isPositron } from "../extension-api-utils/extensionHost";
-import { applyFileSetDiff, type DiffError } from "./diff";
+import { ChatResponseStateMachine } from "./chat-response-state-machine";
+import { type DiffError } from "./diff";
 import {
-  inferFileType,
   langNameToFileExt,
   langNameToProperName,
   type LangName,
@@ -291,7 +290,9 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // If the language hasn't been set yet, ask the user what they want.
     // ========================================================================
     if (projectSettings.language === null) {
-      stream.markdown("What language you want to use for your Shiny app?\n\n");
+      stream.markdown(
+        "What language do you want to use for your Shiny app?\n\n"
+      );
       const setProjectLanguagePromise = createPromiseWithStatus<void>();
 
       stream.button({
@@ -413,10 +414,10 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     const options: vscode.LanguageModelChatRequestOptions = {
       tools: tools,
     };
-    let responseContainsFileSet = false;
+    let fullResponseContainsFileSet = false;
     // Collect all the raw text from the LLM. This will include the text
-    // spanning multiple tool calls, if present.
-    let rawResponseText = "";
+    // spanning multiple tool call turns, if applicable.
+    let fullRawResponseText = "";
 
     // If there are any tool calls in the response, this function loops by
     // calling itself recursively until there are no more tool calls in the
@@ -431,331 +432,92 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
         // Stream the response
         const toolCalls: vscode.LanguageModelToolCallPart[] = [];
-        const tagProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
-        let fileSet: FileSet | null = null;
+        const tagProcessor = new StreamingTagProcessor([
+          "FILESET",
+          "FILE",
+          "DIFFCHUNK",
+          "DIFFOLD",
+          "DIFFNEW",
+        ]);
         let diffErrors: DiffError[] = [];
         // The response text streamed in from the LLM.
         let thisTurnResponseText = "";
 
-        // Create a state machine using XState
-        const tagMachine = createMachine({
-          id: "tagProcessor",
-          initial: "text",
-          states: {
-            text: {
-              on: {
-                processText: {
-                  actions: ["renderText"],
-                },
-                openFileset: {
-                  target: "fileset",
-                  actions: ["createFileSet"],
-                },
-                openFile: {
-                  actions: () => {
-                    console.log(
-                      "Parse error: <FILE> tag found, but not in <FILESET> block."
-                    );
-                  },
-                },
-                closeFileset: {
-                  actions: () => {
-                    console.log(
-                      "Parse error: Unexpected closing tag in TEXT state."
-                    );
-                  },
-                },
-                closeFile: {
-                  actions: () => {
-                    console.log(
-                      "Parse error: Unexpected closing tag in TEXT state."
-                    );
-                  },
-                },
-              },
-            },
-            fileset: {
-              on: {
-                processText: {
-                  actions: ["renderText"],
-                },
-                openFileset: {
-                  actions: () => {
-                    console.log(
-                      `Parse error: <FILESET> cannot have child tag <FILESET>.`
-                    );
-                  },
-                },
-                closeFileset: {
-                  target: "text",
-                  actions: ["finalizeFileSet"],
-                },
-                openFile: {
-                  target: "file",
-                  actions: ["createFile"],
-                },
-                closeFile: {
-                  actions: () => {
-                    console.log(
-                      "Parse error: Unexpected closing tag in FILESET state."
-                    );
-                  },
-                },
-              },
-            },
-            file: {
-              entry: () => {
-                // Reset first chunk flag when entering file state
-                fileStateProcessedFirstChunk = false;
-              },
-              on: {
-                processText: {
-                  actions: ["processFileContent"],
-                },
-                openFileset: {
-                  actions: () => {
-                    console.log(
-                      "Parse error: tags inside of <FILE> are not supported."
-                    );
-                  },
-                },
-                openFile: {
-                  actions: () => {
-                    console.log(
-                      "Parse error: tags inside of <FILE> are not supported."
-                    );
-                  },
-                },
-                closeFile: {
-                  target: "fileset",
-                  actions: ["finalizeFile"],
-                },
-                closeFileset: {
-                  actions: () => {
-                    console.log(
-                      "Parse error: Unexpected closing tag in FILE state."
-                    );
-                  },
-                },
-              },
-            },
-          },
+        // Initialize the ChatResponseStateMachine
+        const stateMachine = new ChatResponseStateMachine({
+          stream,
+          workspaceFolderUri,
+          proposedFilePreviewProvider,
+          proposedFilePreviewCounter,
+          incrementPreviewCounter: () => ++proposedFilePreviewCounter,
+          projectLanguage: projectSettings.language
+            ? projectSettings.language
+            : "",
         });
 
-        // Functions for handling state transitions and side effects
-        let fileStateProcessedFirstChunk = false;
-        let currentFileIndex = -1;
-
-        const renderText = (text: string) => {
-          stream.markdown(text);
-        };
-
-        const createFileSet = (format: "complete" | "diff") => {
-          responseContainsFileSet = true;
-          fileSet = {
-            format: format,
-            files: [],
-          };
-        };
-
-        const createFile = (name: string) => {
-          if (!fileSet) return;
-
-          if (!name) {
-            console.log(
-              "Parse error: <FILE> tag found without NAME attribute."
-            );
-          }
-
-          fileSet.files.push({
-            name: name,
-            content: "",
-            type: "text",
-          });
-
-          currentFileIndex = fileSet.files.length - 1;
-
-          stream.markdown("\n### " + name + "\n");
-          stream.markdown("```");
-
-          if (fileSet.format === "diff") {
-            stream.markdown("diff");
+        // Process the response stream
+        for await (const part of chatResponse.stream) {
+          if (part instanceof vscode.LanguageModelTextPart) {
+            fullRawResponseText += part.value;
+          } else if (part instanceof vscode.LanguageModelToolCallPart) {
+            toolCalls.push(part);
+            continue;
           } else {
-            const fileType = inferFileType(name);
-            if (fileType !== "text") {
-              stream.markdown(fileType);
-            }
+            console.log("Unknown part type: ", part);
+            continue;
           }
 
-          stream.markdown("\n");
-        };
+          thisTurnResponseText += part.value;
+          const processedFragment = tagProcessor.process(part.value);
 
-        const processFileContent = (text: string) => {
-          if (!fileSet || currentFileIndex < 0) return;
-
-          // "<FILE>" may be followed by "\n", which needs to be removed.
-          if (!fileStateProcessedFirstChunk && text.startsWith("\n")) {
-            text = text.slice(1);
-          }
-
-          fileStateProcessedFirstChunk = true;
-          stream.markdown(text);
-
-          // Add text to the current file content
-          fileSet.files[currentFileIndex].content += text;
-        };
-
-        const finalizeFile = () => {
-          stream.markdown("```");
-        };
-
-        const finalizeFileSet = async () => {
-          if (!fileSet) return;
-
-          // Add files to the proposedFilePreviewProvider
-          proposedFilePreviewCounter++;
-          const proposedFilesPrefixDir =
-            "/app-preview-" + proposedFilePreviewCounter;
-
-          if (fileSet.format === "diff") {
-            // For each file, if it ends with a trailing "\n", remove
-            // it. This is because the LLM usually puts a "\n" before
-            // "</FILE>", but that "\n" shouldn't actually be part of
-            // the diff context.
-            for (const file of fileSet.files) {
-              if (file.type === "text" && file.content.endsWith("\n")) {
-                file.content = file.content.replace(/\n$/, "");
-              }
-            }
-
-            const result = await applyFileSetDiff(
-              fileSet,
-              workspaceFolderUri.fsPath
-            );
-
-            fileSet = result.fileSet;
-            diffErrors = result.diffErrors;
-          }
-
-          // TODO: Remove question mark from proposedFilePreviewProvider
-          proposedFilePreviewProvider?.addFiles(
-            fileSet.files,
-            proposedFilesPrefixDir
-          );
-
-          stream.button({
-            title: "View changes as diff",
-            command: "shiny.assistant.showDiff",
-            arguments: [fileSet, workspaceFolderUri, proposedFilesPrefixDir],
-          });
-
-          stream.button({
-            title: "Apply changes",
-            command: "shiny.assistant.saveFilesToWorkspace",
-            arguments: [fileSet.files, true],
-          });
-
-          stream.markdown(
-            new vscode.MarkdownString(
-              `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(projectSettings.language!)} editor panel to run the app.\n\n`,
-              true
-            )
-          );
-        };
-
-        // Create the XState service
-        const tagService = interpret(tagMachine).start();
-
-        // We'll use custom handler functions for each event type
-        const handleEvents = async () => {
-          for await (const part of chatResponse.stream) {
-            if (part instanceof vscode.LanguageModelTextPart) {
-              rawResponseText += part.value;
-            } else if (part instanceof vscode.LanguageModelToolCallPart) {
-              toolCalls.push(part);
-              continue;
-            } else {
-              console.log("Unknown part type: ", part);
-              continue;
-            }
-
-            thisTurnResponseText += part.value;
-            const processedFragment = tagProcessor.process(part.value);
-
-            for (const fragment of processedFragment) {
-              if (fragment.type === "text") {
-                const currentState = tagService.getSnapshot().value;
-
-                if (currentState === "text" || currentState === "fileset") {
-                  renderText(fragment.text);
-                } else if (currentState === "file") {
-                  processFileContent(fragment.text);
+          for (const fragment of processedFragment) {
+            if (fragment.type === "text") {
+              stateMachine.send({
+                type: "processText",
+                text: fragment.text,
+              });
+            } else if (fragment.type === "tag") {
+              if (fragment.kind === "open") {
+                if (fragment.name === "FILESET") {
+                  stateMachine.send({
+                    type: "openFileset",
+                    format: fragment.attributes["FORMAT"] as
+                      | "complete"
+                      | "diff",
+                  });
+                } else if (fragment.name === "FILE") {
+                  stateMachine.send({
+                    type: "openFile",
+                    name: fragment.attributes["NAME"],
+                  });
+                } else if (fragment.name === "DIFFCHUNK") {
+                  stateMachine.send({ type: "openDiffChunk" });
+                } else if (fragment.name === "DIFFNEW") {
+                  stateMachine.send({ type: "openDiffNew" });
+                } else if (fragment.name === "DIFFOLD") {
+                  stateMachine.send({ type: "openDiffOld" });
                 }
-
-                // Also send to state machine to track state changes
-                tagService.send({
-                  type: "processText",
-                  text: fragment.text,
-                });
-              } else if (fragment.type === "tag") {
-                if (fragment.kind === "open") {
-                  if (fragment.name === "FILESET") {
-                    let format: "complete" | "diff" = "complete";
-                    if (fragment.attributes["FORMAT"] === "diff") {
-                      format = "diff";
-                    }
-
-                    // If we're in text state, create a file set
-                    if (tagService.getSnapshot().value === "text") {
-                      createFileSet(format);
-                    }
-
-                    // Send to state machine to update state
-                    tagService.send({
-                      type: "openFileset",
-                      format: format,
-                    });
-                  } else if (fragment.name === "FILE") {
-                    // If we're in fileset state, create a file
-                    if (tagService.getSnapshot().value === "fileset") {
-                      createFile(fragment.attributes["NAME"]);
-                    }
-
-                    // Send to state machine to update state
-                    tagService.send({
-                      type: "openFile",
-                      name: fragment.attributes["NAME"],
-                    });
-                  }
-                } else if (fragment.kind === "close") {
-                  if (fragment.name === "FILESET") {
-                    // If we're in fileset state, finalize file set
-                    if (tagService.getSnapshot().value === "fileset") {
-                      await finalizeFileSet();
-                    }
-
-                    // Send to state machine to update state
-                    tagService.send({ type: "closeFileset" });
-                  } else if (fragment.name === "FILE") {
-                    // If we're in file state, finalize file
-                    if (tagService.getSnapshot().value === "file") {
-                      finalizeFile();
-                    }
-
-                    // Send to state machine to update state
-                    tagService.send({ type: "closeFile" });
-                  }
+              } else if (fragment.kind === "close") {
+                if (fragment.name === "FILESET") {
+                  stateMachine.send({ type: "closeFileset" });
+                } else if (fragment.name === "FILE") {
+                  stateMachine.send({ type: "closeFile" });
+                } else if (fragment.name === "DIFFCHUNK") {
+                  stateMachine.send({ type: "closeDiffChunk" });
+                } else if (fragment.name === "DIFFNEW") {
+                  stateMachine.send({ type: "closeDiffNew" });
+                } else if (fragment.name === "DIFFOLD") {
+                  stateMachine.send({ type: "closeDiffOld" });
                 }
               }
             }
           }
-        };
+        }
 
-        // Execute the handler
-        await handleEvents();
-
-        // Stop the state machine service
-        tagService.stop();
+        // Get any diff errors from the state machine
+        diffErrors = stateMachine.getDiffErrors();
+        fullResponseContainsFileSet =
+          fullResponseContainsFileSet || stateMachine.hasFileSet();
 
         messages.push(
           vscode.LanguageModelChatMessage.Assistant([
@@ -817,7 +579,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           stream.markdown("\n\n");
           stream.progress("");
           // Add line breaks between tool call loop iterations.
-          rawResponseText += "\n\n";
+          fullRawResponseText += "\n\n";
           return runWithTools();
         }
       } catch (err) {
@@ -874,8 +636,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
     await runWithTools();
 
-    chatResult.metadata.rawResponseText = rawResponseText;
-    if (responseContainsFileSet) {
+    chatResult.metadata.rawResponseText = fullRawResponseText;
+    if (fullResponseContainsFileSet) {
       chatResult.metadata.followups.push(
         "Install the packages needed for my app."
       );

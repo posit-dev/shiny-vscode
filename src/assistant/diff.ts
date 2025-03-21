@@ -258,18 +258,12 @@ function parseDiff(diff: string): Array<DiffChunk> | DiffError {
   type State = "OUTSIDE" | "IN_CHUNK" | "IN_OLD" | "IN_NEW";
   let state: State = "OUTSIDE";
 
-  // Buffer to collect lines for old and new sections
-  let oldLines: string[] = [];
-  let newLines: string[] = [];
-
   for (const line of lines) {
     switch (state) {
       case "OUTSIDE":
         if (line === "<DIFFCHUNK>") {
           state = "IN_CHUNK";
           currentChunk = { old: [], new: [] };
-          oldLines = [];
-          newLines = [];
         } else if (line !== "") {
           return {
             status: "error",

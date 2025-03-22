@@ -24,7 +24,7 @@ This is what the diff format looks like:
  app = App(app_ui, server)
 ---------------------------
 
-It is similar to aunified diff, but lacks line numbers.
+It is similar to a unified diff, but lacks line numbers.
 
 One limitation to this diff format is that if there are multiple matches for the
 pattern (starting after the previous hunk), then it will always be the first one
@@ -32,6 +32,17 @@ that is replaced, even if the actual target was supposed to be a later match.
 This is a limitation of the diff format. It would be better to require line
 numbers like a traditional unified diff, but unfortunately, LLMs have trouble
 generating accurate line numbers.
+
+The reason for using this format is that LLMs will more reliably generated it
+than a traditional unified diff -- I was unable to get Claude 3.5 Sonnet to
+generate unified diffs that worked more than about 70% of the time.
+
+One limitation to this diff format is that if there are multiple matches for the
+pattern (starting after the previous chunk), then it will always be the first
+one that is replaced, even if the actual target was supposed to be a later
+match. This is a limitation of the diff format. It would be better to require
+line numbers like a traditional unified diff, but unfortunately, LLMs have
+trouble generating accurate line numbers.
 */
 
 export type DiffResult = {
@@ -64,9 +75,9 @@ export function applyDiff(
     return { status: "success", value: original };
   }
 
-  const hunks = parseDiff(diff);
-  if (!(hunks instanceof Array)) {
-    return hunks;
+  const chunks = parseDiff(diff);
+  if (!(chunks instanceof Array)) {
+    return chunks;
   }
 
   // Split the original text into lines
@@ -76,37 +87,21 @@ export function applyDiff(
 
   let currentLine = 0;
 
-  // Process each hunk in order
-  for (const hunk of hunks) {
-    // Extract pattern to search for (context + removed lines)
-    const searchPattern: string[] = [];
-    // Extract replacement (context + added lines)
-    const replacement: string[] = [];
-
-    // Build the search pattern and replacement
-    for (const line of hunk) {
-      if (line.type === "context" || line.type === "remove") {
-        searchPattern.push(line.content);
-      }
-
-      if (line.type === "context" || line.type === "add") {
-        replacement.push(line.content);
-      }
-    }
-
+  // Process each chunk in order
+  for (const chunk of chunks) {
     // If we have a search pattern, try to find it in the original
-    if (searchPattern.length > 0) {
+    if (chunk.old.length > 0) {
       let patternFound = false;
 
       // Start searching from the current position
       for (
         let i = currentLine;
-        i <= originalLines.length - searchPattern.length;
+        i <= originalLines.length - chunk.old.length;
         i++
       ) {
         let found = true;
-        for (let j = 0; j < searchPattern.length; j++) {
-          if (originalLines[i + j] !== searchPattern[j]) {
+        for (let j = 0; j < chunk.old.length; j++) {
+          if (originalLines[i + j] !== chunk.old[j]) {
             found = false;
             break;
           }
@@ -120,12 +115,12 @@ export function applyDiff(
           }
 
           // Add the replacement lines
-          for (const line of replacement) {
+          for (const line of chunk.new) {
             resultLines.push(line);
           }
 
           // Skip past the pattern in the original
-          currentLine += searchPattern.length;
+          currentLine += chunk.old.length;
           patternFound = true;
           break;
         }
@@ -133,22 +128,14 @@ export function applyDiff(
 
       if (!patternFound) {
         console.log(
-          `Could not find pattern in hunk: ${searchPattern.join("\n")}`
+          `Could not find search pattern in chunk: ${chunk.old.join("\n")}`
         );
         console.log(`Original: ${originalLines.join("\n")}`);
         return {
           status: "error",
-          message: "Could not find pattern to apply in hunk",
-          extra: { pattern: searchPattern.join("\n") },
+          message: "Could not find search pattern in chunk",
+          extra: { pattern: chunk.old.join("\n") },
         };
-      }
-    } else if (hunk.length > 0) {
-      // If there's no search pattern but we have added lines, just add them at
-      // the current position
-      for (const line of hunk) {
-        if (line.type === "add") {
-          resultLines.push(line.content);
-        }
       }
     }
   }
@@ -238,35 +225,29 @@ export async function applyFileSetDiff(
   return { fileSet: newFileSet, diffErrors };
 }
 
-/**
- * Represents a hunk in a unified diff.
- *
- * A hunk is a section of a diff that represents a contiguous set of changes.
- */
-type Hunk = Array<DiffLine>;
+type DiffChunk = {
+  old: Array<string>;
+  new: Array<string>;
+};
 
 /**
- * Represents a single line in a diff.
- *
- * Each line has a type indicating whether it's being added, removed, or is context,
- * and the content of the line (without the leading +, -, or space character).
- */
-type DiffLine = { type: "add" | "remove" | "context"; content: string };
-
-/**
- * Parses a unified diff string into an array of hunks.
+ * Parses a unified diff string into an array of chunks.
  *
  * This function takes a diff string in the unified diff format and parses it
- * into an array of Hunk objects, each representing a section of changes.
+ * into an array of Chunk objects, each representing a section of changes.
+ *
+ * Yes, they're called "chunks" instead of the traditional "hunk" here, because
+ * this function has been gone through a number of versions where it worked on a
+ * very different XML-based diff format.
  *
  * @param diff The unified diff string to parse
- * @returns An array of Hunk objects
+ * @returns An array of Chunk objects
  * @throws Error if an unknown line type is encountered
  */
-function parseDiff(diff: string): Array<Hunk> | DiffError {
-  const hunks: Array<Hunk> = [];
+function parseDiff(diff: string): Array<DiffChunk> | DiffError {
+  const chunks: Array<DiffChunk> = [];
   const lines = diff.split("\n");
-  let currentHunk: Hunk | null = null;
+  let currentChunk: DiffChunk | null = null;
 
   // Sometimes the LLM will generate a diff with headers that show the filename.
   // If present, just ignore them.
@@ -284,30 +265,32 @@ function parseDiff(diff: string): Array<Hunk> | DiffError {
 
   for (const line of lines) {
     if (line === "@@ ... @@") {
-      if (currentHunk) {
-        // Finished the previous hunk
-        hunks.push(currentHunk);
+      if (currentChunk) {
+        // Finished the previous chunk
+        chunks.push(currentChunk);
       }
 
-      currentHunk = [];
+      currentChunk = { old: [], new: [] };
       //
-    } else if (currentHunk) {
+    } else if (currentChunk) {
+      const lineContent = line.slice(1);
       // Add a line to the current hunk
-      let lineType: "add" | "remove" | "context";
       switch (line[0]) {
-        case "+":
-          lineType = "add";
-          break;
         case "-":
-          lineType = "remove";
+          currentChunk.old.push(lineContent);
+          break;
+        case "+":
+          currentChunk.new.push(lineContent);
           break;
         case " ":
-          lineType = "context";
+          currentChunk.old.push(lineContent);
+          currentChunk.new.push(lineContent);
           break;
         case undefined:
           // Gets here if line is "". Some diffs don't put a leading space when
           // the context line is empty.
-          lineType = "context";
+          currentChunk.old.push("");
+          currentChunk.new.push("");
           break;
         default:
           return {
@@ -316,9 +299,6 @@ function parseDiff(diff: string): Array<Hunk> | DiffError {
             extra: {},
           };
       }
-
-      const content = line.slice(1);
-      currentHunk.push({ type: lineType, content });
     } else {
       // Error because we're not in a hunk and we're not starting one
       return {
@@ -328,6 +308,81 @@ function parseDiff(diff: string): Array<Hunk> | DiffError {
       };
     }
   }
-  if (currentHunk) hunks.push(currentHunk);
-  return hunks;
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+function parseDiffOld(diff: string): Array<DiffChunk> | DiffError {
+  const chunks: Array<DiffChunk> = [];
+  const lines = diff.split("\n");
+  let currentChunk: DiffChunk | null = null;
+
+  // State machine states
+  type State = "OUTSIDE" | "IN_CHUNK" | "IN_OLD" | "IN_NEW";
+  let state: State = "OUTSIDE";
+
+  for (const line of lines) {
+    switch (state) {
+      case "OUTSIDE":
+        if (line === "<DIFFCHUNK>") {
+          state = "IN_CHUNK";
+          currentChunk = { old: [], new: [] };
+        } else if (line !== "") {
+          return {
+            status: "error",
+            message: `Invalid diff format, unexpected line outside chunk: ${line}`,
+            extra: {},
+          };
+        }
+        break;
+
+      case "IN_CHUNK":
+        if (line === "<DIFFOLD>") {
+          state = "IN_OLD";
+        } else if (line === "<DIFFNEW>") {
+          state = "IN_NEW";
+        } else if (line === "</DIFFCHUNK>") {
+          chunks.push(currentChunk!);
+          state = "OUTSIDE";
+          currentChunk = null;
+        } else if (line !== "") {
+          return {
+            status: "error",
+            message: `Invalid diff format, unexpected line in chunk: ${line}`,
+            extra: {},
+          };
+        }
+        break;
+
+      case "IN_OLD":
+        if (line === "</DIFFOLD>") {
+          state = "IN_CHUNK";
+        } else {
+          currentChunk!.old.push(line);
+        }
+        break;
+
+      case "IN_NEW":
+        if (line === "</DIFFNEW>") {
+          state = "IN_CHUNK";
+        } else {
+          currentChunk!.new.push(line);
+        }
+        break;
+    }
+  }
+
+  // Check if we ended in an unexpected state
+  if (state !== "OUTSIDE") {
+    return {
+      status: "error",
+      message: `Invalid diff format, unexpected end of input in state: ${state}`,
+      extra: {},
+    };
+  }
+
+  return chunks;
 }

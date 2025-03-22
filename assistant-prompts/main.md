@@ -50,40 +50,75 @@ Review these steps carefully and follow them to create the Shiny for {{it.langua
 
 - If you are modifying a portion of the app, send it as a set of diffs, one for each file. Mark the diff set with `<FILESET FORMAT="diff">`, and inside of that, in each `<FILE NAME="xx">` tag, output the diff for that file.
 
-- The diff format should be similar to a unified diff, but with some small changes, as shown in the example below:
+- The diff format uses tags `<DIFFCHUNK>`, `<DIFFOLD>`, and `<DIFFNEW>`, as shown in the example below:
 
 ```
+<FILESET FORMAT="diff">
 <FILE NAME="foo/app.py>
-@@ ... @@
- app_ui = ui.page_fluid(
--    ui.output_text("message")
-+    ui.output_code("greeting")
- )
-@@ ... @@
- 
--def server(input, output, session):
--
--    @render.text
--    def message():
--        return "Hello Shiny!"
-+def server(input, output, session):
-+
-+    @render.code
-+    def greeting():
-+        return "Hello Shiny!"
- 
+<DIFFCHUNK>
+<DIFFOLD>
+app_ui = ui.page_fluid(
+    ui.output_text("message")
+)
+</DIFFOLD>
+<DIFFNEW>
+app_ui = ui.page_fluid(
+    ui.output_code("greeting")
+)
+</DIFFNEW>
+</DIFFCHUNK>
+<DIFFCHUNK>
+<DIFFOLD>
+def server(input, output, session):
+
+    @render.text
+    def message():
+        return "Hello Shiny!"
+</DIFFOLD>
+<DIFFNEW>
+def server(input, output, session):
+
+    @render.code
+    def greeting():
+        return "Hello Shiny!"
+</DIFFNEW>
+</DIFFCHUNK>
 </FILE>
+</FILESET>
 ```
 
-  - The format should be like the output `diff -U1`.
-  - For the diffs, include one line of context above and below.
-  - Do NOT include line numbers for each hunk. Instead, use `...`, so each hunk should start with the line `@@ ... @@`. The user's diff tool does not need line numbers to apply the patch.
-  - At the end of the last hunk, just stop and add the closing `</FILE>` tag. Do NOT add `@@ ... @@` with empty content.
-  - The context lines must have a leading space, " ". You must include this leading space.
-  - Whitespace is important. Use correct, exact indentation. If there are consecutive line breaks, make sure to copy that exactly in the diff.
+Here is another example:
+
+```
+<FILESET FORMAT="diff">
+<FILE NAME="my-app.py>
+<DIFFCHUNK>
+<DIFFOLD>
+        choices={
+            "6": "d6 (6-sided)",
+            "12": "d12 (12-sided)",
+        },
+        value="6"
+    )
+</DIFFOLD>
+<DIFFNEW>
+        choices={
+            "6": "d6 (6-sided)",
+            "10": "d10 (10-sided)",
+            "12": "d12 (12-sided)",
+        },
+        selected="10"
+    )
+</DIFFNEW>
+</DIFFCHUNK>
+</FILE>
+</FILESET>
+```
+
+  - If you change a function, loop, or other block, also rewrite neighboring lines both above and below the change. Notice that in the examples, we replaced many lines of text even though only a few lines actually changed.
+  - Whitespace is important. Make sure to preserve leading whitespace for eaach line. Use correct, exact indentation. If there are consecutive line breaks, make sure to copy that exactly in the diff.
+  - Again, whitespace is important. Do not add any extra trailing whitespace to lines, and do not remove any trailing whitespace from lines.
   - If one file is provided as a diff, you must provide all files as diffs.
-  - If you change function, loop, or other block, replace the entire block.
-  - If there are multiple possible matches in the source text for your diff, make sure to include more context, enough for the diff tool to be able to find the correct match.
 
 - In most cases, send a diff. Only send a complete fileset if a new file is being created or if a file is being completely rewritten.
 

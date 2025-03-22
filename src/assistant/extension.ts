@@ -2,9 +2,9 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
 import { isPositron } from "../extension-api-utils/extensionHost";
-import { applyFileSetDiff, type DiffError } from "./diff";
+import { ChatResponseStateMachine } from "./chat-response-state-machine";
+import { type DiffError } from "./diff";
 import {
-  inferFileType,
   langNameToFileExt,
   langNameToProperName,
   type LangName,
@@ -290,7 +290,9 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // If the language hasn't been set yet, ask the user what they want.
     // ========================================================================
     if (projectSettings.language === null) {
-      stream.markdown("What language you want to use for your Shiny app?\n\n");
+      stream.markdown(
+        "What language do you want to use for your Shiny app?\n\n"
+      );
       const setProjectLanguagePromise = createPromiseWithStatus<void>();
 
       stream.button({
@@ -412,10 +414,10 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     const options: vscode.LanguageModelChatRequestOptions = {
       tools: tools,
     };
-    let responseContainsFileSet = false;
+    let fullResponseContainsFileSet = false;
     // Collect all the raw text from the LLM. This will include the text
-    // spanning multiple tool calls, if present.
-    let rawResponseText = "";
+    // spanning multiple tool call turns, if applicable.
+    let fullRawResponseText = "";
 
     // If there are any tool calls in the response, this function loops by
     // calling itself recursively until there are no more tool calls in the
@@ -430,20 +432,31 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
         // Stream the response
         const toolCalls: vscode.LanguageModelToolCallPart[] = [];
-        const tagProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
-        let fileSet: FileSet | null = null;
+        const tagProcessor = new StreamingTagProcessor([
+          "FILESET",
+          "FILE",
+          "DIFFCHUNK",
+          "DIFFOLD",
+          "DIFFNEW",
+        ]);
         let diffErrors: DiffError[] = [];
-        // States of a state machine to handle the response
-        let state: "TEXT" | "FILESET" | "FILE" = "TEXT";
-        // When processing text in the FILE state, the first chunk of text may have
-        // a leading \n that needs to be removed;
-        let fileStateProcessedFirstChunk = false;
         // The response text streamed in from the LLM.
         let thisTurnResponseText = "";
 
+        // Initialize the ChatResponseStateMachine
+        const stateMachine = new ChatResponseStateMachine({
+          stream,
+          workspaceFolderUri,
+          proposedFilePreviewProvider,
+          proposedFilePreviewCounter,
+          incrementPreviewCounter: () => ++proposedFilePreviewCounter,
+          projectLanguage: projectSettings.language!,
+        });
+
+        // Process the response stream
         for await (const part of chatResponse.stream) {
           if (part instanceof vscode.LanguageModelTextPart) {
-            rawResponseText += part.value;
+            fullRawResponseText += part.value;
           } else if (part instanceof vscode.LanguageModelToolCallPart) {
             toolCalls.push(part);
             continue;
@@ -455,183 +468,68 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           thisTurnResponseText += part.value;
           const processedFragment = tagProcessor.process(part.value);
 
-          for (const part of processedFragment) {
-            // TODO: flush at the end?
-            if (state === "TEXT") {
-              if (part.type === "text") {
-                stream.markdown(part.text);
-              } else if (part.type === "tag") {
-                if (part.kind === "open") {
-                  if (part.name === "FILESET") {
-                    state = "FILESET";
-                    // TODO: handle multiple filesets? Or just error?
-                    responseContainsFileSet = true;
-
-                    let format: "complete" | "diff" = "complete";
-                    if (part.attributes["FORMAT"] === "diff") {
-                      format = "diff";
-                    }
-
-                    fileSet = {
-                      format: format,
-                      files: [],
-                    };
-                  } else if (part.name === "FILE") {
-                    console.log(
-                      "Parse error: <FILE> tag found, but not in <FILESET> block."
-                    );
+          for (const fragment of processedFragment) {
+            if (fragment.type === "text") {
+              stateMachine.send({
+                type: "processText",
+                text: fragment.text,
+              });
+            } else if (fragment.type === "tag") {
+              if (fragment.kind === "open") {
+                if (fragment.name === "FILESET") {
+                  // Default to "complete" if no format is specified
+                  const format = fragment.attributes.FORMAT ?? "complete";
+                  if (format !== "complete" && format !== "diff") {
+                    throw new Error(`Invalid fileset format: ${format}`);
                   }
-                } else if (part.kind === "close") {
-                  console.log(
-                    "Parse error: Unexpected closing tag in TEXT state."
-                  );
+
+                  stateMachine.send({
+                    type: "openFileset",
+                    format: format,
+                  });
+                } else if (fragment.name === "FILE") {
+                  stateMachine.send({
+                    type: "openFile",
+                    name: fragment.attributes.NAME,
+                  });
+                } else if (fragment.name === "DIFFCHUNK") {
+                  stateMachine.send({ type: "openDiffChunk" });
+                } else if (fragment.name === "DIFFNEW") {
+                  stateMachine.send({ type: "openDiffNew" });
+                } else if (fragment.name === "DIFFOLD") {
+                  stateMachine.send({ type: "openDiffOld" });
                 }
-              } else {
-                console.log("Parse error: Unexpected part type in TEXT state.");
-              }
-            } else if (state === "FILESET") {
-              if (part.type === "text") {
-                // console.log(
-                //   "Parse error: Unexpected text in FILESET state.",
-                //   part.text,
-                //   "."
-                // );
-                stream.markdown(part.text);
-              } else if (part.type === "tag") {
-                if (part.kind === "open") {
-                  if (part.name === "FILESET") {
-                    console.log(
-                      `Parse error: <FILESET> cannot have child tag <${part.name}>.`
-                    );
-                  } else if (part.name === "FILE") {
-                    state = "FILE";
-                    fileStateProcessedFirstChunk = false;
-
-                    if (!part.attributes["NAME"]) {
-                      console.log(
-                        "Parse error: <FILE> tag found without NAME attribute."
-                      );
-                    }
-                    fileSet!.files.push({
-                      name: part.attributes["NAME"],
-                      content: "",
-                      type: "text",
-                    });
-                    stream.markdown("\n### " + part.attributes["NAME"] + "\n");
-                    stream.markdown("```");
-                    if (fileSet!.format === "diff") {
-                      stream.markdown("diff");
-                    } else {
-                      const fileType = inferFileType(part.attributes["NAME"]);
-                      if (fileType !== "text") {
-                        stream.markdown(fileType);
-                      }
-                    }
-                    stream.markdown("\n");
-                  }
-                } else if (part.kind === "close") {
-                  if (part.name === "FILESET") {
-                    if (fileSet) {
-                      // Add files to the proposedFilePreviewProvider
-                      proposedFilePreviewCounter++;
-                      const proposedFilesPrefixDir =
-                        "/app-preview-" + proposedFilePreviewCounter;
-
-                      if (fileSet.format === "diff") {
-                        // For each file, if it ends with a trailing "\n", remove
-                        // it. This is because the LLM usually puts a "\n" before
-                        // "</FILE>", but that "\n" shouldn't actually be part of
-                        // the diff context.
-                        for (const file of fileSet.files) {
-                          if (
-                            file.type === "text" &&
-                            file.content.endsWith("\n")
-                          ) {
-                            file.content = file.content.replace(/\n$/, "");
-                          }
-                        }
-
-                        const result = await applyFileSetDiff(
-                          fileSet,
-                          workspaceFolderUri.fsPath
-                        );
-
-                        fileSet = result.fileSet;
-                        diffErrors = result.diffErrors;
-                      }
-
-                      // TODO: Remove question mark from proposedFilePreviewProvider
-                      proposedFilePreviewProvider?.addFiles(
-                        fileSet.files,
-                        proposedFilesPrefixDir
-                      );
-
-                      stream.button({
-                        title: "View changes as diff",
-                        command: "shiny.assistant.showDiff",
-                        arguments: [
-                          fileSet,
-                          workspaceFolderUri,
-                          proposedFilesPrefixDir,
-                        ],
-                      });
-
-                      stream.button({
-                        title: "Apply changes",
-                        command: "shiny.assistant.saveFilesToWorkspace",
-                        arguments: [fileSet.files, true],
-                      });
-
-                      stream.markdown(
-                        new vscode.MarkdownString(
-                          `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(projectSettings.language!)} editor panel to run the app.\n\n`,
-                          true
-                        )
-                      );
-                    }
-                    state = "TEXT";
-                  } else {
-                    console.log(
-                      "Parse error: Unexpected closing tag in FILESET state."
-                    );
-                  }
-                }
-              } else {
-                console.log(
-                  "Parse error: Unexpected part type in FILESET state."
-                );
-              }
-            } else if (state === "FILE") {
-              if (part.type === "text") {
-                if (!fileStateProcessedFirstChunk) {
-                  fileStateProcessedFirstChunk = true;
-                  // "<FILE>" may be followed by "\n", which needs to be removed.
-                  if (part.text.startsWith("\n")) {
-                    part.text = part.text.slice(1);
-                  }
-                }
-                stream.markdown(part.text);
-                // Add text to the current file content
-                fileSet!.files[fileSet!.files.length - 1].content += part.text;
-              } else if (part.type === "tag") {
-                if (part.kind === "open") {
-                  console.log(
-                    "Parse error: tags inside of <FILE> are not supported."
-                  );
-                } else if (part.kind === "close") {
-                  if (part.name === "FILE") {
-                    stream.markdown("```");
-                    state = "FILESET";
-                  } else {
-                    console.log(
-                      "Parse error: Unexpected closing tag in FILE state."
-                    );
-                  }
+              } else if (fragment.kind === "close") {
+                if (fragment.name === "FILESET") {
+                  stateMachine.send({ type: "closeFileset" });
+                } else if (fragment.name === "FILE") {
+                  stateMachine.send({ type: "closeFile" });
+                } else if (fragment.name === "DIFFCHUNK") {
+                  stateMachine.send({ type: "closeDiffChunk" });
+                } else if (fragment.name === "DIFFNEW") {
+                  stateMachine.send({ type: "closeDiffNew" });
+                } else if (fragment.name === "DIFFOLD") {
+                  stateMachine.send({ type: "closeDiffOld" });
                 }
               }
             }
+
+            // Some of the state machine actions may have triggered async
+            // operations. If so, wait for them to complete. Even though it's
+            // not strictly necessary to call hasPendingAsyncOperations() to
+            // check, we do it here because that is synchronous and fast,
+            // whereas calling `await waitForPendingOperations()` is async, and
+            // will always have a performance penalty.
+            if (stateMachine.hasPendingAsyncOperations()) {
+              await stateMachine.waitForPendingOperations();
+            }
           }
         }
+
+        // Get any diff errors from the state machine
+        diffErrors = stateMachine.getDiffErrors();
+        fullResponseContainsFileSet =
+          fullResponseContainsFileSet || stateMachine.hasFileSet();
 
         messages.push(
           vscode.LanguageModelChatMessage.Assistant([
@@ -693,7 +591,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           stream.markdown("\n\n");
           stream.progress("");
           // Add line breaks between tool call loop iterations.
-          rawResponseText += "\n\n";
+          fullRawResponseText += "\n\n";
           return runWithTools();
         }
       } catch (err) {
@@ -750,8 +648,8 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
     await runWithTools();
 
-    chatResult.metadata.rawResponseText = rawResponseText;
-    if (responseContainsFileSet) {
+    chatResult.metadata.rawResponseText = fullRawResponseText;
+    if (fullResponseContainsFileSet) {
       chatResult.metadata.followups.push(
         "Install the packages needed for my app."
       );
@@ -1027,6 +925,9 @@ async function setAppSubdirDialog(
       // Set the selected folder as the app subdirectory
       projectSettings.appSubdir = relativePath;
       callback(true);
+    } else {
+      // User pressed Cancel
+      callback(false);
     }
   } else {
     // Strip leading and trailing slashes
@@ -1035,7 +936,6 @@ async function setAppSubdirDialog(
     projectSettings.appSubdir = subdir;
     callback(true);
   }
-  callback(false);
 }
 
 /**

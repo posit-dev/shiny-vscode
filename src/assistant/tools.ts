@@ -134,26 +134,35 @@ tools.push({
       `\n\nWould you like to put your app in the ${defaultDirString} of the project workspace?\n\n`
     );
 
-    const setAppSubdirPromise = createPromiseWithStatus<boolean>();
+    const setAppSubdirPromise = createPromiseWithStatus<void>();
 
     opts.stream.button({
       title: `Yes, use ${defaultDir}`,
       command: "shiny.assistant.setAppSubdir",
-      arguments: [defaultDir, setAppSubdirPromise.resolve],
+      arguments: [
+        defaultDir,
+        (success: boolean) => {
+          // If the user successfully set the app subdirectory, resolve the
+          // promise with true.
+          if (success) setAppSubdirPromise.resolve();
+        },
+      ],
     });
 
     opts.stream.button({
       title: "No, I want to choose another subdirectory",
       command: "shiny.assistant.setAppSubdir",
-      arguments: [null, setAppSubdirPromise.resolve],
+      arguments: [
+        null,
+        (success: boolean) => {
+          // If the user successfully set the app subdirectory, resolve the
+          // promise with true.
+          if (success) setAppSubdirPromise.resolve();
+        },
+      ],
     });
 
-    const setAppSubdirSuccess = await setAppSubdirPromise;
-
-    if (!setAppSubdirSuccess) {
-      opts.stream.markdown(`You did not set the app subdirectory.\n\n`);
-      return "User did not set the app subdirectory.";
-    }
+    await setAppSubdirPromise;
 
     opts.stream.markdown(
       `You have set the app subdirectory to \`${projectSettings.appSubdir}/\`.\n\n`

@@ -324,21 +324,19 @@ export class StreamingTagProcessor {
   }
 }
 
-// const testProcessor = new StreamingTagProcessor(["SHINY", "FILESET", "FILE"]);
+// const testProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
 
 // function testTagMatches() {
 //   console.log("Testing tag matches:");
 //   const testStrings = [
 //     "<",
-//     "<S",
-//     "<SH",
-//     "<SHINY",
-//     "<SHINY ",
-//     "<SHINY>",
-//     "<SHINY >",
-//     "<SHINY FO",
-//     "<SHINYA",
-//     "</SHINYA",
+//     "<F",
+//     "<FI",
+//     "<FILE",
+//     "<FILE  ",
+//     "<FILE>",
+//     "<FILE >",
+//     "<FILE X",
 //     "<FILESET",
 //     "<FILESET>",
 //     "<FILESET >",
@@ -363,8 +361,11 @@ export class StreamingTagProcessor {
 //     "<-",
 //     "< ",
 //     "<XH",
-//     "<SHIP",
-//     "<SHINYX",
+//     "<FIP",
+//     "<FILEX",
+//     "<FILE X>",
+//     "<FILESX>",
+//     "<FILESETX",
 //     "<FILESETX",
 //     "<FILESETX>",
 //     "<FILESET =",

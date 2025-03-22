@@ -210,6 +210,34 @@ export class ChatResponseStateMachine extends StateMachine<
   }
 
   // ===========================================================================
+  // Async operations
+  // ===========================================================================
+  // Track pending async operations
+  private pendingAsyncOperations = new Set<Promise<void>>();
+
+  /**
+   * Checks if there are any pending async operations.
+   *
+   * @returns True if there are pending async operations, false otherwise
+   */
+  hasPendingAsyncOperations(): boolean {
+    return this.pendingAsyncOperations.size > 0;
+  }
+
+  /**
+   * Waits for all pending async operations to complete.
+   *
+   * @returns A promise that resolves when all pending operations are complete
+   */
+  async waitForPendingOperations(): Promise<void> {
+    if (this.pendingAsyncOperations.size === 0) {
+      return;
+    }
+
+    await Promise.all(Array.from(this.pendingAsyncOperations));
+  }
+
+  // ===========================================================================
   // State machine event handlers
   // ===========================================================================
   private fileSet: FileSet | null = null;
@@ -246,55 +274,73 @@ export class ChatResponseStateMachine extends StateMachine<
     const proposedFilesPrefixDir =
       "/app-preview-" + this.config.proposedFilePreviewCounter;
 
+    // Create an async operation and track it
+    const asyncOperation = this.processFileSetAsync(proposedFilesPrefixDir);
+    this.pendingAsyncOperations.add(asyncOperation);
+
+    // Clean up the pending operations list when this operation completes
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    (async () => {
-      if (this.fileSet!.format === "diff") {
-        // For each file, if it ends with a trailing "\n", remove it. This is
-        // because the LLM usually puts a "\n" before "</FILE>", but that "\n"
-        // shouldn't actually be part of the diff context.
-        for (const file of this.fileSet!.files) {
-          if (file.type === "text" && file.content.endsWith("\n")) {
-            file.content = file.content.replace(/\n$/, "");
-          }
+    asyncOperation.finally(() => {
+      this.pendingAsyncOperations.delete(asyncOperation);
+    });
+  }
+
+  /**
+   * Processes the file set asynchronously.
+   * This is extracted from closeFileset to handle all async operations.
+   *
+   * @param proposedFilesPrefixDir - Directory prefix for the proposed files
+   * @returns A promise that resolves when processing is complete
+   */
+  private async processFileSetAsync(
+    proposedFilesPrefixDir: string
+  ): Promise<void> {
+    if (this.fileSet!.format === "diff") {
+      // For each file, if it ends with a trailing "\n", remove it. This is
+      // because the LLM usually puts a "\n" before "</FILE>", but that "\n"
+      // shouldn't actually be part of the diff context.
+      for (const file of this.fileSet!.files) {
+        if (file.type === "text" && file.content.endsWith("\n")) {
+          file.content = file.content.replace(/\n$/, "");
         }
-
-        const result = await applyFileSetDiff(
-          this.fileSet!,
-          this.config.workspaceFolderUri.fsPath
-        );
-
-        this.fileSet = result.fileSet;
-        this.diffErrors = result.diffErrors;
       }
 
-      this.config.proposedFilePreviewProvider.addFiles(
-        this.fileSet!.files,
-        proposedFilesPrefixDir
+      const result = await applyFileSetDiff(
+        this.fileSet!,
+        this.config.workspaceFolderUri.fsPath
       );
 
-      this.config.stream.button({
-        title: "View changes as diff",
-        command: "shiny.assistant.showDiff",
-        arguments: [
-          this.fileSet!,
-          this.config.workspaceFolderUri,
-          proposedFilesPrefixDir,
-        ],
-      });
+      this.fileSet = result.fileSet;
+      this.diffErrors = result.diffErrors;
+    }
 
-      this.config.stream.button({
-        title: "Apply changes",
-        command: "shiny.assistant.saveFilesToWorkspace",
-        arguments: [this.fileSet!.files, true],
-      });
+    this.config.proposedFilePreviewProvider.addFiles(
+      this.fileSet!.files,
+      proposedFilesPrefixDir
+    );
 
-      this.config.stream.markdown(
-        new vscode.MarkdownString(
-          `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(this.config.projectLanguage)} editor panel to run the app.\n\n`,
-          true
-        )
-      );
-    })();
+    this.config.stream.button({
+      title: "View changes as diff",
+      command: "shiny.assistant.showDiff",
+      arguments: [
+        this.fileSet!,
+        this.config.workspaceFolderUri,
+        proposedFilesPrefixDir,
+      ],
+    });
+
+    this.config.stream.button({
+      title: "Apply changes",
+      command: "shiny.assistant.saveFilesToWorkspace",
+      arguments: [this.fileSet!.files, true],
+    });
+
+    this.config.stream.markdown(
+      new vscode.MarkdownString(
+        `After you apply the changes, press the $(run) button in the upper right of the app.${langNameToFileExt(this.config.projectLanguage)} editor panel to run the app.\n\n`,
+        true
+      )
+    );
   }
 
   private openFile(eventObj: ChatResponseEventOpenFile) {
@@ -355,6 +401,9 @@ export class ChatResponseStateMachine extends StateMachine<
     this.config.stream.markdown("\n");
   }
 
+  // Note that the diffs are received as XML because the LLM is better at
+  // generating diffs that way, but we convert them to a format that is the same
+  // as unified diffs, except there are no line numbers.
   private openDiffChunk(eventObj: ChatResponseEventOpenDiffChunk) {
     this.currentFile!.content += "@@ ... @@\n";
     this.config.stream.markdown("@@ ... @@\n");

@@ -513,6 +513,16 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                 }
               }
             }
+
+            // Some of the state machine actions may have triggered async
+            // operations. If so, wait for them to complete. Even though it's
+            // not strictly necessary to call hasPendingAsyncOperations() to
+            // check, we do it here because that is synchronous and fast,
+            // whereas calling `await waitForPendingOperations()` is async, and
+            // will always have a performance penalty.
+            if (stateMachine.hasPendingAsyncOperations()) {
+              await stateMachine.waitForPendingOperations();
+            }
           }
         }
 

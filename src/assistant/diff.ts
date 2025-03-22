@@ -5,42 +5,33 @@ import type { FileContent, FileSetComplete, FileSetDiff } from "./types";
 /*
 This is what the diff format looks like:
 ---------------------------
-<DIFFCHUNK>
-<DIFFOLD>
-app_ui = ui.page_fluid(
-    ui.output_text("message")
-)
-</DIFFOLD>
-<DIFFNEW>
-app_ui = ui.page_fluid(
-    ui.output_code("greeting")
-)
-</DIFFNEW>
-</DIFFCHUNK>
-<DIFFCHUNK>
-<DIFFOLD>
-def server(input, output, session):
+@@ ... @@
+ from shiny import App, ui, render
 
-    @render.text
-    def message():
-        return "Hello Shiny!"
-</DIFFOLD>
-<DIFFNEW>
-def server(input, output, session):
+ app_ui = ui.page_fluid(
+-    ui.output_text("message")
++    ui.output_code("greeting")
+     )
 
-    @render.code
-    def greeting():
-        return "Hello Shiny!"
-</DIFFNEW>
-</DIFFCHUNK>
+ def server(input, output, session):
+-    @render.text
+-    def message():
+-        return "Hello Shiny!"
++    @render.code
++    def greeting():
++        return "Hello Shiny!"
+
+ app = App(app_ui, server)
 ---------------------------
-*/
-/*
-The format is similar to a unified diff, but lacks line numbers, and uses XML
-tags instead of leading +, -, and space characters. Each chunk is enclosed in
-<DIFFCHUNK> tags. Inside each chunk, there are <DIFFOLD> and <DIFFNEW> tags, each containing
-the original and new content, respectively. The content is separated by
-newlines.
+
+It is similar to a unified diff, but lacks line numbers.
+
+One limitation to this diff format is that if there are multiple matches for the
+pattern (starting after the previous hunk), then it will always be the first one
+that is replaced, even if the actual target was supposed to be a later match.
+This is a limitation of the diff format. It would be better to require line
+numbers like a traditional unified diff, but unfortunately, LLMs have trouble
+generating accurate line numbers.
 
 The reason for using this format is that LLMs will more reliably generated it
 than a traditional unified diff -- I was unable to get Claude 3.5 Sonnet to
@@ -240,16 +231,91 @@ type DiffChunk = {
 };
 
 /**
- * Parses an XML diff string into an array of DiffChunks.
+ * Parses a unified diff string into an array of chunks.
  *
- * This function takes a diff string in the XML diff format and parses it
- * into an array of DiffChunk objects, each representing a section of changes.
+ * This function takes a diff string in the unified diff format and parses it
+ * into an array of Chunk objects, each representing a section of changes.
  *
- * @param diff The XML diff string to parse
- * @returns An array of DiffChunk objects
+ * Yes, they're called "chunks" instead of the traditional "hunk" here, because
+ * this function has been gone through a number of versions where it worked on a
+ * very different XML-based diff format.
+ *
+ * @param diff The unified diff string to parse
+ * @returns An array of Chunk objects
  * @throws Error if an unknown line type is encountered
  */
 function parseDiff(diff: string): Array<DiffChunk> | DiffError {
+  const chunks: Array<DiffChunk> = [];
+  const lines = diff.split("\n");
+  let currentChunk: DiffChunk | null = null;
+
+  // Sometimes the LLM will generate a diff with headers that show the filename.
+  // If present, just ignore them.
+  // For example:
+  // --- app/ui.R
+  // +++ app/ui.R
+  if (
+    lines.length >= 2 &&
+    lines[0].startsWith("---") &&
+    lines[1].startsWith("+++")
+  ) {
+    lines.shift();
+    lines.shift();
+  }
+
+  for (const line of lines) {
+    if (line === "@@ ... @@") {
+      if (currentChunk) {
+        // Finished the previous chunk
+        chunks.push(currentChunk);
+      }
+
+      currentChunk = { old: [], new: [] };
+      //
+    } else if (currentChunk) {
+      const lineContent = line.slice(1);
+      // Add a line to the current hunk
+      switch (line[0]) {
+        case "-":
+          currentChunk.old.push(lineContent);
+          break;
+        case "+":
+          currentChunk.new.push(lineContent);
+          break;
+        case " ":
+          currentChunk.old.push(lineContent);
+          currentChunk.new.push(lineContent);
+          break;
+        case undefined:
+          // Gets here if line is "". Some diffs don't put a leading space when
+          // the context line is empty.
+          currentChunk.old.push("");
+          currentChunk.new.push("");
+          break;
+        default:
+          return {
+            status: "error",
+            message: `Unknown line type: ${line[0]}`,
+            extra: {},
+          };
+      }
+    } else {
+      // Error because we're not in a hunk and we're not starting one
+      return {
+        status: "error",
+        message: `Invalid diff format: ${line}`,
+        extra: {},
+      };
+    }
+  }
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+function parseDiffOld(diff: string): Array<DiffChunk> | DiffError {
   const chunks: Array<DiffChunk> = [];
   const lines = diff.split("\n");
   let currentChunk: DiffChunk | null = null;

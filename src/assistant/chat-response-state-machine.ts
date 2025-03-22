@@ -89,17 +89,6 @@ export class ChatResponseStateMachine extends StateMachine<
   ChatResponseEventObject
 > {
   private config: ChatResponseStateMachineConfig;
-  private fileSet: FileSet | null = null;
-  private currentFile: FileContent | null = null;
-  private diffErrors: DiffError[] = [];
-
-  // In the FILE, DIFF_NEW, and DIFF_OLD state, the very first line of the file content is a spurious
-  // newline.
-  private fileStateHasRemovedFirstNewline = false;
-  private diffOldStateHasRemovedFirstNewline = false;
-  private diffOldStateLastCharWasNewline = false;
-  private diffNewStateHasRemovedFirstNewline = false;
-  private diffNewStateLastCharWasNewline = false;
 
   /**
    * Creates a new chat response state machine for processing chat responses.
@@ -153,9 +142,7 @@ export class ChatResponseStateMachine extends StateMachine<
       },
       DIFFCHUNK: {
         on: {
-          processText: {
-            action: this.processDiffChunkText.bind(this),
-          },
+          processText: {},
           openDiffNew: {
             target: "DIFFNEW",
             action: this.openDiffNew.bind(this),
@@ -166,7 +153,6 @@ export class ChatResponseStateMachine extends StateMachine<
           },
           closeDiffChunk: {
             target: "FILE",
-            action: this.closeDiffChunk.bind(this),
           },
         },
       },
@@ -177,7 +163,6 @@ export class ChatResponseStateMachine extends StateMachine<
           },
           closeDiffNew: {
             target: "DIFFCHUNK",
-            action: this.closeDiffNew.bind(this),
           },
         },
       },
@@ -188,7 +173,6 @@ export class ChatResponseStateMachine extends StateMachine<
           },
           closeDiffOld: {
             target: "DIFFCHUNK",
-            action: this.closeDiffOld.bind(this),
           },
         },
       },
@@ -222,9 +206,23 @@ export class ChatResponseStateMachine extends StateMachine<
    * @returns Array of diff errors (currently always empty)
    */
   getDiffErrors(): DiffError[] {
-    // return this.diffErrors;
-    return [];
+    return this.diffErrors;
   }
+
+  // ===========================================================================
+  // State machine event handlers
+  // ===========================================================================
+  private fileSet: FileSet | null = null;
+  private currentFile: FileContent | null = null;
+  private diffErrors: DiffError[] = [];
+
+  // In the FILE, DIFF_NEW, and DIFF_OLD state, the very first line of the file
+  // content is a spurious newline.
+  private fileStateHasRemovedFirstNewline = false;
+  private diffOldStateHasRemovedFirstNewline = false;
+  private diffOldStateLastCharWasNewline = false;
+  private diffNewStateHasRemovedFirstNewline = false;
+  private diffNewStateLastCharWasNewline = false;
 
   private renderText(eventObj: ChatResponseEventProcessText) {
     this.config.stream.markdown(eventObj.text);
@@ -331,6 +329,12 @@ export class ChatResponseStateMachine extends StateMachine<
   private renderFileText(eventObj: ChatResponseEventProcessText) {
     let text = eventObj.text;
 
+    // If we're in a diff fileset, the format is very different and we'll let
+    // the handlers for the diff states handle the text.
+    if (this.fileSet!.format === "diff") {
+      return;
+    }
+
     // The very first line of the FILE content is a spurious newline, because of
     // the XML tag format.
     if (!this.fileStateHasRemovedFirstNewline) {
@@ -340,13 +344,8 @@ export class ChatResponseStateMachine extends StateMachine<
       }
       this.fileStateHasRemovedFirstNewline = true;
     }
-    this.currentFile!.content += text;
-    // If we're in a diff fileset, the format is very different and we'll let
-    // the handlers for the diff states handle the text.
-    if (this.fileSet!.format === "diff") {
-      return;
-    }
 
+    this.currentFile!.content += text;
     this.config.stream.markdown(text);
   }
 
@@ -357,31 +356,17 @@ export class ChatResponseStateMachine extends StateMachine<
   }
 
   private openDiffChunk(eventObj: ChatResponseEventOpenDiffChunk) {
-    this.currentFile!.content += "<DIFFCHUNK>";
+    this.currentFile!.content += "@@ ... @@\n";
     this.config.stream.markdown("@@ ... @@\n");
   }
 
-  private processDiffChunkText(eventObj: ChatResponseEventProcessText) {
-    // We need to keep the text verbatim in the FileContent object, to keep
-    // track of newlines, but we'll stream something different.
-    this.currentFile!.content += eventObj.text;
-  }
-
-  private closeDiffChunk(eventObj: ChatResponseEventCloseDiffChunk) {
-    this.currentFile!.content += "</DIFFCHUNK>";
-  }
-
   private openDiffOld(eventObj: ChatResponseEventOpenDiffOld) {
-    this.currentFile!.content += "<DIFFOLD>";
     this.diffOldStateHasRemovedFirstNewline = false;
     this.diffOldStateLastCharWasNewline = false;
   }
 
   private renderDiffOldText(eventObj: ChatResponseEventProcessText) {
     let text = eventObj.text;
-    // Keep this text verbatim in the FileContent object -- we'll stream
-    // something different.
-    this.currentFile!.content += text;
 
     // Handle trailing newline. With the XML tag format, the </DIFFOLD> tag will
     // be on a line _after_ the last line of content. That means that the last
@@ -416,15 +401,11 @@ export class ChatResponseStateMachine extends StateMachine<
       this.diffOldStateHasRemovedFirstNewline = true;
     }
 
+    this.currentFile!.content += text;
     this.config.stream.markdown(text);
   }
 
-  private closeDiffOld(eventObj: ChatResponseEventCloseDiffOld) {
-    this.currentFile!.content += "</DIFFOLD>";
-  }
-
   private openDiffNew(eventObj: ChatResponseEventOpenDiffNew) {
-    this.currentFile!.content += "<DIFFNEW>";
     this.diffNewStateHasRemovedFirstNewline = false;
     this.diffNewStateLastCharWasNewline = false;
   }
@@ -433,7 +414,6 @@ export class ChatResponseStateMachine extends StateMachine<
     // The implementation here is the same as for DiffOld, but with "+" instead
     // of "-".
     let text = eventObj.text;
-    this.currentFile!.content += text;
 
     if (this.diffNewStateLastCharWasNewline) {
       text = "+" + text;
@@ -454,9 +434,7 @@ export class ChatResponseStateMachine extends StateMachine<
       this.diffNewStateHasRemovedFirstNewline = true;
     }
 
+    this.currentFile!.content += text;
     this.config.stream.markdown(text);
-  }
-  private closeDiffNew(eventObj: ChatResponseEventCloseDiffNew) {
-    this.currentFile!.content += "</DIFFNEW>";
   }
 }

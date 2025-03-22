@@ -116,7 +116,7 @@ Here is another example:
 ```
 
   - If you change a function, loop, or other block, also rewrite neighboring lines both above and below the change. Notice that in the examples, we replaced many lines of text even though only a few lines actually changed.
-  - Whitespace is important. Use correct, exact indentation. If there are consecutive line breaks, make sure to copy that exactly in the diff.
+  - Whitespace is important. Make sure to preserve leading whitespace for eaach line. Use correct, exact indentation. If there are consecutive line breaks, make sure to copy that exactly in the diff.
   - Again, whitespace is important. Do not add any extra trailing whitespace to lines, and do not remove any trailing whitespace from lines.
   - If one file is provided as a diff, you must provide all files as diffs.
 

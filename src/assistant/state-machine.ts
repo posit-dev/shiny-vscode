@@ -20,6 +20,17 @@ export type EventByType<
 > = Extract<TEvent, { type: TType }>;
 
 /**
+ * Type for an action function that can be executed when an event occurs.
+ *
+ * @template EventObjT - Discriminated union type for events with a 'type' property
+ * @template E - The specific event type or wildcard
+ */
+export type ActionFunction<
+  EventObjT extends { type: string },
+  E extends EventObjT["type"] | "*",
+> = <T extends E & EventObjT["type"]>(event: EventByType<EventObjT, T>) => void;
+
+/**
  * Type for a single state definition within a state machine.
  * Defines how a state responds to events, including optional transitions and actions.
  *
@@ -40,12 +51,13 @@ export type StateDefinition<
       /** Optional target state to transition to when this event occurs */
       target?: StateT;
       /**
-       * Optional action function to execute when this event occurs.
-       * The action receives the typed event object as its parameter.
+       * Optional action function(s) to execute when this event occurs.
+       * Can be a single action function or an array of action functions.
+       * Each action receives the typed event object as its parameter.
        */
-      action?: <T extends E & EventObjT["type"]>(
-        event: EventByType<EventObjT, T>
-      ) => void;
+      action?:
+        | ActionFunction<EventObjT, E>
+        | Array<ActionFunction<EventObjT, E>>;
     };
   };
 };
@@ -135,9 +147,18 @@ export abstract class StateMachine<
     }
 
     if (eventData.action) {
-      // Use type assertion to make TypeScript happy
-      // This is safe because we're only calling the action with events of the right type
-      (eventData.action as (event: EventObjT) => void)(eventObj);
+      // Execute the action(s)
+      if (Array.isArray(eventData.action)) {
+        // Execute all actions in the array
+        for (const action of eventData.action) {
+          // Use type assertion to make TypeScript happy
+          // This is safe because we're only calling the action with events of the right type
+          (action as (event: EventObjT) => void)(eventObj);
+        }
+      } else {
+        // Execute the single action
+        (eventData.action as (event: EventObjT) => void)(eventObj);
+      }
     }
 
     if (eventData.target) {

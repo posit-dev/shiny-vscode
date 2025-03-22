@@ -450,9 +450,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           proposedFilePreviewProvider,
           proposedFilePreviewCounter,
           incrementPreviewCounter: () => ++proposedFilePreviewCounter,
-          projectLanguage: projectSettings.language
-            ? projectSettings.language
-            : "",
+          projectLanguage: projectSettings.language!,
         });
 
         // Process the response stream

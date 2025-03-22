@@ -4,11 +4,12 @@ import { isShinyAppFilename } from "../extension";
 import { isPositron } from "../extension-api-utils/extensionHost";
 import { ChatResponseStateMachine } from "./chat-response-state-machine";
 import { type DiffError } from "./diff";
+import { langNameToProperName, type LangName } from "./language";
 import {
-  langNameToFileExt,
-  langNameToProperName,
-  type LangName,
-} from "./language";
+  checkUsingDesiredModel,
+  desiredModelName,
+  displayDesiredModelSuggestion,
+} from "./llm-selection";
 import { checkPythonEnvironment } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingTagProcessor } from "./streaming-tag-processor";
@@ -42,8 +43,7 @@ export const projectSettings: ProjectSettings = {
   appSubdir: null,
 };
 
-// export const projectLanguage = new PromisedValueContainer<LangName>();
-const hasConfirmedClaude = createPromiseWithStatus<boolean>();
+const hasConfirmedDesiredModel = createPromiseWithStatus<boolean>();
 const hasContinuedAfterWorkspaceFolderSuggestion =
   createPromiseWithStatus<void>();
 
@@ -84,9 +84,9 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
         }
       ),
       vscode.commands.registerCommand(
-        "shiny.assistant.continueAfterClaudeSuggestion",
-        (switchedToClaude: boolean) =>
-          hasConfirmedClaude.resolve(switchedToClaude)
+        "shiny.assistant.continueAfterDesiredModelSuggestion",
+        (switchedToDesiredModel: boolean) =>
+          hasConfirmedDesiredModel.resolve(switchedToDesiredModel)
       ),
       vscode.commands.registerCommand(
         "shiny.assistant.continueAfterWorkspaceFolderSuggestion",
@@ -164,41 +164,19 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     }
 
     // ========================================================================
-    // If the user isn't using Claude 3.5 Sonnet, prompt them to switch.
+    // If the user isn't using one of the desired LLM models, prompt them to
+    // switch.
     // ========================================================================
     if (
-      request.model.id !== "claude-3.5-sonnet" &&
-      !hasConfirmedClaude.isResolved()
+      !checkUsingDesiredModel(request.model) &&
+      !hasConfirmedDesiredModel.isResolved() // Only prompt once
     ) {
-      // The text displays much more quickly if we call markdown() twice instead
-      // of just once.
-      stream.markdown(
-        `It looks like you are using **${request.model.name}** for Copilot. `
-      );
-      if (request.model.id.startsWith("claude-3.7-sonnet")) {
-        stream.markdown(
-          "**Claude 3.7 Sonnet** currently doesn't work with chat participants like `@shiny`.\n\n"
-        );
-      } else {
-        stream.markdown(
-          "For best results with `@shiny`, please switch to **Claude 3.5 Sonnet**.\n\n"
-        );
-      }
-      stream.button({
-        title: "I'll switch to Claude 3.5 Sonnet",
-        command: "shiny.assistant.continueAfterClaudeSuggestion",
-        arguments: [true],
-      });
-      stream.button({
-        title: `No thanks, I'll continue with ${request.model.name}`,
-        command: "shiny.assistant.continueAfterClaudeSuggestion",
-        arguments: [false],
-      });
+      displayDesiredModelSuggestion(request.model.name, stream);
 
-      if (await hasConfirmedClaude) {
+      if (await hasConfirmedDesiredModel) {
         stream.markdown(
           new vscode.MarkdownString(
-            "Great! In the text input box, switch to Claude 3.5 Sonnet and then click on the $(refresh) button.\n\n",
+            `Great! In the chat input box down below, switch to ${desiredModelName()}and then click on the $(refresh) button.\n\n`,
             true
           )
         );

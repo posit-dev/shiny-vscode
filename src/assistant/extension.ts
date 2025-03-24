@@ -2,7 +2,11 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
 import { isPositron } from "../extension-api-utils/extensionHost";
-import { ChatResponseStateMachine } from "./chat-response-state-machine";
+import {
+  ChatResponseKnownTags,
+  ChatResponseStateMachine,
+  type ChatResponseKnownTagsType,
+} from "./chat-response-state-machine";
 import { type DiffError } from "./diff";
 import { langNameToProperName, type LangName } from "./language";
 import {
@@ -410,13 +414,10 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
         // Stream the response
         const toolCalls: vscode.LanguageModelToolCallPart[] = [];
-        const tagProcessor = new StreamingTagProcessor([
-          "FILESET",
-          "FILE",
-          "DIFFCHUNK",
-          "DIFFOLD",
-          "DIFFNEW",
-        ]);
+        const tagProcessor =
+          new StreamingTagProcessor<ChatResponseKnownTagsType>(
+            ChatResponseKnownTags
+          );
         let diffErrors: DiffError[] = [];
         // The response text streamed in from the LLM.
         let thisTurnResponseText = "";
@@ -453,54 +454,54 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                 text: fragment.text,
               });
             } else if (fragment.type === "tag") {
-              if (fragment.kind === "open") {
-                if (fragment.name === "FILESET") {
-                  // Default to "complete" if no format is specified
-                  const format = fragment.attributes.FORMAT ?? "complete";
-                  if (format !== "complete" && format !== "diff") {
-                    throw new Error(`Invalid fileset format: ${format}`);
-                  }
+              // Create the appropriate tag event based on the tag name
+              if (fragment.name === "FILESET") {
+                const format = (fragment.attributes.FORMAT ?? "complete") as
+                  | "complete"
+                  | "diff";
 
+                stateMachine.send({
+                  type: "processTag",
+                  name: "FILESET",
+                  kind: fragment.kind,
+                  attributes: { FORMAT: format },
+                });
+              } else if (fragment.name === "FILE") {
+                // Ensure FILE tag has the required NAME attribute
+                if ("NAME" in fragment.attributes) {
+                  const name = fragment.attributes.NAME;
                   stateMachine.send({
-                    type: "openFileset",
-                    format: format,
+                    type: "processTag",
+                    name: "FILE",
+                    kind: fragment.kind,
+                    attributes: { NAME: name },
                   });
-                } else if (fragment.name === "FILE") {
-                  stateMachine.send({
-                    type: "openFile",
-                    name: fragment.attributes.NAME,
-                  });
-                } else if (fragment.name === "DIFFCHUNK") {
-                  stateMachine.send({ type: "openDiffChunk" });
-                } else if (fragment.name === "DIFFNEW") {
-                  stateMachine.send({ type: "openDiffNew" });
-                } else if (fragment.name === "DIFFOLD") {
-                  stateMachine.send({ type: "openDiffOld" });
+                } else {
+                  console.warn("FILE tag missing required NAME attribute");
                 }
-              } else if (fragment.kind === "close") {
-                if (fragment.name === "FILESET") {
-                  stateMachine.send({ type: "closeFileset" });
-                } else if (fragment.name === "FILE") {
-                  stateMachine.send({ type: "closeFile" });
-                } else if (fragment.name === "DIFFCHUNK") {
-                  stateMachine.send({ type: "closeDiffChunk" });
-                } else if (fragment.name === "DIFFNEW") {
-                  stateMachine.send({ type: "closeDiffNew" });
-                } else if (fragment.name === "DIFFOLD") {
-                  stateMachine.send({ type: "closeDiffOld" });
-                }
+              } else {
+                // The remaining kinds of tags ("DIFFCHUNK", "DIFFOLD",
+                // "DIFFNEW", etc.) don't have attributes.
+                stateMachine.send({
+                  type: "processTag",
+                  name: fragment.name,
+                  kind: fragment.kind,
+                  attributes: fragment.attributes as Readonly<
+                    Record<string, never>
+                  >,
+                });
               }
             }
+          }
 
-            // Some of the state machine actions may have triggered async
-            // operations. If so, wait for them to complete. Even though it's
-            // not strictly necessary to call hasPendingAsyncOperations() to
-            // check, we do it here because that is synchronous and fast,
-            // whereas calling `await waitForPendingOperations()` is async, and
-            // will always have a performance penalty.
-            if (stateMachine.hasPendingAsyncOperations()) {
-              await stateMachine.waitForPendingOperations();
-            }
+          // Some of the state machine actions may have triggered async
+          // operations. If so, wait for them to complete. Even though it's not
+          // strictly necessary to call hasPendingAsyncOperations() to check, we
+          // do it here because that is synchronous and fast, whereas calling
+          // `await waitForPendingOperations()` is async, and will always have a
+          // performance penalty.
+          if (stateMachine.hasPendingAsyncOperations()) {
+            await stateMachine.waitForPendingOperations();
           }
         }
 

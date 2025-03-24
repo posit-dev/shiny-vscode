@@ -7,23 +7,75 @@ import type { ProposedFilePreviewProvider } from "./proposed-file-preview-provid
 import { StateMachine } from "./state-machine";
 import type { FileContent, FileSet } from "./types";
 
+export const ChatResponseKnownTags = [
+  "FILESET",
+  "FILE",
+  "DIFFCHUNK",
+  "DIFFOLD",
+  "DIFFNEW",
+] as const;
+
+export type ChatResponseKnownTagsType = (typeof ChatResponseKnownTags)[number];
+
 /**
  * Defines the possible states for the tag state machine.
  * Each state represents a different context in the chat response processing.
  */
 export type ChatResponseStateName =
-  | "TEXT"
-  | "FILESET"
-  | "FILE"
-  | "DIFFCHUNK"
-  | "DIFFOLD"
-  | "DIFFNEW";
+  | "IN_TEXT"
+  | "IN_FILESET"
+  | "IN_FILE"
+  | "IN_DIFFCHUNK"
+  | "IN_DIFFOLD"
+  | "IN_DIFFNEW";
 
 // Define event  type with discriminated union pattern
-export type ChatResponseEventProcessText = {
+export type EventProcessText = {
   type: "processText";
   text: string;
 };
+
+// Base type for tag events
+export type EventProcessTagBase = {
+  type: "processTag";
+  name: ChatResponseKnownTagsType;
+  kind: "open" | "close";
+};
+
+// Specific tag types with their attributes
+export type EventProcessTagFileset = EventProcessTagBase & {
+  name: "FILESET";
+  attributes: Readonly<{ FORMAT?: "complete" | "diff" }>;
+};
+
+export type EventProcessTagFile = EventProcessTagBase & {
+  name: "FILE";
+  attributes: Readonly<{ NAME: string }>;
+};
+
+export type EventProcessTagDiffChunk = EventProcessTagBase & {
+  name: "DIFFCHUNK";
+  attributes: Readonly<Record<string, never>>;
+};
+
+export type EventProcessTagDiffNew = EventProcessTagBase & {
+  name: "DIFFNEW";
+  attributes: Readonly<Record<string, never>>;
+};
+
+export type EventProcessTagDiffOld = EventProcessTagBase & {
+  name: "DIFFOLD";
+  attributes: Readonly<Record<string, never>>;
+};
+
+// Union type of all possible tag events
+export type EventProcessTag =
+  | EventProcessTagFileset
+  | EventProcessTagFile
+  | EventProcessTagDiffChunk
+  | EventProcessTagDiffNew
+  | EventProcessTagDiffOld;
+
 export type ChatResponseEventOpenFileset = {
   type: "openFileset";
   format: "complete" | "diff";
@@ -42,8 +94,9 @@ export type ChatResponseEventCloseDiffOld = { type: "closeDiffOld" };
  * Union type of all possible events that can be processed by the tag state machine.
  * Uses a discriminated union pattern with the 'type' property as the discriminator.
  */
-export type ChatResponseEventObject =
-  | ChatResponseEventProcessText
+export type ChatResponseEventObjectT =
+  | EventProcessText
+  | EventProcessTag
   | ChatResponseEventOpenFileset
   | ChatResponseEventCloseFileset
   | ChatResponseEventOpenFile
@@ -58,7 +111,7 @@ export type ChatResponseEventObject =
 /**
  * Utility type that extracts all possible event names from the event object union.
  */
-export type ChatResponseEventNames = ChatResponseEventObject["type"];
+export type ChatResponseEventNames = ChatResponseEventObjectT["type"];
 
 // ============================================================================
 // ChatResponseStateMachine
@@ -86,7 +139,7 @@ export type ChatResponseStateMachineConfig = {
  */
 export class ChatResponseStateMachine extends StateMachine<
   ChatResponseStateName,
-  ChatResponseEventObject
+  ChatResponseEventObjectT
 > {
   private config: ChatResponseStateMachineConfig;
 
@@ -96,83 +149,155 @@ export class ChatResponseStateMachine extends StateMachine<
    * @param config - Configuration options for the state machine
    */
   constructor(config: ChatResponseStateMachineConfig) {
-    super({ initialState: "TEXT" });
+    super({ initialState: "IN_TEXT" });
     this.config = config;
 
     // Define state machine transitions here
     this.states = {
-      TEXT: {
+      IN_TEXT: {
         on: {
           processText: {
             action: this.renderText.bind(this),
           },
+          processTag: [
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "open" && e.name === "FILESET",
+              target: "IN_FILESET",
+              action: this.handleProcessTag.bind(this),
+            },
+          ],
           openFileset: {
-            target: "FILESET",
+            target: "IN_FILESET",
             action: this.openFileset.bind(this),
           },
         },
       },
-      FILESET: {
+      IN_FILESET: {
         on: {
           processText: {},
+          processTag: [
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "close" && e.name === "FILESET",
+              target: "IN_TEXT",
+              action: this.handleProcessTag.bind(this),
+            },
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "open" && e.name === "FILE",
+              target: "IN_FILE",
+              action: this.handleProcessTag.bind(this),
+            },
+          ],
           closeFileset: {
-            target: "TEXT",
+            target: "IN_TEXT",
             action: this.closeFileset.bind(this),
           },
           openFile: {
-            target: "FILE",
+            target: "IN_FILE",
             action: this.openFile.bind(this),
           },
         },
       },
-      FILE: {
+      IN_FILE: {
         on: {
           processText: {
             action: this.renderFileText.bind(this),
           },
+          processTag: [
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "close" && e.name === "FILE",
+              target: "IN_FILESET",
+              action: this.handleProcessTag.bind(this),
+            },
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "open" && e.name === "DIFFCHUNK",
+              target: "IN_DIFFCHUNK",
+              action: this.handleProcessTag.bind(this),
+            },
+          ],
           closeFile: {
-            target: "FILESET",
+            target: "IN_FILESET",
             action: this.closeFile.bind(this),
           },
           openDiffChunk: {
-            target: "DIFFCHUNK",
+            target: "IN_DIFFCHUNK",
             action: this.openDiffChunk.bind(this),
           },
         },
       },
-      DIFFCHUNK: {
+      IN_DIFFCHUNK: {
         on: {
           processText: {},
+          processTag: [
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "open" && e.name === "DIFFNEW",
+              target: "IN_DIFFNEW",
+              action: this.handleProcessTag.bind(this),
+            },
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "open" && e.name === "DIFFOLD",
+              target: "IN_DIFFOLD",
+              action: this.handleProcessTag.bind(this),
+            },
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "close" && e.name === "DIFFCHUNK",
+              target: "IN_FILE",
+              action: this.handleProcessTag.bind(this),
+            },
+          ],
           openDiffNew: {
-            target: "DIFFNEW",
+            target: "IN_DIFFNEW",
             action: this.openDiffNew.bind(this),
           },
           openDiffOld: {
-            target: "DIFFOLD",
+            target: "IN_DIFFOLD",
             action: this.openDiffOld.bind(this),
           },
           closeDiffChunk: {
-            target: "FILE",
+            target: "IN_FILE",
           },
         },
       },
-      DIFFNEW: {
+      IN_DIFFNEW: {
         on: {
           processText: {
             action: this.renderDiffNewText.bind(this),
           },
+          processTag: [
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "close" && e.name === "DIFFNEW",
+              target: "IN_DIFFCHUNK",
+              action: this.handleProcessTag.bind(this),
+            },
+          ],
           closeDiffNew: {
-            target: "DIFFCHUNK",
+            target: "IN_DIFFCHUNK",
           },
         },
       },
-      DIFFOLD: {
+      IN_DIFFOLD: {
         on: {
           processText: {
             action: this.renderDiffOldText.bind(this),
           },
+          processTag: [
+            {
+              guard: (e: EventProcessTag) =>
+                e.kind === "close" && e.name === "DIFFOLD",
+              target: "IN_DIFFCHUNK",
+              action: this.handleProcessTag.bind(this),
+            },
+          ],
           closeDiffOld: {
-            target: "DIFFCHUNK",
+            target: "IN_DIFFCHUNK",
           },
         },
       },
@@ -180,7 +305,7 @@ export class ChatResponseStateMachine extends StateMachine<
       "*": {
         on: {
           "*": {
-            action: (eventObj: ChatResponseEventObject) => {
+            action: (eventObj: ChatResponseEventObjectT) => {
               console.log(
                 `Unhandled event: in state "${this.currentState}" and received event "${eventObj.type}".`
               );
@@ -252,7 +377,7 @@ export class ChatResponseStateMachine extends StateMachine<
   private diffNewStateHasRemovedFirstNewline = false;
   private diffNewStateLastCharWasNewline = false;
 
-  private renderText(eventObj: ChatResponseEventProcessText) {
+  private renderText(eventObj: EventProcessText) {
     this.config.stream.markdown(eventObj.text);
   }
 
@@ -372,7 +497,7 @@ export class ChatResponseStateMachine extends StateMachine<
     this.config.stream.markdown("\n");
   }
 
-  private renderFileText(eventObj: ChatResponseEventProcessText) {
+  private renderFileText(eventObj: EventProcessText) {
     let text = eventObj.text;
 
     // If we're in a diff fileset, the format is very different and we'll let
@@ -414,7 +539,7 @@ export class ChatResponseStateMachine extends StateMachine<
     this.diffOldStateLastCharWasNewline = false;
   }
 
-  private renderDiffOldText(eventObj: ChatResponseEventProcessText) {
+  private renderDiffOldText(eventObj: EventProcessText) {
     let text = eventObj.text;
 
     // Handle trailing newline. With the XML tag format, the </DIFFOLD> tag will
@@ -459,7 +584,7 @@ export class ChatResponseStateMachine extends StateMachine<
     this.diffNewStateLastCharWasNewline = false;
   }
 
-  private renderDiffNewText(eventObj: ChatResponseEventProcessText) {
+  private renderDiffNewText(eventObj: EventProcessText) {
     // The implementation here is the same as for DiffOld, but with "+" instead
     // of "-".
     let text = eventObj.text;
@@ -485,5 +610,89 @@ export class ChatResponseStateMachine extends StateMachine<
 
     this.currentFile!.content += text;
     this.config.stream.markdown(text);
+  }
+
+  // ===========================================================================
+  // Tag handler adapter methods
+  // ===========================================================================
+
+  private handleProcessTag(event: EventProcessTag): void {
+    if (event.kind === "open") {
+      if (event.name === "FILESET") {
+        this.handleOpenFilesetTag(event as EventProcessTagFileset);
+      } else if (event.name === "FILE") {
+        this.handleOpenFileTag(event as EventProcessTagFile);
+      } else if (event.name === "DIFFCHUNK") {
+        this.handleOpenDiffChunkTag(event as EventProcessTagDiffChunk);
+      } else if (event.name === "DIFFNEW") {
+        this.handleOpenDiffNewTag(event as EventProcessTagDiffNew);
+      } else if (event.name === "DIFFOLD") {
+        this.handleOpenDiffOldTag(event as EventProcessTagDiffOld);
+      }
+    } else if (event.kind === "close") {
+      if (event.name === "FILESET") {
+        this.handleCloseFilesetTag(event as EventProcessTagFileset);
+      } else if (event.name === "FILE") {
+        this.handleCloseFileTag(event as EventProcessTagFile);
+      } else if (event.name === "DIFFCHUNK") {
+        this.handleCloseDiffChunkTag(event as EventProcessTagDiffChunk);
+      } else if (event.name === "DIFFNEW") {
+        this.handleCloseDiffNewTag(event as EventProcessTagDiffNew);
+      } else if (event.name === "DIFFOLD") {
+        this.handleCloseDiffOldTag(event as EventProcessTagDiffOld);
+      }
+    }
+  }
+
+  private handleOpenFilesetTag(event: EventProcessTagFileset): void {
+    // Default to "complete" if no format is specified
+    const format = event.attributes.FORMAT ?? "complete";
+    if (format !== "complete" && format !== "diff") {
+      throw new Error(`Invalid fileset format: ${format}`);
+    }
+
+    this.openFileset({
+      type: "openFileset",
+      format: format,
+    });
+  }
+
+  private handleCloseFilesetTag(event: EventProcessTagFileset): void {
+    this.closeFileset({ type: "closeFileset" });
+  }
+
+  private handleOpenFileTag(event: EventProcessTagFile): void {
+    this.openFile({
+      type: "openFile",
+      name: event.attributes.NAME,
+    });
+  }
+
+  private handleCloseFileTag(event: EventProcessTagFile): void {
+    this.closeFile({ type: "closeFile" });
+  }
+
+  private handleOpenDiffChunkTag(event: EventProcessTagDiffChunk): void {
+    this.openDiffChunk({ type: "openDiffChunk" });
+  }
+
+  private handleCloseDiffChunkTag(event: EventProcessTagDiffChunk): void {
+    // No action needed, just transition
+  }
+
+  private handleOpenDiffNewTag(event: EventProcessTagDiffNew): void {
+    this.openDiffNew({ type: "openDiffNew" });
+  }
+
+  private handleCloseDiffNewTag(event: EventProcessTagDiffNew): void {
+    // No action needed, just transition
+  }
+
+  private handleOpenDiffOldTag(event: EventProcessTagDiffOld): void {
+    this.openDiffOld({ type: "openDiffOld" });
+  }
+
+  private handleCloseDiffOldTag(event: EventProcessTagDiffOld): void {
+    // No action needed, just transition
   }
 }

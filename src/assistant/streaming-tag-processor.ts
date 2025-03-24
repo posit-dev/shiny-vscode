@@ -3,17 +3,17 @@ type ProcessedText = {
   text: string;
 };
 
-type ProcessedTag = {
+type ProcessedTag<TagNameT extends string> = {
   type: "tag";
-  name: string;
+  name: TagNameT;
   kind: "open" | "close";
   attributes: Record<string, string>;
   originalText: string;
 };
 
-export class StreamingTagProcessor {
+export class StreamingTagProcessor<TagNameT extends string> {
   private buffer: string = "";
-  private readonly tagNames: string[];
+  private readonly tagNames: TagNameT[];
 
   // Variables for tracking the state of the parser
   private state:
@@ -33,19 +33,21 @@ export class StreamingTagProcessor {
   private scannedText: string = "";
 
   // Variables for tracking the state when we're in a potential tag
-  private tagName: string = "";
+  private tagName: TagNameT | null = null;
+  private tagNamePartial: string = ""; // Partial tag name as we build it
   private kind: "open" | "close" = "open";
   private currentAttributeName: string = "";
   private currentAttributeValue: string = "";
   private attributes: Record<string, string> = {};
   // Counter for iterating over a tag name character by character.
-  private tagNameIdx = 0;
-  private potentialTagNameMatches: string[] = [];
+  private tagNamePartialIdx = 0;
+  private potentialTagNameMatches: TagNameT[] = [];
 
   private resetPotentialTagStateVars() {
-    this.tagNameIdx = 0;
+    this.tagNamePartialIdx = 0;
     this.potentialTagNameMatches = [...this.tagNames];
-    this.tagName = "";
+    this.tagName = null;
+    this.tagNamePartial = "";
     this.kind = "open";
     this.currentAttributeName = "";
     this.currentAttributeValue = "";
@@ -57,7 +59,7 @@ export class StreamingTagProcessor {
    * @param tagNames - Array of tag names without angle brackets or attributes
    *                  (e.g., ["FILESET", "FILE"])
    */
-  constructor(tagNames: string[]) {
+  constructor(tagNames: Readonly<Array<TagNameT>>) {
     // TODO: Validate tag names
     this.tagNames = [...tagNames];
     this.resetPotentialTagStateVars();
@@ -73,8 +75,8 @@ export class StreamingTagProcessor {
    * @returns - The text before the tag or potential tag, or an empty string if
    * there is no such text.
    */
-  process(chunk: string): Array<ProcessedText | ProcessedTag> {
-    const result: Array<ProcessedText | ProcessedTag> = [];
+  process(chunk: string): Array<ProcessedText | ProcessedTag<TagNameT>> {
+    const result: Array<ProcessedText | ProcessedTag<TagNameT>> = [];
 
     for (const char of chunk) {
       if (this.state === "TEXT") {
@@ -97,7 +99,9 @@ export class StreamingTagProcessor {
           // Iterate backward over the list of potentialTagNameMatches because we
           // may remove items as we go.
           for (let j = this.potentialTagNameMatches.length - 1; j >= 0; j--) {
-            if (char !== this.potentialTagNameMatches[j][this.tagNameIdx]) {
+            if (
+              char !== this.potentialTagNameMatches[j][this.tagNamePartialIdx]
+            ) {
               // Character mismatch: we can remove this tag name from the list of
               // potential matches.
               this.potentialTagNameMatches.splice(j, 1);
@@ -111,9 +115,9 @@ export class StreamingTagProcessor {
           }
 
           this.state = "TAG_NAME";
-          this.tagName = char;
+          this.tagNamePartial = char;
           this.kind = "open";
-          this.tagNameIdx++;
+          this.tagNamePartialIdx++;
         } else {
           // Not a valid tag name starting character
           this.resetPotentialTagStateVars();
@@ -122,7 +126,9 @@ export class StreamingTagProcessor {
       } else if (this.state === "TAG_START_SLASH") {
         if (/^[a-zA-Z0-9]$/.test(char)) {
           for (let j = this.potentialTagNameMatches.length - 1; j >= 0; j--) {
-            if (char !== this.potentialTagNameMatches[j][this.tagNameIdx]) {
+            if (
+              char !== this.potentialTagNameMatches[j][this.tagNamePartialIdx]
+            ) {
               this.potentialTagNameMatches.splice(j, 1);
             }
           }
@@ -134,9 +140,9 @@ export class StreamingTagProcessor {
           }
 
           this.state = "TAG_NAME";
-          this.tagName = char;
+          this.tagNamePartial = char;
           this.kind = "close";
-          this.tagNameIdx++;
+          this.tagNamePartialIdx++;
         } else {
           // Not a valid tag name starting character
           this.resetPotentialTagStateVars();
@@ -152,12 +158,15 @@ export class StreamingTagProcessor {
           // the potential matches. (For consistency, we're not using filter();
           // elsewhere in the code we're modifying the array in place.)
           for (let i = this.potentialTagNameMatches.length - 1; i >= 0; i--) {
-            if (this.tagNameIdx !== this.potentialTagNameMatches[i].length) {
+            if (
+              this.tagNamePartialIdx !== this.potentialTagNameMatches[i].length
+            ) {
               this.potentialTagNameMatches.splice(i, 1);
             }
           }
           // If we hit the end of a tag name, we can transition to the next state.
           if (this.potentialTagNameMatches.length === 1) {
+            this.tagName = this.tagNamePartial as TagNameT;
             if (char === " ") {
               // "<FILESET "
               this.state = "WHITESPACE";
@@ -175,7 +184,9 @@ export class StreamingTagProcessor {
           }
         } else if (/^[a-zA-Z0-9_-]$/.test(char)) {
           for (let j = this.potentialTagNameMatches.length - 1; j >= 0; j--) {
-            if (char !== this.potentialTagNameMatches[j][this.tagNameIdx]) {
+            if (
+              char !== this.potentialTagNameMatches[j][this.tagNamePartialIdx]
+            ) {
               this.potentialTagNameMatches.splice(j, 1);
             }
           }
@@ -186,8 +197,8 @@ export class StreamingTagProcessor {
             this.state = "TEXT";
           }
 
-          this.tagName += char;
-          this.tagNameIdx++;
+          this.tagNamePartial += char;
+          this.tagNamePartialIdx++;
         } else {
           // Not a valid tag name character, as in "<SHIN!"
           this.resetPotentialTagStateVars();
@@ -292,7 +303,7 @@ export class StreamingTagProcessor {
       if (this.state === "TAG_END") {
         result.push({
           type: "tag",
-          name: this.tagName,
+          name: this.tagName as TagNameT,
           kind: this.kind,
           attributes: structuredClone(this.attributes),
           originalText: this.scannedText,

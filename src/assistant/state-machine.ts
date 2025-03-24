@@ -31,11 +31,58 @@ export type ActionFunction<
 > = <T extends E & EventObjT["type"]>(event: EventByType<EventObjT, T>) => void;
 
 /**
- * Type for a single state definition within a state machine.
- * Defines how a state responds to events, including optional transitions and actions.
+ * Type for a guard/condition function that determines if a transition should
+ * occur.
+ *
+ * @template EventObjT - Discriminated union type for events with a 'type'
+ * property
+ * @template E - The specific event type or wildcard
+ */
+export type GuardFunction<
+  EventObjT extends { type: string },
+  E extends EventObjT["type"] | "*",
+> = <T extends E & EventObjT["type"]>(
+  event: EventByType<EventObjT, T>
+) => boolean;
+
+/**
+ * Type for a single transition definition within a state. Defines how a state
+ * responds to a specific event, including optional target state, actions, and
+ * guards.
  *
  * @template StateT - String literal type representing possible states
- * @template EventObjT - Discriminated union type for events with a 'type' property
+ * @template EventObjT - Discriminated union type for events with a 'type'
+ * property
+ * @template E - The specific event type or wildcard
+ */
+export type TransitionDefinition<
+  StateT extends string,
+  EventObjT extends { type: string },
+  E extends EventObjT["type"] | "*" = EventObjT["type"] | "*",
+> = {
+  /** Optional target state to transition to when this event occurs */
+  target?: StateT;
+  /**
+   * Optional action function(s) to execute when this event occurs. Can be a
+   * single action function or an array of action functions. Each action
+   * receives the typed event object as its parameter.
+   */
+  action?: ActionFunction<EventObjT, E> | Array<ActionFunction<EventObjT, E>>;
+  /**
+   * Optional guard function to determine if the transition should occur. Can be
+   * a single guard function or an array of guard functions. Each guard receives
+   * the typed event object as its parameter.
+   */
+  guard?: GuardFunction<EventObjT, E> | Array<GuardFunction<EventObjT, E>>;
+};
+
+/**
+ * Type for a single state definition within a state machine. Defines how a
+ * state responds to events, including optional transitions and actions.
+ *
+ * @template StateT - String literal type representing possible states
+ * @template EventObjT - Discriminated union type for events with a 'type'
+ * property
  */
 export type StateDefinition<
   StateT extends string,
@@ -44,21 +91,12 @@ export type StateDefinition<
   /**
    * Event handlers for this state.
    * Keys are event types or "*" for wildcard handling.
-   * Each handler can define a target state and/or an action to execute.
+   * Each handler can define a single transition or an array of transitions.
    */
   on?: {
-    [E in EventObjT["type"] | "*"]?: {
-      /** Optional target state to transition to when this event occurs */
-      target?: StateT;
-      /**
-       * Optional action function(s) to execute when this event occurs.
-       * Can be a single action function or an array of action functions.
-       * Each action receives the typed event object as its parameter.
-       */
-      action?:
-        | ActionFunction<EventObjT, E>
-        | Array<ActionFunction<EventObjT, E>>;
-    };
+    [E in EventObjT["type"] | "*"]?:
+      | TransitionDefinition<StateT, EventObjT, E>
+      | Array<TransitionDefinition<StateT, EventObjT, E>>;
   };
 };
 
@@ -68,7 +106,8 @@ export type StateDefinition<
  * with full TypeScript type safety.
  *
  * @template StateT - String literal type representing possible states
- * @template EventObjT - Discriminated union type for events with a 'type' property
+ * @template EventObjT - Discriminated union type for events with a 'type'
+ * property.
  */
 export abstract class StateMachine<
   StateT extends string,
@@ -146,23 +185,46 @@ export abstract class StateMachine<
       return;
     }
 
-    if (eventData.action) {
-      // Execute the action(s)
-      if (Array.isArray(eventData.action)) {
-        // Execute all actions in the array
-        for (const action of eventData.action) {
-          // Use type assertion to make TypeScript happy
-          // This is safe because we're only calling the action with events of the right type
-          (action as (event: EventObjT) => void)(eventObj);
-        }
-      } else {
-        // Execute the single action
-        (eventData.action as (event: EventObjT) => void)(eventObj);
-      }
-    }
+    // Handle single transition or array of transitions
+    const transitions = Array.isArray(eventData) ? eventData : [eventData];
 
-    if (eventData.target) {
-      this.currentState = eventData.target;
+    // Process each transition
+    for (const transition of transitions) {
+      // Check guard condition if present
+      if (transition.guard) {
+        const guards = Array.isArray(transition.guard)
+          ? transition.guard
+          : [transition.guard];
+        // Only proceed if all guards return true
+        if (
+          !guards.every((guard: (event: EventObjT) => boolean) => {
+            return guard(eventObj);
+          })
+        ) {
+          continue; // Skip this transition if guard fails
+        }
+      }
+
+      // Execute actions if present
+      if (transition.action) {
+        if (Array.isArray(transition.action)) {
+          // Execute all actions in the array
+          for (const action of transition.action) {
+            // Use type assertion to make TypeScript happy
+            // This is safe because we're only calling the action with events of the right type
+            (action as (event: EventObjT) => void)(eventObj);
+          }
+        } else {
+          // Execute the single action
+          (transition.action as (event: EventObjT) => void)(eventObj);
+        }
+      }
+
+      // Perform state transition if target is specified
+      if (transition.target) {
+        this.currentState = transition.target;
+        break; // Stop processing further transitions after a state change
+      }
     }
   }
 }

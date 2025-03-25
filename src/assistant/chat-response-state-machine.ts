@@ -2,63 +2,128 @@
 
 import * as vscode from "vscode";
 import { applyFileSetDiff, type DiffError } from "./diff";
-import { inferFileType, type LangName, langNameToFileExt } from "./language";
+import { inferFileType, langNameToFileExt, type LangName } from "./language";
 import type { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StateMachine } from "./state-machine";
 import type { FileContent, FileSet } from "./types";
+
+/**
+ * Names of XML-like tags, like <FILESET>, <FILE>, <DIFFCHUNK>, etc., that are
+ * used in chat responses.
+ */
+export const chatResponseKnownTags = [
+  "FILESET",
+  "FILE",
+  "DIFFCHUNK",
+  "DIFFOLD",
+  "DIFFNEW",
+] as const;
+
+/**
+ * Extract the _type_ of the known tags from the array of known tags.
+ */
+export type ChatResponseKnownTagsType = (typeof chatResponseKnownTags)[number];
 
 /**
  * Defines the possible states for the tag state machine.
  * Each state represents a different context in the chat response processing.
  */
 export type ChatResponseStateName =
-  | "TEXT"
-  | "FILESET"
-  | "FILE"
-  | "DIFFCHUNK"
-  | "DIFFOLD"
-  | "DIFFNEW";
+  | "IN_TEXT"
+  | "IN_FILESET"
+  | "IN_FILE"
+  | "IN_DIFFCHUNK"
+  | "IN_DIFFNEW"
+  | "IN_DIFFOLD";
 
-// Define event  type with discriminated union pattern
-export type ChatResponseEventProcessText = {
+// ============================================================================
+// Event types
+// ============================================================================
+// Each event type represents a different kind of content that can be processed
+// by the state machine.
+
+/**
+ * This event type represents a block of text content.
+ */
+export type EventProcessText = {
   type: "processText";
   text: string;
 };
-export type ChatResponseEventOpenFileset = {
-  type: "openFileset";
-  format: "complete" | "diff";
+
+/**
+ * The base type for events that represent processing of XML-like tags.
+ */
+export type EventProcessTagBase = {
+  type: "processTag";
+  name: ChatResponseKnownTagsType;
 };
-export type ChatResponseEventCloseFileset = { type: "closeFileset" };
-export type ChatResponseEventOpenFile = { type: "openFile"; name: string };
-export type ChatResponseEventCloseFile = { type: "closeFile" };
-export type ChatResponseEventOpenDiffChunk = { type: "openDiffChunk" };
-export type ChatResponseEventCloseDiffChunk = { type: "closeDiffChunk" };
-export type ChatResponseEventOpenDiffNew = { type: "openDiffNew" };
-export type ChatResponseEventCloseDiffNew = { type: "closeDiffNew" };
-export type ChatResponseEventOpenDiffOld = { type: "openDiffOld" };
-export type ChatResponseEventCloseDiffOld = { type: "closeDiffOld" };
 
 /**
- * Union type of all possible events that can be processed by the tag state machine.
- * Uses a discriminated union pattern with the 'type' property as the discriminator.
+ * The open and close tag events are distinguished by their `kind` attribute.
  */
-export type ChatResponseEventObject =
-  | ChatResponseEventProcessText
-  | ChatResponseEventOpenFileset
-  | ChatResponseEventCloseFileset
-  | ChatResponseEventOpenFile
-  | ChatResponseEventCloseFile
-  | ChatResponseEventOpenDiffChunk
-  | ChatResponseEventCloseDiffChunk
-  | ChatResponseEventOpenDiffNew
-  | ChatResponseEventCloseDiffNew
-  | ChatResponseEventOpenDiffOld
-  | ChatResponseEventCloseDiffOld;
+export type EventProcessTagOpenBase = EventProcessTagBase & {
+  kind: "open";
+};
+export type EventProcessTagCloseBase = EventProcessTagBase & {
+  kind: "close";
+};
 
 /**
- * Utility type that extracts all possible event names from the event object union.
+ * Now we define the specific tag events for each known tag type. Each one has
+ * an open and close event, and each open event may have additional attributes.
  */
-export type ChatResponseEventNames = ChatResponseEventObject["type"];
+export type EventProcessTagFilesetOpen = EventProcessTagOpenBase & {
+  name: "FILESET";
+  attributes: Readonly<{ FORMAT?: "complete" | "diff" }>;
+};
+export type EventProcessTagFilesetClose = EventProcessTagCloseBase & {
+  name: "FILESET";
+};
+
+export type EventProcessTagFileOpen = EventProcessTagOpenBase & {
+  name: "FILE";
+  attributes: Readonly<{ NAME: string }>;
+};
+export type EventProcessTagFileClose = EventProcessTagCloseBase & {
+  name: "FILE";
+};
+
+export type EventProcessTagDiffChunkOpen = EventProcessTagOpenBase & {
+  name: "DIFFCHUNK";
+};
+export type EventProcessTagDiffChunkClose = EventProcessTagCloseBase & {
+  name: "DIFFCHUNK";
+};
+
+export type EventProcessTagDiffNewOpen = EventProcessTagOpenBase & {
+  name: "DIFFNEW";
+};
+export type EventProcessTagDiffNewClose = EventProcessTagCloseBase & {
+  name: "DIFFNEW";
+};
+
+export type EventProcessTagDiffOldOpen = EventProcessTagOpenBase & {
+  name: "DIFFOLD";
+};
+export type EventProcessTagDiffOldClose = EventProcessTagCloseBase & {
+  name: "DIFFOLD";
+};
+
+// Union type of all possible tag events
+export type EventProcessTag =
+  | EventProcessTagFilesetOpen
+  | EventProcessTagFilesetClose
+  | EventProcessTagFileOpen
+  | EventProcessTagFileClose
+  | EventProcessTagDiffChunkOpen
+  | EventProcessTagDiffChunkClose
+  | EventProcessTagDiffNewOpen
+  | EventProcessTagDiffNewClose
+  | EventProcessTagDiffOldOpen
+  | EventProcessTagDiffOldClose;
+
+// Union type of all possible events that can be processed by the state machine
+export type ChatResponseEvents = EventProcessText | EventProcessTag;
 
 // ============================================================================
 // ChatResponseStateMachine
@@ -86,9 +151,18 @@ export type ChatResponseStateMachineConfig = {
  */
 export class ChatResponseStateMachine extends StateMachine<
   ChatResponseStateName,
-  ChatResponseEventObject
+  ChatResponseEvents
 > {
   private config: ChatResponseStateMachineConfig;
+  private pendingAsyncOperations = new Set<Promise<void>>();
+  private fileSet: FileSet | null = null;
+  private currentFile: FileContent | null = null;
+  private diffErrors: DiffError[] = [];
+  private fileStateHasRemovedFirstNewline = false;
+  private diffOldStateHasRemovedFirstNewline = false;
+  private diffOldStateLastCharWasNewline = false;
+  private diffNewStateHasRemovedFirstNewline = false;
+  private diffNewStateLastCharWasNewline = false;
 
   /**
    * Creates a new chat response state machine for processing chat responses.
@@ -96,91 +170,130 @@ export class ChatResponseStateMachine extends StateMachine<
    * @param config - Configuration options for the state machine
    */
   constructor(config: ChatResponseStateMachineConfig) {
-    super({ initialState: "TEXT" });
+    super({ initialState: "IN_TEXT" });
     this.config = config;
 
-    // Define state machine transitions here
+    // =========================================================================
+    // Define state machine transitions
+    // =========================================================================
     this.states = {
-      TEXT: {
+      IN_TEXT: {
         on: {
           processText: {
             action: this.renderText.bind(this),
           },
-          openFileset: {
-            target: "FILESET",
-            action: this.openFileset.bind(this),
-          },
+          processTag: [
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagFilesetOpen =>
+                e.kind === "open" && e.name === "FILESET",
+              target: "IN_FILESET",
+              action: this.openFileset.bind(this),
+            },
+          ],
         },
       },
-      FILESET: {
+      IN_FILESET: {
         on: {
-          processText: {},
-          closeFileset: {
-            target: "TEXT",
-            action: this.closeFileset.bind(this),
-          },
-          openFile: {
-            target: "FILE",
-            action: this.openFile.bind(this),
-          },
+          processTag: [
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagFilesetClose =>
+                e.kind === "close" && e.name === "FILESET",
+              target: "IN_TEXT",
+              action: this.closeFileset.bind(this),
+            },
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagFileOpen =>
+                e.kind === "open" && e.name === "FILE",
+              target: "IN_FILE",
+              action: this.openFile.bind(this),
+            },
+          ],
         },
       },
-      FILE: {
+      IN_FILE: {
         on: {
           processText: {
+            guard: (e: EventProcessText): e is EventProcessText =>
+              e.type === "processText",
             action: this.renderFileText.bind(this),
           },
-          closeFile: {
-            target: "FILESET",
-            action: this.closeFile.bind(this),
-          },
-          openDiffChunk: {
-            target: "DIFFCHUNK",
-            action: this.openDiffChunk.bind(this),
-          },
+          processTag: [
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagFileClose =>
+                e.kind === "close" && e.name === "FILE",
+              target: "IN_FILESET",
+              action: this.closeFile.bind(this),
+            },
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagDiffChunkOpen =>
+                e.kind === "open" && e.name === "DIFFCHUNK",
+              target: "IN_DIFFCHUNK",
+              action: this.openDiffChunk.bind(this),
+            },
+          ],
         },
       },
-      DIFFCHUNK: {
+      IN_DIFFCHUNK: {
         on: {
-          processText: {},
-          openDiffNew: {
-            target: "DIFFNEW",
-            action: this.openDiffNew.bind(this),
-          },
-          openDiffOld: {
-            target: "DIFFOLD",
-            action: this.openDiffOld.bind(this),
-          },
-          closeDiffChunk: {
-            target: "FILE",
-          },
+          // processText: {},
+          processTag: [
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagDiffNewOpen =>
+                e.kind === "open" && e.name === "DIFFNEW",
+              target: "IN_DIFFNEW",
+              action: this.openDiffNew.bind(this),
+            },
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagDiffOldOpen =>
+                e.kind === "open" && e.name === "DIFFOLD",
+              target: "IN_DIFFOLD",
+              action: this.openDiffOld.bind(this),
+            },
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagDiffChunkClose =>
+                e.kind === "close" && e.name === "DIFFCHUNK",
+              target: "IN_FILE",
+            },
+          ],
         },
       },
-      DIFFNEW: {
+      IN_DIFFNEW: {
         on: {
           processText: {
+            guard: (e: EventProcessText): e is EventProcessText =>
+              e.type === "processText",
             action: this.renderDiffNewText.bind(this),
           },
-          closeDiffNew: {
-            target: "DIFFCHUNK",
-          },
+          processTag: [
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagDiffNewClose =>
+                e.kind === "close" && e.name === "DIFFNEW",
+              target: "IN_DIFFCHUNK",
+            },
+          ],
         },
       },
-      DIFFOLD: {
+      IN_DIFFOLD: {
         on: {
           processText: {
+            guard: (e: EventProcessText): e is EventProcessText =>
+              e.type === "processText",
             action: this.renderDiffOldText.bind(this),
           },
-          closeDiffOld: {
-            target: "DIFFCHUNK",
-          },
+          processTag: [
+            {
+              guard: (e: EventProcessTag): e is EventProcessTagDiffOldClose =>
+                e.kind === "close" && e.name === "DIFFOLD",
+              target: "IN_DIFFCHUNK",
+            },
+          ],
         },
       },
 
       "*": {
         on: {
           "*": {
-            action: (eventObj: ChatResponseEventObject) => {
+            action: (eventObj: EventProcessText | EventProcessTag) => {
               console.log(
                 `Unhandled event: in state "${this.currentState}" and received event "${eventObj.type}".`
               );
@@ -190,6 +303,12 @@ export class ChatResponseStateMachine extends StateMachine<
       },
     };
   }
+
+  // ===========================================================================
+  // Public methods
+  // ===========================================================================
+  // These methods are used to fetch information about the state machine from
+  // the outside.
 
   /**
    * Checks if the state machine currently has an active fileset.
@@ -213,7 +332,6 @@ export class ChatResponseStateMachine extends StateMachine<
   // Async operations
   // ===========================================================================
   // Track pending async operations
-  private pendingAsyncOperations = new Set<Promise<void>>();
 
   /**
    * Checks if there are any pending async operations.
@@ -240,25 +358,14 @@ export class ChatResponseStateMachine extends StateMachine<
   // ===========================================================================
   // State machine event handlers
   // ===========================================================================
-  private fileSet: FileSet | null = null;
-  private currentFile: FileContent | null = null;
-  private diffErrors: DiffError[] = [];
 
-  // In the FILE, DIFF_NEW, and DIFF_OLD state, the very first line of the file
-  // content is a spurious newline.
-  private fileStateHasRemovedFirstNewline = false;
-  private diffOldStateHasRemovedFirstNewline = false;
-  private diffOldStateLastCharWasNewline = false;
-  private diffNewStateHasRemovedFirstNewline = false;
-  private diffNewStateLastCharWasNewline = false;
-
-  private renderText(eventObj: ChatResponseEventProcessText) {
+  private renderText(eventObj: EventProcessText) {
     this.config.stream.markdown(eventObj.text);
   }
 
-  private openFileset(eventObj: ChatResponseEventOpenFileset) {
+  private openFileset(eventObj: EventProcessTagFilesetOpen) {
     // Default format is "complete"
-    const format = eventObj.format ?? "complete";
+    const format = eventObj.attributes.FORMAT ?? "complete";
     if (format !== "complete" && format !== "diff") {
       throw new Error(`Invalid fileset format: ${format}`);
     }
@@ -269,7 +376,7 @@ export class ChatResponseStateMachine extends StateMachine<
     };
   }
 
-  private closeFileset(eventObj: ChatResponseEventCloseFileset) {
+  private closeFileset(eventObj: EventProcessTagFilesetClose) {
     this.config.incrementPreviewCounter();
     const proposedFilesPrefixDir =
       "/app-preview-" + this.config.proposedFilePreviewCounter;
@@ -343,14 +450,14 @@ export class ChatResponseStateMachine extends StateMachine<
     );
   }
 
-  private openFile(eventObj: ChatResponseEventOpenFile) {
+  private openFile(eventObj: EventProcessTagFileOpen) {
     if (!this.fileSet) {
       throw new Error("Fileset not initialized");
     }
 
     // Create a mutable reference to the most recent file in this.fileSet.files.
     this.currentFile = {
-      name: eventObj.name,
+      name: eventObj.attributes.NAME,
       content: "",
       type: "text",
     };
@@ -359,12 +466,12 @@ export class ChatResponseStateMachine extends StateMachine<
 
     this.fileStateHasRemovedFirstNewline = false;
 
-    this.config.stream.markdown("\n### " + eventObj.name + "\n");
+    this.config.stream.markdown("\n### " + eventObj.attributes.NAME + "\n");
     this.config.stream.markdown("```");
     if (this.fileSet!.format === "diff") {
       this.config.stream.markdown("diff");
     } else {
-      const fileType = inferFileType(eventObj.name);
+      const fileType = inferFileType(eventObj.attributes.NAME);
       if (fileType !== "text") {
         this.config.stream.markdown(fileType);
       }
@@ -372,7 +479,7 @@ export class ChatResponseStateMachine extends StateMachine<
     this.config.stream.markdown("\n");
   }
 
-  private renderFileText(eventObj: ChatResponseEventProcessText) {
+  private renderFileText(eventObj: EventProcessText) {
     let text = eventObj.text;
 
     // If we're in a diff fileset, the format is very different and we'll let
@@ -395,7 +502,7 @@ export class ChatResponseStateMachine extends StateMachine<
     this.config.stream.markdown(text);
   }
 
-  private closeFile(eventObj: ChatResponseEventCloseFile) {
+  private closeFile(eventObj: EventProcessTagFileClose) {
     this.currentFile = null;
     this.config.stream.markdown("```");
     this.config.stream.markdown("\n");
@@ -404,17 +511,17 @@ export class ChatResponseStateMachine extends StateMachine<
   // Note that the diffs are received as XML because the LLM is better at
   // generating diffs that way, but we convert them to a format that is the same
   // as unified diffs, except there are no line numbers.
-  private openDiffChunk(eventObj: ChatResponseEventOpenDiffChunk) {
+  private openDiffChunk(eventObj: EventProcessTagDiffChunkOpen) {
     this.currentFile!.content += "@@ ... @@\n";
     this.config.stream.markdown("@@ ... @@\n");
   }
 
-  private openDiffOld(eventObj: ChatResponseEventOpenDiffOld) {
+  private openDiffOld(eventObj: EventProcessTagDiffOldOpen) {
     this.diffOldStateHasRemovedFirstNewline = false;
     this.diffOldStateLastCharWasNewline = false;
   }
 
-  private renderDiffOldText(eventObj: ChatResponseEventProcessText) {
+  private renderDiffOldText(eventObj: EventProcessText) {
     let text = eventObj.text;
 
     // Handle trailing newline. With the XML tag format, the </DIFFOLD> tag will
@@ -454,12 +561,12 @@ export class ChatResponseStateMachine extends StateMachine<
     this.config.stream.markdown(text);
   }
 
-  private openDiffNew(eventObj: ChatResponseEventOpenDiffNew) {
+  private openDiffNew(eventObj: EventProcessTagDiffNewOpen) {
     this.diffNewStateHasRemovedFirstNewline = false;
     this.diffNewStateLastCharWasNewline = false;
   }
 
-  private renderDiffNewText(eventObj: ChatResponseEventProcessText) {
+  private renderDiffNewText(eventObj: EventProcessText) {
     // The implementation here is the same as for DiffOld, but with "+" instead
     // of "-".
     let text = eventObj.text;

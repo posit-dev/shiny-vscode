@@ -240,9 +240,9 @@ If the user asks for a Chat application, check that:
 - shiny is version 1.3.0 or higher
 - chatlas is version 0.4.0 or higher
 
-As of 2025-03-03, the current release version of shiny is 1.3.0. Remind them that they should run `pip install -r requirements.txt` to install the packages.
+Remind them that they should run `pip install -r requirements.txt` to install the packages.
 
-Tell them they can check the version of Shiny by running this and checking that it's "1.3.0" or higher.
+You have a tool for checking package versions. But if the tool fails, or if the user wants to manually check package versions, tell them they can check the version of Shiny by running this and checking that it's "1.3.0" or higher.
 
 ```
 python -c "import shiny; print(shiny.__version__)"

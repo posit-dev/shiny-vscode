@@ -3,9 +3,8 @@ import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
 import { isPositron } from "../extension-api-utils/extensionHost";
 import {
-  ChatResponseKnownTags,
+  chatResponseKnownTags,
   ChatResponseStateMachine,
-  EventProcessTagFilesetClose,
   type ChatResponseKnownTagsType,
 } from "./chat-response-state-machine";
 import { type DiffError } from "./diff";
@@ -417,7 +416,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
         const toolCalls: vscode.LanguageModelToolCallPart[] = [];
         const tagProcessor =
           new StreamingTagProcessor<ChatResponseKnownTagsType>(
-            ChatResponseKnownTags
+            chatResponseKnownTags
           );
         let diffErrors: DiffError[] = [];
         // The response text streamed in from the LLM.
@@ -465,6 +464,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                     type: "processTag",
                     name: "FILESET",
                     kind: "open",
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
                     attributes: { FORMAT: format },
                   });
                 } else {
@@ -482,6 +482,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                       type: "processTag",
                       name: "FILE",
                       kind: fragment.kind,
+                      // eslint-disable-next-line @typescript-eslint/naming-convention
                       attributes: { NAME: name },
                     });
                     // Ensure FILE open tag has the required NAME attribute

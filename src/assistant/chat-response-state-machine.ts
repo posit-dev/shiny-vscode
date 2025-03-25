@@ -11,7 +11,7 @@ import type { FileContent, FileSet } from "./types";
  * Names of XML-like tags, like <FILESET>, <FILE>, <DIFFCHUNK>, etc., that are
  * used in chat responses.
  */
-export const ChatResponseKnownTags = [
+export const chatResponseKnownTags = [
   "FILESET",
   "FILE",
   "DIFFCHUNK",
@@ -22,7 +22,7 @@ export const ChatResponseKnownTags = [
 /**
  * Extract the _type_ of the known tags from the array of known tags.
  */
-export type ChatResponseKnownTagsType = (typeof ChatResponseKnownTags)[number];
+export type ChatResponseKnownTagsType = (typeof chatResponseKnownTags)[number];
 
 /**
  * Defines the possible states for the tag state machine.

@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
+export type BaseEvent = { type: string };
+
 /**
  * Generic helper type to extract event names from any discriminated union.
  * This type extracts the string literal types used in the 'type' property
  * of a discriminated union.
  */
-export type EventNames<T extends { type: string }> = T["type"];
+export type EventNames<T extends BaseEvent> = T["type"];
 
 /**
  * Helper type to get a specific event type based on the discriminator.
@@ -15,66 +17,76 @@ export type EventNames<T extends { type: string }> = T["type"];
  * @template TType - The specific 'type' value to extract
  */
 export type EventByType<
-  TEvent extends { type: string },
+  TEvent extends BaseEvent,
   TType extends string,
 > = Extract<TEvent, { type: TType }>;
 
 /**
- * Type for an action function that can be executed when an event occurs.
- *
- * @template EventObjT - Discriminated union type for events with a 'type' property
- * @template E - The specific event type or wildcard
- */
-export type ActionFunction<
-  EventObjT extends { type: string },
-  E extends EventObjT["type"] | "*",
-> = <T extends E & EventObjT["type"]>(event: EventByType<EventObjT, T>) => void;
-
-/**
  * Type for a guard/condition function that determines if a transition should
- * occur.
+ * occur and narrows the event type.
  *
  * @template EventObjT - Discriminated union type for events with a 'type'
  * property
- * @template E - The specific event type or wildcard
+ * @template NarrowedEventObjT - The narrowed event type if the guard passes
  */
-export type GuardFunction<
-  EventObjT extends { type: string },
-  E extends EventObjT["type"] | "*",
-> = <T extends E & EventObjT["type"]>(
-  event: EventByType<EventObjT, T>
-) => boolean;
+export type GuardFunction<EventObjT, NarrowedEventObjT extends EventObjT> = (
+  event: EventObjT
+) => event is NarrowedEventObjT;
+
+/**
+ * Type for an action function that can be executed when an event occurs.
+ *
+ * @template NarrowedEventObjT - The event type that the action will receive
+ */
+export type ActionFunction<NarrowedEventObjT> = (
+  event: NarrowedEventObjT
+) => void;
 
 /**
  * Type for a single transition definition within a state. Defines how a state
- * responds to a specific event, including optional target state, actions, and
- * guards.
+ * machine should respond to a specific event.
  *
- * @template StateT - String literal type representing possible states
- * @template EventObjT - Discriminated union type for events with a 'type'
- * property
- * @template E - The specific event type or wildcard
+ * @template StateT - Type for state names
+ * @template EventObjT - Discriminated union type for events with a 'type' property
+ * @template NarrowedEventObjT - The narrowed event type if the guard passes
  */
 export type TransitionDefinition<
   StateT extends string,
-  EventObjT extends { type: string },
-  E extends EventObjT["type"] | "*" = EventObjT["type"] | "*",
+  EventObjT extends BaseEvent,
+  NarrowedEventObjT extends EventObjT,
 > = {
-  /** Optional target state to transition to when this event occurs */
   target?: StateT;
-  /**
-   * Optional action function(s) to execute when this event occurs. Can be a
-   * single action function or an array of action functions. Each action
-   * receives the typed event object as its parameter.
-   */
-  action?: ActionFunction<EventObjT, E> | Array<ActionFunction<EventObjT, E>>;
-  /**
-   * Optional guard function to determine if the transition should occur. Can be
-   * a single guard function or an array of guard functions. Each guard receives
-   * the typed event object as its parameter.
-   */
-  guard?: GuardFunction<EventObjT, E> | Array<GuardFunction<EventObjT, E>>;
+  guard?: GuardFunction<EventObjT, NarrowedEventObjT>;
+  action?: ActionFunction<NarrowedEventObjT>;
 };
+
+/**
+ * Advanced type that automatically narrows transition definitions based on event types.
+ * This type creates a union of all possible transition definitions for a given
+ * state machine, with proper type narrowing for each event type.
+ *
+ * It works by:
+ * 1. Iterating through the keys of the event object type
+ * 2. For each key, creating a transition definition with the correctly narrowed event type
+ * 3. Returning a union of all these transition definitions
+ *
+ * This enables type-safe access to event properties in guards and actions without
+ * requiring manual type assertions or unsafe casts.
+ *
+ * @template StateT - String literal type representing possible states
+ * @template EventObjT - Discriminated union type for events with a 'type' property
+ */
+type SubtypeTransitions<StateT extends string, EventObjT extends BaseEvent> = {
+  [K in keyof EventObjT & string]: EventObjT extends infer NarrowedEventObjT
+    ? NarrowedEventObjT extends { [P in K]: unknown }
+      ? TransitionDefinition<
+          StateT,
+          EventObjT,
+          Extract<NarrowedEventObjT, EventObjT>
+        >
+      : never
+    : never;
+}[keyof EventObjT & string];
 
 /**
  * Type for a single state definition within a state machine. Defines how a
@@ -86,7 +98,7 @@ export type TransitionDefinition<
  */
 export type StateDefinition<
   StateT extends string,
-  EventObjT extends { type: string },
+  EventObjT extends BaseEvent,
 > = {
   /**
    * Event handlers for this state.
@@ -95,8 +107,8 @@ export type StateDefinition<
    */
   on?: {
     [E in EventObjT["type"] | "*"]?:
-      | TransitionDefinition<StateT, EventObjT, E>
-      | Array<TransitionDefinition<StateT, EventObjT, E>>;
+      | SubtypeTransitions<StateT, EventObjT>
+      | Array<SubtypeTransitions<StateT, EventObjT>>;
   };
 };
 
@@ -106,12 +118,11 @@ export type StateDefinition<
  * with full TypeScript type safety.
  *
  * @template StateT - String literal type representing possible states
- * @template EventObjT - Discriminated union type for events with a 'type'
- * property.
+ * @template EventObjT - Discriminated union type for events with a 'type' property
  */
 export abstract class StateMachine<
   StateT extends string,
-  EventObjT extends { type: string },
+  EventObjT extends BaseEvent,
 > {
   /** The current state of the state machine */
   currentState: StateT;
@@ -138,93 +149,99 @@ export abstract class StateMachine<
   }
 
   /**
-   * Sends an event to the state machine for processing.
-   * The machine will look for handlers in the following order:
+   * Send an event to the state machine to trigger transitions.
+   *
+   * @param event - The event to send to the state machine
+   * @returns The state machine instance for chaining
+   */
+  send(event: EventObjT): void {
+    const currentState = this.currentState;
+    const eventType = event.type;
+
+    // Find transitions for this event type in the current state
+    const transitions = this.getTransitionsForEvent(currentState, eventType);
+    if (!transitions) {
+      return;
+    }
+
+    // Process each transition (could be an array or a single transition)
+    const transitionArray = Array.isArray(transitions)
+      ? transitions
+      : [transitions];
+
+    for (const transition of transitionArray) {
+      // Check if there's a guard function
+      if (transition.guard) {
+        // Execute the action and transition if the guard returns true
+        if (transition.guard(event)) {
+          if (transition.action) {
+            transition.action(event);
+          }
+
+          // Transition to the target state if specified
+          if (transition.target) {
+            this.currentState = transition.target;
+          }
+
+          // Return true to indicate that the event was processed
+          return;
+        }
+      } else {
+        // No guard, execute the action directly
+        if (transition.action) {
+          transition.action(event as EventObjT);
+        }
+
+        // Transition to the target state if specified
+        if (transition.target) {
+          this.currentState = transition.target;
+        }
+      }
+    }
+
+    return;
+  }
+
+  /**
+   * Get transitions for a specific event type in a given state.
+   * This method checks for transitions in the following order:
    * 1. Current state's specific event handler
    * 2. Current state's wildcard handler
    * 3. Wildcard state's specific event handler
    * 4. Wildcard state's wildcard handler
    *
-   * If a matching handler is found, its action is executed and any
-   * target state transition is performed.
-   *
-   * @param eventObj - The event object to process
+   * @param state - The state to get transitions for
+   * @param eventType - The event type to get transitions for
+   * @returns The transition definition(s) for the event, or undefined if none found
    */
-  send(eventObj: EventObjT): void {
-    // Type-safe event name
-    const eventName = eventObj.type;
-    type EventKey = EventObjT["type"] | "*";
+  protected getTransitionsForEvent(
+    state: StateT,
+    eventType: EventObjT["type"]
+  ):
+    | SubtypeTransitions<StateT, EventObjT>
+    | Array<SubtypeTransitions<StateT, EventObjT>>
+    | undefined {
+    const stateDefinition = this.states[state];
 
-    // Get the current state - handle undefined case (shouldn't happen with exhaustive states)
-    const currentState = this.states[this.currentState];
-
-    // Get the event for the current state.
-    let eventData = currentState.on?.[eventName as EventKey];
-
-    // If the current state does not have the specific event, check that state
-    // for the wildcard event.
-    if (!eventData && currentState.on?.["*" as EventKey]) {
-      eventData = currentState.on?.["*" as EventKey];
+    // Check in order of specificity
+    if (stateDefinition?.on?.[eventType]) {
+      return stateDefinition.on[eventType];
     }
 
-    // If the current state still does not have the event, check the wildcard
-    // state for the event.
+    if (stateDefinition?.on?.["*"]) {
+      return stateDefinition.on["*"];
+    }
+
     const wildcardState = this.states["*"];
-    if (!eventData && wildcardState?.on?.[eventName as EventKey]) {
-      eventData = wildcardState.on?.[eventName as EventKey];
+
+    if (wildcardState?.on?.[eventType]) {
+      return wildcardState.on[eventType];
     }
 
-    // If the wildcard state does not have the event, check the wildcard state
-    // for the wildcard event.
-    if (!eventData && wildcardState?.on?.["*" as EventKey]) {
-      eventData = wildcardState.on?.["*" as EventKey];
+    if (wildcardState?.on?.["*"]) {
+      return wildcardState.on["*"];
     }
 
-    // If no event data is found, return.
-    if (!eventData) {
-      return;
-    }
-
-    // Handle single transition or array of transitions
-    const transitions = Array.isArray(eventData) ? eventData : [eventData];
-
-    // Process each transition
-    for (const transition of transitions) {
-      // Check guard condition if present
-      if (transition.guard) {
-        const guards = Array.isArray(transition.guard)
-          ? transition.guard
-          : [transition.guard];
-        // Only proceed if all guards return true
-        if (
-          !guards.every((guard: (event: EventObjT) => boolean) => {
-            return guard(eventObj);
-          })
-        ) {
-          continue; // Skip this transition if guard fails
-        }
-      }
-
-      // Execute actions if present
-      if (transition.action) {
-        if (Array.isArray(transition.action)) {
-          // Execute all actions in the array
-          for (const action of transition.action) {
-            // Use type assertion to make TypeScript happy
-            // This is safe because we're only calling the action with events of the right type
-            (action as (event: EventObjT) => void)(eventObj);
-          }
-        } else {
-          // Execute the single action
-          (transition.action as (event: EventObjT) => void)(eventObj);
-        }
-      }
-
-      // Perform state transition if target is specified
-      if (transition.target) {
-        this.currentState = transition.target;
-        break; // Stop processing further transitions after a state change
-      }
-    }
+    return undefined;
   }
 }

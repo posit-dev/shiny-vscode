@@ -5,6 +5,7 @@ import { isPositron } from "../extension-api-utils/extensionHost";
 import {
   ChatResponseKnownTags,
   ChatResponseStateMachine,
+  EventProcessTagFilesetClose,
   type ChatResponseKnownTagsType,
 } from "./chat-response-state-machine";
 import { type DiffError } from "./diff";
@@ -456,28 +457,43 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
             } else if (fragment.type === "tag") {
               // Create the appropriate tag event based on the tag name
               if (fragment.name === "FILESET") {
-                const format = (fragment.attributes.FORMAT ?? "complete") as
-                  | "complete"
-                  | "diff";
-
-                stateMachine.send({
-                  type: "processTag",
-                  name: "FILESET",
-                  kind: fragment.kind,
-                  attributes: { FORMAT: format },
-                });
+                if (fragment.kind === "open") {
+                  const format = (fragment.attributes.FORMAT ?? "complete") as
+                    | "complete"
+                    | "diff";
+                  stateMachine.send({
+                    type: "processTag",
+                    name: "FILESET",
+                    kind: "open",
+                    attributes: { FORMAT: format },
+                  });
+                } else {
+                  stateMachine.send({
+                    type: "processTag",
+                    name: "FILESET",
+                    kind: "close",
+                  });
+                }
               } else if (fragment.name === "FILE") {
-                // Ensure FILE tag has the required NAME attribute
-                if ("NAME" in fragment.attributes) {
-                  const name = fragment.attributes.NAME;
+                if (fragment.kind === "open") {
+                  if ("NAME" in fragment.attributes) {
+                    const name = fragment.attributes.NAME;
+                    stateMachine.send({
+                      type: "processTag",
+                      name: "FILE",
+                      kind: fragment.kind,
+                      attributes: { NAME: name },
+                    });
+                    // Ensure FILE open tag has the required NAME attribute
+                  } else {
+                    console.warn("FILE tag missing required NAME attribute");
+                  }
+                } else {
                   stateMachine.send({
                     type: "processTag",
                     name: "FILE",
-                    kind: fragment.kind,
-                    attributes: { NAME: name },
+                    kind: "close",
                   });
-                } else {
-                  console.warn("FILE tag missing required NAME attribute");
                 }
               } else {
                 // The remaining kinds of tags ("DIFFCHUNK", "DIFFOLD",
@@ -486,9 +502,6 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
                   type: "processTag",
                   name: fragment.name,
                   kind: fragment.kind,
-                  attributes: fragment.attributes as Readonly<
-                    Record<string, never>
-                  >,
                 });
               }
             }

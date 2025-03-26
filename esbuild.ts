@@ -1,25 +1,44 @@
-const esbuild = require("esbuild");
-const fs = require("fs");
+import * as esbuild from "esbuild";
+import * as fs from "fs";
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
 const metafile = process.argv.includes("--metafile");
 
-/**
- * @type {import('esbuild').Plugin}
- */
-const esbuildProblemMatcherPlugin = {
+const esbuildProblemMatcherPlugin: esbuild.Plugin = {
   name: "esbuild-problem-matcher",
 
   setup(build) {
-    let entryPoints = build.initialOptions.entryPoints;
-    if (!Array.isArray(entryPoints)) {
-      entryPoints = [entryPoints];
+    const entryPoints = build.initialOptions.entryPoints;
+    if (entryPoints === undefined || entryPoints.length === 0) {
+      throw new Error("entryPoints is undefined");
+    }
+
+    // Get the input file names
+    let entryPointsInputNames: string[];
+    if (Array.isArray(entryPoints)) {
+      if (entryPoints.every((e) => typeof e === "string")) {
+        // Case 1: string[] - already an array of strings
+        entryPointsInputNames = entryPoints;
+      } else if ("in" in entryPoints[0]) {
+        // Case 2: array of {in, out} objects
+        entryPointsInputNames = entryPoints.map(
+          (entry) => (entry as { in: string }).in
+        );
+      } else {
+        throw new Error(
+          "entryPoints is not an array of strings or {in, out} objects"
+        );
+      }
+    } else {
+      // Case 3: Record<string, string>
+      const record = entryPoints;
+      entryPointsInputNames = Object.values(record);
     }
 
     build.onStart(() => {
       console.log(
-        `[${watch ? "watch " : ""}${new Date().toISOString()}] build started ${entryPoints.join(
+        `[${watch ? "watch " : ""}${new Date().toISOString()}] build started ${entryPointsInputNames.join(
           ", "
         )}`
       );
@@ -28,12 +47,14 @@ const esbuildProblemMatcherPlugin = {
     build.onEnd((result) => {
       result.errors.forEach(({ text, location }) => {
         console.error(`✘ [ERROR] ${text}`);
-        console.error(
-          `    ${location.file}:${location.line}:${location.column}:`
-        );
+        if (location !== null) {
+          console.error(
+            `    ${location.file}:${location.line}:${location.column}:`
+          );
+        }
       });
       console.log(
-        `[${watch ? "watch " : ""}${new Date().toISOString()}] build finished ${entryPoints.join(
+        `[${watch ? "watch " : ""}${new Date().toISOString()}] build finished ${entryPointsInputNames.join(
           ", "
         )}`
       );
@@ -41,7 +62,7 @@ const esbuildProblemMatcherPlugin = {
   },
 };
 
-const metafilePlugin = {
+const metafilePlugin: esbuild.Plugin = {
   name: "metafile",
   setup(build) {
     build.onEnd((result) => {

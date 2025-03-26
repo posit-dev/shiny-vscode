@@ -42,7 +42,7 @@ export default tseslint.config(
   },
   {
     // Build scripts config - these are run by nodejs.
-    files: ["esbuild.js", "eslint.config.mjs"],
+    files: ["esbuild.ts", "eslint.config.mjs"],
     languageOptions: {
       globals: globals.node,
     },

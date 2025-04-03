@@ -131,6 +131,9 @@ Here is another example:
 {{ /if}}`
 
 
+{{ @includeFile("brand_yml.md", it)/}}
+
+
 Consider multiple possible implementations of the application, then choose the best one. Remember to create a fully functional Shiny for {{it.language}} app that accurately reflects the user's requirements. If you're unsure about any aspect of the app, make a reasonable decision and explain your choice in a comment.
 
 {{it.verbosity}}

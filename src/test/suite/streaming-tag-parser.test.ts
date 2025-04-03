@@ -1,13 +1,12 @@
 import * as assert from "assert";
-import { StreamingTagProcessor } from "../../assistant/streaming-tag-processor";
+import { StreamingTagParser } from "../../assistant/streaming-tag-parser";
 
-suite("StreamingTagProcessor Test Suite", () => {
+suite("StreamingTagParser Test Suite", () => {
   test("Tag matching tests", () => {
-    const testProcessor = new StreamingTagProcessor([
-      "SHINY",
-      "FILESET",
-      "FILE",
-    ]);
+    const testProcessor = new StreamingTagParser({
+      tagNames: ["SHINY", "FILESET", "FILE"],
+      contentHandler: () => {},
+    });
 
     const testCases = [
       { input: "<", expected: false },

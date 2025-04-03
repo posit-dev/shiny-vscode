@@ -77,7 +77,7 @@ export type TransitionDefinition<
  * @template EventObjT - Discriminated union type for events with a 'type' property
  */
 type SubtypeTransitions<StateT extends string, EventObjT extends BaseEvent> = {
-  [K in keyof EventObjT & string]: EventObjT extends infer NarrowedEventObjT
+  [K in keyof EventObjT]: EventObjT extends infer NarrowedEventObjT
     ? NarrowedEventObjT extends { [P in K]: unknown }
       ? TransitionDefinition<
           StateT,
@@ -86,7 +86,7 @@ type SubtypeTransitions<StateT extends string, EventObjT extends BaseEvent> = {
         >
       : never
     : never;
-}[keyof EventObjT & string];
+}[keyof EventObjT];
 
 /**
  * Type for a single state definition within a state machine. Defines how a
@@ -113,17 +113,32 @@ export type StateDefinition<
 };
 
 /**
- * Abstract base class for implementing type-safe state machines.
- * Provides a framework for defining states, transitions, and event handlers
- * with full TypeScript type safety.
+ * Type that defines the structure of states in a state machine.
+ * Maps each state name to its corresponding state definition.
  *
  * @template StateT - String literal type representing possible states
  * @template EventObjT - Discriminated union type for events with a 'type' property
+ *
+ * The type has two components:
+ * 1. A mapping of each state name to its state definition
+ * 2. An optional wildcard state ("*") that can handle events not specifically handled by other states
  */
-export abstract class StateMachine<
-  StateT extends string,
-  EventObjT extends BaseEvent,
-> {
+export type StatesMap<StateT extends string, EventObjT extends BaseEvent> = {
+  [S in StateT]: StateDefinition<StateT, EventObjT>;
+} & {
+  "*"?: StateDefinition<StateT, EventObjT>;
+};
+
+/**
+ * Class for implementing type-safe state machines. Provides a framework for
+ * defining states, transitions, and event handlers with full TypeScript type
+ * safety.
+ *
+ * @template StateT - String literal type representing possible states
+ * @template EventObjT - Discriminated union type for events with a 'type'
+ * property
+ */
+export class StateMachine<StateT extends string, EventObjT extends BaseEvent> {
   /** The current state of the state machine */
   currentState: StateT;
 
@@ -132,11 +147,7 @@ export abstract class StateMachine<
    * All states specified in StateT must be defined in this object.
    * An optional "*" wildcard state can handle events not handled by specific states.
    */
-  states!: {
-    [S in StateT]: StateDefinition<StateT, EventObjT>;
-  } & {
-    "*"?: StateDefinition<StateT, EventObjT>;
-  };
+  states: StatesMap<StateT, EventObjT>;
 
   /**
    * Creates a new state machine instance.
@@ -144,8 +155,15 @@ export abstract class StateMachine<
    * @param options - Configuration options
    * @param options.initialState - The initial state for the machine
    */
-  constructor({ initialState }: { initialState: StateT }) {
+  constructor({
+    initialState,
+    states,
+  }: {
+    initialState: StateT;
+    states: StatesMap<StateT, EventObjT>;
+  }) {
     this.currentState = initialState;
+    this.states = states;
   }
 
   /**

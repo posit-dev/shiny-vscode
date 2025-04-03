@@ -1,9 +1,9 @@
-type ProcessedText = {
+export type ProcessedText = {
   type: "text";
   text: string;
 };
 
-type ProcessedTag<TagNameT extends string> = {
+export type ProcessedTag<TagNameT extends string> = {
   type: "tag";
   name: TagNameT;
   kind: "open" | "close";
@@ -11,9 +11,12 @@ type ProcessedTag<TagNameT extends string> = {
   originalText: string;
 };
 
-export class StreamingTagProcessor<TagNameT extends string> {
+export class StreamingTagParser<TagNameT extends string> {
   private buffer: string = "";
   private readonly tagNames: TagNameT[];
+  private readonly contentHandler: (
+    chunk: ProcessedText | ProcessedTag<TagNameT>
+  ) => void;
 
   // Variables for tracking the state of the parser
   private state:
@@ -55,34 +58,38 @@ export class StreamingTagProcessor<TagNameT extends string> {
   }
 
   /**
-   * Creates a new StreamingTagProcessor that looks for specified XML-style tags.
+   * Creates a new StreamingTagParser that looks for specified XML-style tags.
    * @param tagNames - Array of tag names without angle brackets or attributes
-   *                  (e.g., ["FILESET", "FILE"])
+   *   (e.g., ["FILESET", "FILE"])
+   * @param contentHandler - Callback function that will be invoked with each
+   *   processed chunk, either text or a tag
    */
-  constructor(tagNames: Readonly<Array<TagNameT>>) {
+  constructor({
+    tagNames,
+    contentHandler,
+  }: {
+    tagNames: Readonly<Array<TagNameT>>;
+    contentHandler: (chunk: ProcessedText | ProcessedTag<TagNameT>) => void;
+  }) {
     // TODO: Validate tag names
     this.tagNames = [...tagNames];
+    this.contentHandler = contentHandler;
     this.resetPotentialTagStateVars();
   }
 
   /**
    * Processes a chunk of text to identify and handle specific tags. Accumulates
-   * text until a complete tag is found, then returns the text before the tag.
-   * If no complete tag is found, keeps the text in the buffer for the next
-   * call.
+   * text until a complete tag is found, then invokes the contentHandler
+   * callback with each processed chunk (text or tag).
    *
    * @param chunk - The chunk of text to process.
-   * @returns - The text before the tag or potential tag, or an empty string if
-   * there is no such text.
    */
-  process(chunk: string): Array<ProcessedText | ProcessedTag<TagNameT>> {
-    const result: Array<ProcessedText | ProcessedTag<TagNameT>> = [];
-
+  process(chunk: string): void {
     for (const char of chunk) {
       if (this.state === "TEXT") {
         if (char === "<") {
           if (this.scannedText.length > 0) {
-            result.push({ type: "text", text: this.scannedText });
+            this.contentHandler({ type: "text", text: this.scannedText });
             this.scannedText = "";
           }
 
@@ -301,7 +308,7 @@ export class StreamingTagProcessor<TagNameT extends string> {
 
       // We found a complete tag! Add it to the result and reset the state.
       if (this.state === "TAG_END") {
-        result.push({
+        this.contentHandler({
           type: "tag",
           name: this.tagName as TagNameT,
           kind: this.kind,
@@ -314,28 +321,32 @@ export class StreamingTagProcessor<TagNameT extends string> {
       }
     }
 
-    // At the end, if we're in the TEXT state, we can flush the text.
+    // At the end of the chunk, if we're in the TEXT state, we can flush the
+    // text.
     if (this.state === "TEXT") {
       if (this.scannedText.length > 0) {
-        result.push({ type: "text", text: this.scannedText });
+        this.contentHandler({ type: "text", text: this.scannedText });
         this.scannedText = "";
       }
     }
-
-    return result;
   }
 
-  flush(): string | null {
-    if (this.buffer.length === 0) {
-      return null;
+  /**
+   * Sends any content that has been scanned but not yet sent to the
+   * contentHandler (for example, if it was a potential start of a tag like
+   * "<FI", and waiting for the rest of the tag) will be sent to the
+   * contentHandler, as type: "text". This should be called at the end of the
+   * text stream.
+   */
+  flush(): void {
+    if (this.scannedText.length > 0) {
+      this.contentHandler({ type: "text", text: this.scannedText });
+      this.scannedText = "";
     }
-    const result = this.buffer;
-    this.buffer = "";
-    return result;
   }
 }
 
-// const testProcessor = new StreamingTagProcessor(["FILESET", "FILE"]);
+// const testProcessor = new StreamingTagParser(["FILESET", "FILE"]);
 
 // function testTagMatches() {
 //   console.log("Testing tag matches:");

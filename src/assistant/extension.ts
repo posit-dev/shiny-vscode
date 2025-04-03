@@ -2,11 +2,6 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "../extension";
 import { isPositron } from "../extension-api-utils/extensionHost";
-import {
-  chatResponseKnownTags,
-  ChatResponseStateMachine,
-  type ChatResponseKnownTagsType,
-} from "./chat-response-state-machine";
 import { type DiffError } from "./diff";
 import { langNameToProperName, type LangName } from "./language";
 import {
@@ -16,7 +11,12 @@ import {
 } from "./llm-selection";
 import { checkPythonEnvironment } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
-import { StreamingTagProcessor } from "./streaming-tag-processor";
+import {
+  chatResponseKnownTags,
+  StreamingChatResponseHandler,
+  type ChatResponseKnownTags,
+} from "./streaming-chat-response-handler";
+import { StreamingTagParser } from "./streaming-tag-parser";
 import { loadSystemPrompt } from "./system-prompt";
 import { tools, wrapToolInvocationResult } from "./tools";
 import type { FileContent, FileSet } from "./types";
@@ -414,16 +414,12 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
 
         // Stream the response
         const toolCalls: vscode.LanguageModelToolCallPart[] = [];
-        const tagProcessor =
-          new StreamingTagProcessor<ChatResponseKnownTagsType>(
-            chatResponseKnownTags
-          );
         let diffErrors: DiffError[] = [];
         // The response text streamed in from the LLM.
         let thisTurnResponseText = "";
 
         // Initialize the ChatResponseStateMachine
-        const stateMachine = new ChatResponseStateMachine({
+        const streamingChatResponseHandler = new StreamingChatResponseHandler({
           stream,
           workspaceFolderUri,
           proposedFilePreviewProvider,
@@ -435,94 +431,35 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
         // Process the response stream
         for await (const part of chatResponse.stream) {
           if (part instanceof vscode.LanguageModelTextPart) {
+            // Each part is a chunk of text, broken at some arbitrary point,
+            // possibly even in the middle of a word.
             fullRawResponseText += part.value;
+            thisTurnResponseText += part.value;
+
+            streamingChatResponseHandler.process(part.value);
+
+            // Some of the state machine actions may have triggered async
+            // operations. If so, wait for them to complete. Even though it's not
+            // strictly necessary to call hasPendingAsyncOperations() to check, we
+            // do it here because that is synchronous and fast, whereas calling
+            // `await waitForPendingOperations()` is async, and will always have a
+            // performance penalty.
+            if (streamingChatResponseHandler.hasPendingAsyncOperations()) {
+              await streamingChatResponseHandler.waitForPendingOperations();
+            }
           } else if (part instanceof vscode.LanguageModelToolCallPart) {
             toolCalls.push(part);
-            continue;
           } else {
             console.log("Unknown part type: ", part);
-            continue;
-          }
-
-          thisTurnResponseText += part.value;
-          const processedFragment = tagProcessor.process(part.value);
-
-          for (const fragment of processedFragment) {
-            if (fragment.type === "text") {
-              stateMachine.send({
-                type: "processText",
-                text: fragment.text,
-              });
-            } else if (fragment.type === "tag") {
-              // Create the appropriate tag event based on the tag name
-              if (fragment.name === "FILESET") {
-                if (fragment.kind === "open") {
-                  const format = (fragment.attributes.FORMAT ?? "complete") as
-                    | "complete"
-                    | "diff";
-                  stateMachine.send({
-                    type: "processTag",
-                    name: "FILESET",
-                    kind: "open",
-                    // eslint-disable-next-line @typescript-eslint/naming-convention
-                    attributes: { FORMAT: format },
-                  });
-                } else {
-                  stateMachine.send({
-                    type: "processTag",
-                    name: "FILESET",
-                    kind: "close",
-                  });
-                }
-              } else if (fragment.name === "FILE") {
-                if (fragment.kind === "open") {
-                  if ("NAME" in fragment.attributes) {
-                    const name = fragment.attributes.NAME;
-                    stateMachine.send({
-                      type: "processTag",
-                      name: "FILE",
-                      kind: fragment.kind,
-                      // eslint-disable-next-line @typescript-eslint/naming-convention
-                      attributes: { NAME: name },
-                    });
-                    // Ensure FILE open tag has the required NAME attribute
-                  } else {
-                    console.warn("FILE tag missing required NAME attribute");
-                  }
-                } else {
-                  stateMachine.send({
-                    type: "processTag",
-                    name: "FILE",
-                    kind: "close",
-                  });
-                }
-              } else {
-                // The remaining kinds of tags ("DIFFCHUNK", "DIFFOLD",
-                // "DIFFNEW", etc.) don't have attributes.
-                stateMachine.send({
-                  type: "processTag",
-                  name: fragment.name,
-                  kind: fragment.kind,
-                });
-              }
-            }
-          }
-
-          // Some of the state machine actions may have triggered async
-          // operations. If so, wait for them to complete. Even though it's not
-          // strictly necessary to call hasPendingAsyncOperations() to check, we
-          // do it here because that is synchronous and fast, whereas calling
-          // `await waitForPendingOperations()` is async, and will always have a
-          // performance penalty.
-          if (stateMachine.hasPendingAsyncOperations()) {
-            await stateMachine.waitForPendingOperations();
           }
         }
+        streamingChatResponseHandler.flush();
 
         // Get any diff errors from the state machine
-        diffErrors = stateMachine.getDiffErrors();
+        diffErrors = streamingChatResponseHandler.getDiffErrors();
         fullResponseContainsFileSet =
-          fullResponseContainsFileSet || stateMachine.hasFileSet();
+          fullResponseContainsFileSet ||
+          streamingChatResponseHandler.hasFileSet();
 
         messages.push(
           vscode.LanguageModelChatMessage.Assistant([

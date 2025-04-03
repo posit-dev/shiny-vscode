@@ -12,7 +12,6 @@ export type ProcessedTag<TagNameT extends string> = {
 };
 
 export class StreamingTagParser<TagNameT extends string> {
-  private buffer: string = "";
   private readonly tagNames: TagNameT[];
   private readonly contentHandler: (
     chunk: ProcessedText | ProcessedTag<TagNameT>

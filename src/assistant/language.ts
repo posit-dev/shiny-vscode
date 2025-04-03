@@ -1,5 +1,3 @@
-import * as vscode from "vscode";
-
 export type LanguageInfo = {
   name: Readonly<LangName>;
   properName: Readonly<LangProperName>;

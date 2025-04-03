@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention */
-
 import * as path from "path";
 import * as Sqrl from "squirrelly";
 import type * as vscode from "vscode";
@@ -11,8 +9,8 @@ const SYSTEM_PROMPT_SUBDIR = "assistant-prompts";
 
 interface PromptVariables {
   language: string;
-  project_settings: string;
-  language_specific_prompt: string;
+  fileExt: string;
+  projectSettings: string;
   verbosity: string;
 }
 
@@ -29,12 +27,16 @@ export async function loadSystemPrompt(
 
     const mainPromptPath = path.join(promptDir, "main.md");
 
-    const result = await Sqrl.renderFile(mainPromptPath, {
-      autoEscape: false,
+    const promptVars: PromptVariables = {
       language: langNameToProperName(projectSettings.language),
       fileExt: langNameToFileExt(projectSettings.language),
       projectSettings: JSON.stringify(projectSettings, null, 2),
       verbosity: "Be very concise in the text.",
+    };
+
+    const result = await Sqrl.renderFile(mainPromptPath, {
+      autoEscape: false,
+      ...promptVars,
     });
     return result;
   } catch (error) {

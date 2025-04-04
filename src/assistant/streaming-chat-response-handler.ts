@@ -147,12 +147,14 @@ export type StreamingChatResponseHandlerConfig = {
 };
 
 /**
- * State machine for processing and rendering chat responses with structured content.
+ * Handler for processing and rendering streaming chat responses with structured
+ * content.
  *
- * This state machine handles the parsing and rendering of chat responses that may
- * contain regular text, filesets, individual files, and diff chunks. It manages
- * transitions between different content types and ensures proper rendering in the
- * VS Code chat interface.
+ * This class parses XML-like tags in chat responses and uses a state machine to
+ * process different content types including regular text, filesets, files, and
+ * diff chunks. It coordinates between the tag parser and state machine to
+ * ensure proper rendering in the VS Code chat interface and handles file
+ * operations when needed.
  */
 export class StreamingChatResponseHandler {
   private machine: StateMachine<ChatResponseStateName, ChatResponseEvents>;

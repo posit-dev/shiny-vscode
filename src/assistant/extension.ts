@@ -389,17 +389,17 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // Assemble tools
     // ========================================================================
 
-    const tools: Array<LocalTool | vscode.LanguageModelChatTool> = [
+    const allTools: Array<LocalTool | vscode.LanguageModelChatTool> = [
       ...localTools,
       ...vscode.lm.tools,
     ];
 
+    // Tools that were specifically requested by the user.
+    const requestedTools = [...request.toolReferences];
+
     // ========================================================================
     // Send the request to the LLM and process the response
     // ========================================================================
-    const options: vscode.LanguageModelChatRequestOptions = {
-      tools: tools,
-    };
     let fullResponseContainsFileSet = false;
     // Collect all the raw text from the LLM. This will include the text
     // spanning multiple tool call turns, if applicable.
@@ -409,6 +409,22 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // calling itself recursively until there are no more tool calls in the
     // response.
     async function runWithTools(): Promise<void> {
+      const options: vscode.LanguageModelChatRequestOptions = {};
+
+      // If a tool was requested, force the model to call that tool. Only call
+      // one tool per round because some models don't support multiple tool
+      // calls. (In the future we may be able to remove this restriction.)
+      const requestedTool = requestedTools.shift();
+      if (requestedTool) {
+        options.toolMode = vscode.LanguageModelChatToolMode.Required;
+        options.tools = allTools.filter(
+          (tool) => tool.name === requestedTool.name
+        );
+      } else {
+        options.toolMode = vscode.LanguageModelChatToolMode.Auto;
+        options.tools = allTools;
+      }
+
       try {
         const chatResponse = await request.model.sendRequest(
           messages,
@@ -486,7 +502,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           const toolCallsResults: Array<vscode.LanguageModelToolResultPart> =
             [];
           for (const toolCall of toolCalls) {
-            const tool = tools.find((tool) => tool.name === toolCall.name);
+            const tool = allTools.find((tool) => tool.name === toolCall.name);
             if (!tool) {
               console.log(`Tool not found: ${toolCall.name}`);
               continue;

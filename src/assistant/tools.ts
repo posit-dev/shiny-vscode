@@ -14,9 +14,6 @@ import { langNameToProperName, type LangName } from "./language";
 import type { JSONifiable } from "./types";
 import { createPromiseWithStatus } from "./utils";
 
-// TODO: Fix types so that we can get rid of the `any`, because it disables
-// type checking for the `params` argument of all `invoke()` methods -- they
-// could be a non-Record type, which contradicts the type definition of Tool.
 export const localTools: Array<LocalTool> = [];
 
 export type InvokeOptions = {

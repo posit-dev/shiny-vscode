@@ -17,5 +17,5 @@ app_ui = ui.page_fluid(
 )
 ```
 
-It also requires installing the `brand_yml` and `libsass` packages, so it should be added to `requirements.txt`.
+It also requires installing the `brand_yml` package, and `shiny[theme]`, so those should be added to `requirements.txt`. If there is an existing `shiny` entry, replace it with `shiny[theme]`.
 

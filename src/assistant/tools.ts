@@ -17,8 +17,7 @@ import { createPromiseWithStatus } from "./utils";
 // TODO: Fix types so that we can get rid of the `any`, because it disables
 // type checking for the `params` argument of all `invoke()` methods -- they
 // could be a non-Record type, which contradicts the type definition of Tool.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const tools: Array<Tool<any>> = [];
+export const localTools: Array<LocalTool> = [];
 
 export type InvokeOptions = {
   stream: vscode.ChatResponseStream;
@@ -35,9 +34,10 @@ export type InvokeOptions = {
 // we have a simpler version of LanguageModelTool, in which the `invoke()`
 // method can return a JSONifiable value (which will be wrapped later) instead
 // of the more complex LanguageModelToolResult.
-type Tool<T extends Record<string, unknown>> = vscode.LanguageModelChatTool & {
+export type LocalTool = vscode.LanguageModelChatTool & {
   invoke: (
-    params: T,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    params: any,
     opts: InvokeOptions
   ) => JSONifiable | Promise<JSONifiable>;
 };
@@ -67,7 +67,7 @@ export function wrapToolInvocationResult(
 
 // This tool will be called when the user asks to set the project language to
 // either R or Python.
-tools.push({
+localTools.push({
   name: "shiny-assistant_setProjectLanguageTool",
   description:
     "Set the language of the project to R or Python. Only call this tool if the user specifically asks to set the language.",
@@ -99,7 +99,7 @@ tools.push({
   },
 });
 
-tools.push({
+localTools.push({
   name: "shiny-assistant_askUserForAppSubdirTool",
   description:
     "Ask the user which subdirectory of the workspace they want to use for their app.",
@@ -178,7 +178,7 @@ interface CheckPackageVersionParams {
   minVersion?: string;
 }
 
-tools.push({
+localTools.push({
   name: "shiny-assistant_checkPackageVersionTool",
   description:
     "Get the version of an R or Python package that is installed on the user's system.",
@@ -263,7 +263,7 @@ tools.push({
 });
 
 // TODO: Implement for R
-tools.push({
+localTools.push({
   name: "shiny-assistant_installRequiredPackagesTool",
   description: "Installs necessary packages, for Python only.",
   inputSchema: {

@@ -11,14 +11,9 @@ import {
 } from "./llm-selection";
 import { checkPythonEnvironment } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
-import {
-  chatResponseKnownTags,
-  StreamingChatResponseHandler,
-  type ChatResponseKnownTags,
-} from "./streaming-chat-response-handler";
-import { StreamingTagParser } from "./streaming-tag-parser";
+import { StreamingChatResponseHandler } from "./streaming-chat-response-handler";
 import { loadSystemPrompt } from "./system-prompt";
-import { tools, wrapToolInvocationResult } from "./tools";
+import { localTools, wrapToolInvocationResult, type LocalTool } from "./tools";
 import type { FileContent, FileSet } from "./types";
 import { createPromiseWithStatus } from "./utils";
 
@@ -391,6 +386,15 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     messages.push(vscode.LanguageModelChatMessage.User(request.prompt));
 
     // ========================================================================
+    // Assemble tools
+    // ========================================================================
+
+    const tools: Array<LocalTool | vscode.LanguageModelChatTool> = [
+      ...localTools,
+      ...vscode.lm.tools,
+    ];
+
+    // ========================================================================
     // Send the request to the LLM and process the response
     // ========================================================================
     const options: vscode.LanguageModelChatRequestOptions = {
@@ -487,28 +491,46 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               console.log(`Tool not found: ${toolCall.name}`);
               continue;
             }
-            const result = await tool.invoke(toolCall.input, {
-              stream: stream,
-              newTerminalName: "Shiny Assistant tool calls",
-              // By leaving this undefined, the first tool call that needs a terminal
-              // will create the Terminal, and future tool calls will reuse it.
-              terminal: undefined,
-              extensionContext: extensionContext,
-              cancellationToken: dummyCancellationToken,
-            });
 
-            if (result === undefined) {
-              console.log(`Tool returned undefined: ${toolCall.name}`);
-              continue;
+            let toolResult: vscode.LanguageModelToolResult;
+
+            if ("invoke" in tool) {
+              // This is a LocalTool
+              const result = await tool.invoke(toolCall.input, {
+                stream: stream,
+                newTerminalName: "Shiny Assistant tool calls",
+                // By leaving this undefined, the first tool call that needs a terminal
+                // will create the Terminal, and future tool calls will reuse it.
+                terminal: undefined,
+                extensionContext: extensionContext,
+                cancellationToken: dummyCancellationToken,
+              });
+
+              if (result === undefined) {
+                console.log(`Tool returned undefined: ${toolCall.name}`);
+                continue;
+              }
+
+              toolResult = wrapToolInvocationResult(result);
+            } else {
+              // Else it is a vscode.lm.tool
+              toolResult = await vscode.lm.invokeTool(
+                tool.name,
+                {
+                  input: toolCall.input,
+                  toolInvocationToken: request.toolInvocationToken,
+                },
+                dummyCancellationToken
+              );
             }
 
-            const resultWrapped = wrapToolInvocationResult(result);
             const toolCallResult = new vscode.LanguageModelToolResultPart(
               toolCall.callId,
-              resultWrapped.content
+              toolResult.content
             );
             toolCallsResults.push(toolCallResult);
           }
+
           messages.push(vscode.LanguageModelChatMessage.User(toolCallsResults));
 
           messages.push(

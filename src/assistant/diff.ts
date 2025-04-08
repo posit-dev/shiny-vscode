@@ -57,6 +57,16 @@ export type DiffError = {
 };
 
 /**
+ * Removes trailing whitespace from a string.
+ *
+ * @param str The string to remove trailing whitespace from
+ * @returns The string with trailing whitespace removed
+ */
+function removeTrailingWhitespace(str: string): string {
+  return str.replace(/\s+$/, "");
+}
+
+/**
  * Applies a diff string to an original string.
  *
  * This function takes a diff string and applies it to an original string,
@@ -65,11 +75,17 @@ export type DiffError = {
  *
  * @param original The original string to apply the diff to
  * @param diff The diff string to apply
+ * @param stripTrailingWhitespace Whether to strip trailing whitespace from
+ *   the original text and diff's old text, for doing the pattern match.
+ *   (default: true)
  * @returns The resulting string after applying the diff
  */
 export function applyDiff(
   original: string,
-  diff: string
+  diff: string,
+  // Unfortunately, we have to default this to true, because the LLMs
+  // will often generate trailing whitespace in the diff.
+  stripTrailingWhitespace = true
 ): DiffResult | DiffError {
   if (diff === "") {
     return { status: "success", value: original };
@@ -101,7 +117,16 @@ export function applyDiff(
       ) {
         let found = true;
         for (let j = 0; j < chunk.old.length; j++) {
-          if (originalLines[i + j] !== chunk.old[j]) {
+          let originalLine = originalLines[i + j];
+          let chunkLine = chunk.old[j];
+          // If we're stripping trailing whitespace, remove it from both
+          // the original and the chunk line before comparing them
+          if (stripTrailingWhitespace) {
+            originalLine = removeTrailingWhitespace(originalLine);
+            chunkLine = removeTrailingWhitespace(chunkLine);
+          }
+
+          if (originalLine !== chunkLine) {
             found = false;
             break;
           }

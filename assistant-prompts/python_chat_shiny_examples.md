@@ -6,9 +6,9 @@ from https://github.com/posit-dev/py-shiny/tree/58e82de55683435c8f7ab852978cf454
 Note: replace [star][star] below with asterisk characters!
 The parser for squirrelly thinks this comment ends when there's a star-slash.
 cd shiny/templates/chat
-npx repomix . --top-files-len 100 --ignore "[star][star]/_template.json,[star][star]/template.env"
+npx repomix . --copy --top-files-len 100 --ignore "[star][star]/_template.json,[star][star]/template.env"
 
-The contents of the resulting repomix-output.xml file are copied and pasted here.
+The result is automatically copied to the clipboard, and then pasted here.
 */
 }}
 <DOCUMENTATION PACKAGE="shiny" LABEL="chat examples">

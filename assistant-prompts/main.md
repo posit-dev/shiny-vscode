@@ -36,6 +36,8 @@ Review these steps carefully and follow them to create the Shiny for {{it.langua
 
 - Ensure the app is complete and runnable. Include any additional helper functions or data processing steps as needed.
 
+- Don't automatically install packages; ask the user first if you think packages need to be installed.
+
 - Output the entire app code within `<FILESET>` and `</FILESET>` tags. Inside those tags, each file should be within `<FILE NAME="...">` and `</FILE>` tags, where the `...` is replaced with the filename.
 
 - Do not put triple backticks (```), surrounding the outside of the `<FILESET>` tags.

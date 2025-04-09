@@ -160,7 +160,6 @@ export class StreamingChatResponseHandler {
   private machine: StateMachine<ChatResponseStateName, ChatResponseEvents>;
   private streamingTagParser: StreamingTagParser<ChatResponseKnownTags>;
   private config: StreamingChatResponseHandlerConfig;
-  private pendingAsyncOperations = new Set<Promise<void>>();
   private fileSet: FileSet | null = null;
   private currentFile: FileContent | null = null;
   private diffErrors: DiffError[] = [];
@@ -331,8 +330,8 @@ export class StreamingChatResponseHandler {
    *
    * @param chunk - The chunk of text to process from the chat response stream
    */
-  process(chunk: string): void {
-    this.streamingTagParser.process(chunk);
+  async process(chunk: string): Promise<void> {
+    await this.streamingTagParser.process(chunk);
   }
 
   /**
@@ -340,8 +339,8 @@ export class StreamingChatResponseHandler {
    * Should be called at the end of a chat response stream to ensure all content
    * is properly handled.
    */
-  flush(): void {
-    this.streamingTagParser.flush();
+  async flush(): Promise<void> {
+    await this.streamingTagParser.flush();
   }
 
   /**
@@ -360,32 +359,6 @@ export class StreamingChatResponseHandler {
    */
   getDiffErrors(): DiffError[] {
     return this.diffErrors;
-  }
-
-  // ===========================================================================
-  // Async operations
-  // ===========================================================================
-
-  /**
-   * Checks if there are any pending async operations.
-   *
-   * @returns True if there are pending async operations, false otherwise
-   */
-  hasPendingAsyncOperations(): boolean {
-    return this.pendingAsyncOperations.size > 0;
-  }
-
-  /**
-   * Waits for all pending async operations to complete.
-   *
-   * @returns A promise that resolves when all pending operations are complete
-   */
-  async waitForPendingOperations(): Promise<void> {
-    if (this.pendingAsyncOperations.size === 0) {
-      return;
-    }
-
-    await Promise.all(Array.from(this.pendingAsyncOperations));
   }
 
   // ===========================================================================
@@ -408,11 +381,11 @@ export class StreamingChatResponseHandler {
    * @param content - The processed content piece, either text fragment or a tag
    *   object
    */
-  private handlePiece(
+  private async handlePiece(
     content: ProcessedText | ProcessedTag<ChatResponseKnownTags>
-  ): void {
+  ): Promise<void> {
     if (content.type === "text") {
-      this.machine.send({
+      await this.machine.send({
         type: "text",
         text: content.text,
       });
@@ -423,14 +396,14 @@ export class StreamingChatResponseHandler {
           const format = (content.attributes.FORMAT ?? "complete") as
             | "complete"
             | "diff";
-          this.machine.send({
+          await this.machine.send({
             type: "tag",
             name: "FILESET",
             kind: "open",
             attributes: { FORMAT: format },
           });
         } else {
-          this.machine.send({
+          await this.machine.send({
             type: "tag",
             name: "FILESET",
             kind: "close",
@@ -440,7 +413,7 @@ export class StreamingChatResponseHandler {
         if (content.kind === "open") {
           if ("NAME" in content.attributes) {
             const name = content.attributes.NAME;
-            this.machine.send({
+            await this.machine.send({
               type: "tag",
               name: "FILE",
               kind: content.kind,
@@ -451,7 +424,7 @@ export class StreamingChatResponseHandler {
             console.warn("FILE tag missing required NAME attribute");
           }
         } else {
-          this.machine.send({
+          await this.machine.send({
             type: "tag",
             name: "FILE",
             kind: "close",
@@ -460,7 +433,7 @@ export class StreamingChatResponseHandler {
       } else {
         // The remaining kinds of tags ("DIFFCHUNK", "DIFFOLD",
         // "DIFFNEW", etc.) don't have attributes.
-        this.machine.send({
+        await this.machine.send({
           type: "tag",
           name: content.name,
           kind: content.kind,
@@ -490,20 +463,12 @@ export class StreamingChatResponseHandler {
     };
   }
 
-  private closeFileset(eventObj: EventTagFilesetClose) {
+  private async closeFileset(eventObj: EventTagFilesetClose) {
     this.config.incrementPreviewCounter();
     const proposedFilesPrefixDir =
       "/app-preview-" + this.config.proposedFilePreviewCounter;
 
-    // Create an async operation and track it
-    const asyncOperation = this.processFileSetAsync(proposedFilesPrefixDir);
-    this.pendingAsyncOperations.add(asyncOperation);
-
-    // Clean up the pending operations list when this operation completes
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    asyncOperation.finally(() => {
-      this.pendingAsyncOperations.delete(asyncOperation);
-    });
+    await this.processFileSetAsync(proposedFilesPrefixDir);
   }
 
   /**

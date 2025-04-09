@@ -15,7 +15,7 @@ export class StreamingTagParser<TagNameT extends string> {
   private readonly tagNames: TagNameT[];
   private readonly contentHandler: (
     chunk: ProcessedText | ProcessedTag<TagNameT>
-  ) => void;
+  ) => void | Promise<void>;
 
   // Variables for tracking the state of the parser
   private state:
@@ -68,7 +68,9 @@ export class StreamingTagParser<TagNameT extends string> {
     contentHandler,
   }: {
     tagNames: Readonly<Array<TagNameT>>;
-    contentHandler: (chunk: ProcessedText | ProcessedTag<TagNameT>) => void;
+    contentHandler: (
+      chunk: ProcessedText | ProcessedTag<TagNameT>
+    ) => void | Promise<void>;
   }) {
     // TODO: Validate tag names
     this.tagNames = [...tagNames];
@@ -83,12 +85,12 @@ export class StreamingTagParser<TagNameT extends string> {
    *
    * @param chunk - The chunk of text to process.
    */
-  process(chunk: string): void {
+  async process(chunk: string): Promise<void> {
     for (const char of chunk) {
       if (this.state === "TEXT") {
         if (char === "<") {
           if (this.scannedText.length > 0) {
-            this.contentHandler({ type: "text", text: this.scannedText });
+            await this.contentHandler({ type: "text", text: this.scannedText });
             this.scannedText = "";
           }
 
@@ -307,7 +309,7 @@ export class StreamingTagParser<TagNameT extends string> {
 
       // We found a complete tag! Add it to the result and reset the state.
       if (this.state === "TAG_END") {
-        this.contentHandler({
+        await this.contentHandler({
           type: "tag",
           name: this.tagName as TagNameT,
           kind: this.kind,
@@ -324,7 +326,7 @@ export class StreamingTagParser<TagNameT extends string> {
     // text.
     if (this.state === "TEXT") {
       if (this.scannedText.length > 0) {
-        this.contentHandler({ type: "text", text: this.scannedText });
+        await this.contentHandler({ type: "text", text: this.scannedText });
         this.scannedText = "";
       }
     }
@@ -337,9 +339,9 @@ export class StreamingTagParser<TagNameT extends string> {
    * contentHandler, as type: "text". This should be called at the end of the
    * text stream.
    */
-  flush(): void {
+  async flush(): Promise<void> {
     if (this.scannedText.length > 0) {
-      this.contentHandler({ type: "text", text: this.scannedText });
+      await this.contentHandler({ type: "text", text: this.scannedText });
       this.scannedText = "";
     }
   }

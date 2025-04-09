@@ -456,24 +456,14 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
             fullRawResponseText += part.value;
             thisTurnResponseText += part.value;
 
-            streamingChatResponseHandler.process(part.value);
-
-            // Some of the state machine actions may have triggered async
-            // operations. If so, wait for them to complete. Even though it's not
-            // strictly necessary to call hasPendingAsyncOperations() to check, we
-            // do it here because that is synchronous and fast, whereas calling
-            // `await waitForPendingOperations()` is async, and will always have a
-            // performance penalty.
-            if (streamingChatResponseHandler.hasPendingAsyncOperations()) {
-              await streamingChatResponseHandler.waitForPendingOperations();
-            }
+            await streamingChatResponseHandler.process(part.value);
           } else if (part instanceof vscode.LanguageModelToolCallPart) {
             toolCalls.push(part);
           } else {
             console.log("Unknown part type: ", part);
           }
         }
-        streamingChatResponseHandler.flush();
+        await streamingChatResponseHandler.flush();
 
         // Get any diff errors from the state machine
         diffErrors = streamingChatResponseHandler.getDiffErrors();
@@ -560,7 +550,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
           stream.progress("");
           // Add line breaks between tool call loop iterations.
           fullRawResponseText += "\n\n";
-          return runWithTools();
+          return await runWithTools();
         }
       } catch (err) {
         let errorMessage: string | null = null;

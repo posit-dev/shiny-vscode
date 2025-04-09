@@ -40,7 +40,7 @@ export type GuardFunction<EventObjT, NarrowedEventObjT extends EventObjT> = (
  */
 export type ActionFunction<NarrowedEventObjT> = (
   event: NarrowedEventObjT
-) => void;
+) => void | Promise<void>;
 
 /**
  * Type for a single transition definition within a state. Defines how a state
@@ -172,7 +172,7 @@ export class StateMachine<StateT extends string, EventObjT extends BaseEvent> {
    * @param event - The event to send to the state machine
    * @returns The state machine instance for chaining
    */
-  send(event: EventObjT): void {
+  async send(event: EventObjT): Promise<void> {
     const currentState = this.currentState;
     const eventType = event.type;
 
@@ -193,7 +193,7 @@ export class StateMachine<StateT extends string, EventObjT extends BaseEvent> {
         // Execute the action and transition if the guard returns true
         if (transition.guard(event)) {
           if (transition.action) {
-            transition.action(event);
+            await transition.action(event);
           }
 
           // Transition to the target state if specified
@@ -207,7 +207,7 @@ export class StateMachine<StateT extends string, EventObjT extends BaseEvent> {
       } else {
         // No guard, execute the action directly
         if (transition.action) {
-          transition.action(event as EventObjT);
+          await transition.action(event as EventObjT);
         }
 
         // Transition to the target state if specified

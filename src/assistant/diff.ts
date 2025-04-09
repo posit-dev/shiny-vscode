@@ -188,9 +188,10 @@ export async function applyDiffToFile(
   diff: string,
   fileName: string
 ): Promise<DiffResult | DiffError> {
-  const originalFileContent = (
-    await vscode.workspace.fs.readFile(vscode.Uri.file(fileName))
-  ).toString();
+  const originalFileUint8 = await vscode.workspace.fs.readFile(
+    vscode.Uri.file(fileName)
+  );
+  const originalFileContent = originalFileUint8.toString();
 
   const result = applyDiff(originalFileContent, diff);
   if (result.status === "error") {

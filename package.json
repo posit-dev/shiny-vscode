@@ -265,7 +265,7 @@
     "@vscode/python-extension": "^1.0.5",
     "@vscode/test-electron": "^2.1.3",
     "concurrently": "^9.1.0",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.25.2",
     "eslint": "^9.15.0",
     "fs": "^0.0.1-security",
     "glob": "^10.3.10",

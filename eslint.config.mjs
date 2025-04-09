@@ -17,6 +17,7 @@ const commonRules = {
   "@typescript-eslint/no-unused-vars": "off",
   "@typescript-eslint/consistent-type-imports": "warn",
   "@typescript-eslint/no-floating-promises": "error",
+  "@typescript-eslint/no-misused-promises": "error",
 };
 
 const commonTsConfig = {

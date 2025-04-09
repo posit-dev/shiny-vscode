@@ -87,7 +87,8 @@ export async function isServerPortAvailable(port: number): Promise<boolean> {
     server.on("listening", () => resolve(true));
     server.on("error", () => resolve(false));
   }).finally(() => {
-    return closeServer(server);
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    closeServer(server);
   });
 
   server.listen(port, "127.0.0.1");
@@ -258,7 +259,8 @@ export async function suggestPort(): Promise<number> {
       );
       server.on("error", reject);
     }).finally(() => {
-      return closeServer(server);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      closeServer(server);
     });
 
     server.listen(0, "127.0.0.1");

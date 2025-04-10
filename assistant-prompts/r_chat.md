@@ -19,6 +19,8 @@ OPENAI_API_KEY=XXXXXXXXXXX
 ANTHROPIC_API_KEY=XXXXXXXXXXX
 ```
 
+If someone asks for a Chat application, use an OpenAI's gpt-4o (not gpt-4, but gpt-4o) model by default.
+
 {{ @includeFile("r_chat_shinychat.md", it)/}}
 
 {{ @includeFile("r_chat_ellmer.md", it)/}}

@@ -157,9 +157,6 @@ ui.page_opts(
 chat = ui.Chat(id="chat")
 chat.ui()
 
-# Store chat state in the url when an "assistant" response occurs
-chat.enable_bookmarking(chat_client, bookmark_store="url")
-
 
 # Define a callback to run when the user submits a message
 @chat.on_user_submit
@@ -239,9 +236,6 @@ chat = ui.Chat(
     messages=["Hello! How can I help you today?"],
 )
 chat.ui()
-
-# Store chat state in the url when an "assistant" response occurs
-chat.enable_bookmarking(chat_client, bookmark_store="url")
 
 
 # Define a callback to run when the user submits a message
@@ -323,9 +317,6 @@ chat = ui.Chat(
 )
 chat.ui()
 
-# Store chat state in the url when an "assistant" response occurs
-chat.enable_bookmarking(chat_client, bookmark_store="url")
-
 
 # Generate a response when the user submits a message
 @chat.on_user_submit
@@ -402,9 +393,6 @@ ui.page_opts(
 # Create and display empty chat
 chat = ui.Chat(id="chat")
 chat.ui()
-
-# Store chat state in the url when an "assistant" response occurs
-chat.enable_bookmarking(chat_client, bookmark_store="url")
 
 
 # Generate a response when the user submits a message
@@ -487,9 +475,6 @@ chat = ui.Chat(
 )
 chat.ui()
 
-# Store chat state in the url when an "assistant" response occurs
-chat.enable_bookmarking(chat_client, bookmark_store="url")
-
 
 # Define a callback to run when the user submits a message
 @chat.on_user_submit
@@ -536,9 +521,6 @@ chat = ui.Chat(
     messages=["Hello! How can I help you today?"],
 )
 chat.ui()
-
-# Store chat state in the url when an "assistant" response occurs
-chat.enable_bookmarking(chat_client, bookmark_store="url")
 
 
 # Generate a response when the user submits a message
@@ -618,9 +600,6 @@ chat = ui.Chat(
     messages=["Hello! How can I help you today?"],
 )
 chat.ui()
-
-# Store chat state in the url when an "assistant" response occurs
-chat.enable_bookmarking(chat_client, bookmark_store="url")
 
 
 # Generate a response when the user submits a message

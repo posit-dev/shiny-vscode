@@ -23,6 +23,8 @@ Note that for Chat applications, you should use Shiny Express syntax by default.
 
 Pay very close attention to the chatlas documentation and Shiny example in it. Where there are differences between the chatlas API and the regular Shiny chat API, use the chatlas API instead, from that example.
 
+If someone asks for a Chat application, use an OpenAI's gpt-4o (not gpt-4, but gpt-4o) model by default.
+
 This is the Shiny Chat documentation:
 
 {{ @includeFile("python_chat_genai_chatbots.md", it)/}}

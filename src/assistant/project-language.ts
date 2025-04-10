@@ -78,15 +78,15 @@ export async function checkPythonEnvironment(): Promise<boolean> {
   // First check if Python extension is installed
   const pythonExtension = vscode.extensions.getExtension("ms-python.python");
   if (!pythonExtension) {
-    const response = await vscode.window.showErrorMessage(
-      "The Python extension is required. Please install it and try again.",
-      "Show Python extension",
-      "Not now"
-    );
+    // const response = await vscode.window.showErrorMessage(
+    //   "The Python extension is required. Please install it and try again.",
+    //   "Show Python extension",
+    //   "Not now"
+    // );
 
-    if (response === "Show Python extension") {
-      vscode.commands.executeCommand("extension.open", "ms-python.python");
-    }
+    // if (response === "Show Python extension") {
+    //   vscode.commands.executeCommand("extension.open", "ms-python.python");
+    // }
     return false;
   }
 

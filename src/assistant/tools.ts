@@ -78,7 +78,6 @@ localTools.push({
       },
     },
     required: ["language"],
-    additionalProperties: false,
   },
   invoke: (
     {
@@ -110,7 +109,6 @@ localTools.push({
       },
     },
     required: ["language"],
-    additionalProperties: false,
   },
   invoke: async (
     {
@@ -197,7 +195,6 @@ localTools.push({
       },
     },
     required: ["language", "package"],
-    additionalProperties: false,
   },
   invoke: async (
     // Note `package` is a reserved keyword so we'll use `package_` instead.
@@ -273,7 +270,6 @@ localTools.push({
       },
     },
     required: ["language"],
-    additionalProperties: false,
   },
   invoke: async (
     { language }: { language: LangName },

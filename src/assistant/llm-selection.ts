@@ -2,16 +2,12 @@ import type * as vscode from "vscode";
 import { isPositron } from "../extension-api-utils/extensionHost";
 
 export function checkUsingDesiredModel(model: vscode.LanguageModelChat) {
-  if (isPositron()) {
-    if (model.name.match(/claude 3.\d sonnet/i)) {
-      return true;
-    }
-  } else {
-    // We're in VS Code (are there any other VS Code forks that implement the
-    // chat APIs?)
-    if (model.name.match(/claude 3.5 sonnet/i)) {
-      return true;
-    }
+  // In older versions of VS Code, the model names were like "Claude 3.5
+  // Sonnet", but in newer versions, they are like "Claude Sonnet 3.5".
+  // In Positron as of this writing, the model names are like "Claude 3.5
+  // Sonnet".
+  if (model.name.match(/claude .*sonnet/i)) {
+    return true;
   }
 
   return false;
@@ -37,15 +33,9 @@ export function displayDesiredModelSuggestion(
     stream.markdown(
       `It looks like you are using **${modelName}** for Copilot. `
     );
-    if (modelName.match(/claude 3.7 sonnet/i)) {
-      stream.markdown(
-        "**Claude 3.7 Sonnet** currently doesn't work with chat participants like `@shiny`.\n\n"
-      );
-    } else {
-      stream.markdown(
-        `For best results with \`@shiny\`, please switch to **${desiredModelName()}**.\n\n`
-      );
-    }
+    stream.markdown(
+      `For best results with \`@shiny\`, please switch to **${desiredModelName()}**.\n\n`
+    );
   }
 
   stream.button({
@@ -62,8 +52,8 @@ export function displayDesiredModelSuggestion(
 
 export function desiredModelName() {
   if (isPositron()) {
-    return "Claude 3.7 Sonnet";
+    return "Claude 4 Sonnet";
   } else {
-    return "Claude 3.5 Sonnet";
+    return "Claude Sonnet 4";
   }
 }

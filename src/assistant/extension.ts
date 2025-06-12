@@ -389,13 +389,17 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // Assemble tools
     // ========================================================================
 
-    const allTools: Array<LocalTool | vscode.LanguageModelChatTool> = [
+    let allTools: Array<LocalTool | vscode.LanguageModelChatTool> = [
       ...localTools,
       ...vscode.lm.tools,
     ];
 
     // Tools that were specifically requested by the user.
     const requestedTools = [...request.toolReferences];
+
+    // Remove tools with empty descriptions, since they can cause errors on
+    // Bedrock, and won't be used anyway.
+    allTools = allTools.filter((tool) => tool.description !== "");
 
     // ========================================================================
     // Send the request to the LLM and process the response

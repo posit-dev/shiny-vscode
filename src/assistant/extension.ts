@@ -357,10 +357,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     try {
       userSystemMessage = vscode.LanguageModelChatMessage2.User([
         new vscode.LanguageModelTextPart(systemPrompt),
-        vscode.LanguageModelDataPart.json(
-          { type: "ephemeral" },
-          "application/cache-control+json"
-        ),
+        vscode.LanguageModelDataPart.text("ephemeral", "cache_control"),
       ]);
     } catch (err) {
       userSystemMessage = vscode.LanguageModelChatMessage.User(systemPrompt);

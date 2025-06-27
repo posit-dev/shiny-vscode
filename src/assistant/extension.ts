@@ -314,7 +314,10 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
     // ========================================================================
     // Construct conversation data structure
     // ========================================================================
-    const messages = chatContext.history.map((message) => {
+    const messages: (
+      | vscode.LanguageModelChatMessage
+      | vscode.LanguageModelChatMessage2
+    )[] = chatContext.history.map((message) => {
       if (message instanceof vscode.ChatRequestTurn) {
         return vscode.LanguageModelChatMessage.User(message.prompt);
       } else if (message instanceof vscode.ChatResponseTurn) {
@@ -347,7 +350,22 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       extensionContext,
       projectSettings
     );
-    messages.unshift(vscode.LanguageModelChatMessage.User(systemPrompt));
+
+    let userSystemMessage:
+      | vscode.LanguageModelChatMessage
+      | vscode.LanguageModelChatMessage2;
+    try {
+      userSystemMessage = vscode.LanguageModelChatMessage2.User([
+        new vscode.LanguageModelTextPart(systemPrompt),
+        vscode.LanguageModelDataPart.json(
+          { type: "ephemeral" },
+          "application/cache-control+json"
+        ),
+      ]);
+    } catch (err) {
+      userSystemMessage = vscode.LanguageModelChatMessage.User(systemPrompt);
+    }
+    messages.unshift(userSystemMessage);
 
     // ========================================================================
 

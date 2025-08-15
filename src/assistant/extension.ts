@@ -912,9 +912,10 @@ async function createContextBlocks(
   refs: Readonly<vscode.ChatPromptReference[]>,
   workspaceFolderUri: vscode.Uri
 ): Promise<string[]> {
-  return Promise.all(
+  const contextBlocks = await Promise.all(
     refs.map((ref) => createContextBlock(ref, workspaceFolderUri))
   );
+  return contextBlocks.filter((block) => block !== undefined);
 }
 
 /**
@@ -931,7 +932,7 @@ async function createContextBlocks(
 async function createContextBlock(
   ref: Readonly<vscode.ChatPromptReference>,
   workspaceFolderUri: vscode.Uri
-): Promise<string> {
+): Promise<string | undefined> {
   const value = ref.value;
 
   if (value instanceof vscode.Uri) {
@@ -968,7 +969,7 @@ ${value}
 </context>
 `;
   } else {
-    throw new Error("Unsupported value type for context block.");
+    return undefined;
   }
 }
 

@@ -573,7 +573,7 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
               ) {
                 // We get here if the model is not enabled.
                 stream.markdown(
-                  `The requested model, ${request.model.name} is not enabled. You can enable it at [https://github.com/settings/copilot](https://github.com/settings/copilot). Scroll down to **Anthropic Claude 4 Sonnet in Copilot** and set it to **Enable**.\n\n`
+                  `The requested model, ${request.model.name} is not enabled. You can enable it at [https://github.com/settings/copilot](https://github.com/settings/copilot).\n\n`
                 );
                 stream.markdown(
                   `Or you can send another message in this chat without \`@shiny\`, like \`"Hello"\`, and Copilot will ask you if you want to enable ${request.model.name}. After you enable it, remember to start the next message with \`@shiny\` again.\n\n`

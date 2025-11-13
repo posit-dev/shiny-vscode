@@ -1,45 +1,57 @@
 import type * as vscode from "vscode";
-import { isPositron } from "../extension-api-utils/extensionHost";
+
+/**
+ * Returns the list of model names we accept (won't show warning for).
+ * Includes both orderings ("Sonnet 4" and "4 Sonnet") to handle variations
+ * across different platforms and versions.
+ */
+function getAcceptedModelNames(): string[] {
+  return [
+    "Claude Sonnet 4.5",
+    "Claude 4.5 Sonnet",
+    "Claude Haiku 4.5",
+    "Claude 4.5 Haiku",
+    "Claude Sonnet 4",
+    "Claude 4 Sonnet",
+    "Claude Haiku 4",
+    "Claude 4 Haiku",
+  ];
+}
+
+/**
+ * Returns the list of model names we suggest to users.
+ * Always uses "Sonnet 4" ordering.
+ */
+function getSuggestedModelNames(): string[] {
+  return ["Claude Sonnet 4.5", "Claude Haiku 4.5"];
+}
 
 export function checkUsingDesiredModel(model: vscode.LanguageModelChat) {
-  // In older versions of VS Code, the model names were like "Claude 3.5
-  // Sonnet", but in newer versions, they are like "Claude Sonnet 3.5".
-  // In Positron as of this writing, the model names are like "Claude 3.5
-  // Sonnet".
-  if (model.name.match(/claude .*sonnet/i)) {
-    return true;
-  }
-
-  return false;
+  const acceptedModels = getAcceptedModelNames();
+  return acceptedModels.some(
+    (acceptedModel) =>
+      model.name.toLowerCase() === acceptedModel.toLowerCase()
+  );
 }
 
 export function displayDesiredModelSuggestion(
   modelName: string,
   stream: vscode.ChatResponseStream
 ) {
-  if (isPositron()) {
-    // The text displays much more quickly if we call markdown() twice instead
-    // of just once.
-    stream.markdown(
-      `It looks like you are using **${modelName}** for Copilot. `
-    );
-    stream.markdown(
-      `For best results with \`@shiny\`, please switch to **${desiredModelName()}**.\n\n`
-    );
-  } else {
-    // VS Code
-    // The text displays much more quickly if we call markdown() twice instead
-    // of just once.
-    stream.markdown(
-      `It looks like you are using **${modelName}** for Copilot. `
-    );
-    stream.markdown(
-      `For best results with \`@shiny\`, please switch to **${desiredModelName()}**.\n\n`
-    );
-  }
+  const suggestedModels = getSuggestedModelNames();
+  const suggestionText = suggestedModels.join(" or ");
+
+  // The text displays much more quickly if we call markdown() twice instead
+  // of just once.
+  stream.markdown(
+    `It looks like you are using **${modelName}** for Copilot. `
+  );
+  stream.markdown(
+    `For best results with \`@shiny\`, please switch to **${suggestionText}**.\n\n`
+  );
 
   stream.button({
-    title: `I'll switch to ${desiredModelName()}`,
+    title: `I'll switch to a recommended model`,
     command: "shiny.assistant.continueAfterDesiredModelSuggestion",
     arguments: [true],
   });
@@ -51,9 +63,6 @@ export function displayDesiredModelSuggestion(
 }
 
 export function desiredModelName() {
-  if (isPositron()) {
-    return "Claude 4 Sonnet";
-  } else {
-    return "Claude Sonnet 4";
-  }
+  const suggestedModels = getSuggestedModelNames();
+  return suggestedModels.join(" or ");
 }

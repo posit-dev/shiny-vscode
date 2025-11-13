@@ -719,7 +719,7 @@ async function saveFilesToWorkspace(
         // File does not exist; create it.
         workspaceEdit.createFile(fileUri, {
           overwrite: false,
-          contents: Buffer.from(file.content, "utf-8"),
+          contents: new Uint8Array(Buffer.from(file.content, "utf-8")),
         });
         createdUris.push(fileUri);
       }

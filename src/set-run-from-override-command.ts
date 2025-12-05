@@ -154,14 +154,7 @@ export async function setRunFromOverride(): Promise<void> {
     vscode.ConfigurationTarget.Workspace
   );
 
-  if (filesToUpdate.length > 1) {
-    vscode.window.showInformationMessage(
-      `Working directory set for ${filesToUpdate.length} files: ` +
-        filesToUpdate.map((f) => path.basename(f)).join(", ")
-    );
-  } else {
-    vscode.window.showInformationMessage(
-      `Working directory set to: ${targetPath}`
-    );
-  }
+  vscode.window.showInformationMessage(
+    `Shiny app will now run from: ${targetPath}`
+  );
 }

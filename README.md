@@ -54,3 +54,34 @@ Note that there is no setting for Python executable path or virtual environment.
 - `shiny.includeHeader`: Include the "Shiny" header in the Shinylive link when opening in app mode?
 - `shiny.shinylive.openAction`: What action should be taken when opening a Shinylive link? Options are `"open"` to open the link in an external browser, `"copy"` the link to the clipboard, or `"ask"`. The default is `"ask"`, which prompts you each time you create a Shinylive link.
 - `shiny.shinylive.host`: The Shinylive host used when creating a Shinylive link. The default is `"https://shinylive.io"`, which uses the latest released version of Shiny in Python or R. Or `"https://posit-dev.github.io/shinylive"`, which uses the latest development version of Shiny in Python or R.
+
+### Working Directory Configuration
+
+By default, Shiny apps run from the workspace root directory. This works well for most projects, but you may need apps to run from a different directory—for example, when using renv in a subfolder or organizing apps in a monorepo structure.
+
+The extension provides two settings to control the working directory:
+
+- `shiny.runFrom`: Global default for all apps in the workspace
+  - `"projectRoot"` (default): Run apps from the workspace root
+  - `"appDirectory"`: Run apps from the directory containing the app file
+
+- `shiny.runFromOverrides`: Per-app overrides for specific files
+  - For specific app paths (relative to the project root), choose which root-relative path the app is run from.
+  - Empty string `""` means project root
+  - This is a workspace-only setting
+
+**Example configuration** for a project with apps in subfolders using renv:
+
+```json
+{
+  "shiny.runFrom": "appDirectory",
+  "shiny.runFromOverrides": {
+    "src/apps/main/app.py": "",
+    "src/r-apps/dashboard/app.R": "src/r-apps"
+  }
+}
+```
+
+**Setting overrides via Command Palette:**
+
+Instead of editing `settings.json` manually, you can use the **"Shiny: Run this app from..."** command to set the run from override for an open app file.

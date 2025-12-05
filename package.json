@@ -83,6 +83,12 @@
       {
         "command": "shiny.assistant.applyChangesToWorkspaceFromDiffView",
         "title": "Apply changes"
+      },
+      {
+        "category": "Shiny",
+        "command": "shiny.setRunFromOverride",
+        "title": "Run this app from...",
+        "enablement": "(editorLangId == python || editorLangId == r) && workspaceFolderCount > 0"
       }
     ],
     "menus": {
@@ -222,6 +228,31 @@
             "Uses the latest released version of Shiny in Python or R.",
             "Uses the latest development version of Shiny in Python or R."
           ]
+        },
+        "shiny.runFrom": {
+          "scope": "window",
+          "type": "string",
+          "description": "Default working directory for running Shiny apps",
+          "enum": [
+            "projectRoot",
+            "appDirectory"
+          ],
+          "default": "projectRoot",
+          "enumDescriptions": [
+            "Run apps from the workspace root directory",
+            "Run apps from the directory containing the app file"
+          ]
+        },
+        "shiny.runFromOverrides": {
+          "scope": "resource",
+          "type": "object",
+          "description": "Override working directory for specific app files. Keys are workspace-relative file paths (with forward slashes), values are workspace-relative directory paths (empty string for project root).",
+          "default": {},
+          "patternProperties": {
+            "^.*\\.(py|R)$": {
+              "type": "string"
+            }
+          }
         }
       }
     },

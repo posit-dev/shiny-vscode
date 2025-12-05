@@ -15,6 +15,7 @@ import {
   envVarsForShell as envVarsForTerminal,
   escapeCommandForTerminal,
 } from "./shell-utils";
+import { resolveWorkingDirectory } from "./working-directory";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -40,8 +41,11 @@ export async function pyRunApp(): Promise<void> {
   const port = await getAppPort("run", "python");
   const autoreloadPort = await getAutoreloadPort("run");
 
+  const cwd = await resolveWorkingDirectory(path);
+
   const terminal = await createTerminalAndCloseOthersWithSameName({
     name: "Shiny",
+    cwd: cwd,
     env: {
       // We store the Python path here so we know whether the terminal can be
       // reused by us in the future (yes if the selected Python interpreter has
@@ -139,12 +143,15 @@ export async function pyDebugApp(): Promise<void> {
     .getConfiguration("shiny.python")
     .get("debugJustMyCode", true);
 
+  const cwd = await resolveWorkingDirectory(path);
+
   await vscode.debug.startDebugging(undefined, {
     type: "python",
     name: DEBUG_NAME,
     request: "launch",
     module: "shiny",
     args: ["run", "--port", port.toString(), path],
+    cwd: cwd,
     jinja: true,
     justMyCode,
     stopOnEntry: false,
@@ -170,8 +177,11 @@ export async function rRunApp(): Promise<void> {
   // TODO: Is this needed for Shiny for R too?
   // const autoreloadPort = await getAutoreloadPort("run");
 
+  const cwd = await resolveWorkingDirectory(pathFile);
+
   const terminal = await createTerminalAndCloseOthersWithSameName({
     name: "Shiny",
+    cwd: cwd,
     env: {
       // We save this here so escapeCommandForTerminal knows what shell
       // semantics to use when escaping arguments. A bit magical, but oh well.

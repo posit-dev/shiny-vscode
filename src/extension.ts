@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { activateAssistant, deactivateAssistant } from "./assistant/extension";
 import { handlePositShinyUri } from "./extension-onUri";
 import { onDidStartDebugSession, pyDebugApp, pyRunApp, rRunApp } from "./run";
+import { setRunFromOverride } from "./set-run-from-override-command";
 import {
   shinyliveCreateFromActiveEditor,
   shinyliveCreateFromExplorer,
@@ -15,6 +16,10 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
     vscode.commands.registerCommand("shiny.r.runApp", rRunApp),
+    vscode.commands.registerCommand(
+      "shiny.setRunFromOverride",
+      setRunFromOverride
+    ),
     vscode.commands.registerCommand(
       "shiny.shinylive.createFromActiveEditor",
       shinyliveCreateFromActiveEditor

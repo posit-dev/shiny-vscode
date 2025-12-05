@@ -35,9 +35,8 @@ export async function resolveWorkingDirectory(
 
   const normalizedRelativePath = relativePath.split(path.sep).join("/");
 
-  const inspectedOverrides = config.inspect<Record<string, string>>(
-    "runFromOverrides"
-  );
+  const inspectedOverrides =
+    config.inspect<Record<string, string>>("runFromOverrides");
   const overrides = inspectedOverrides?.workspaceValue || {};
 
   if (normalizedRelativePath in overrides) {
@@ -47,7 +46,10 @@ export async function resolveWorkingDirectory(
     }
     const resolvedPath = path.join(workspaceRoot, overrideValue);
 
-    if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isDirectory()) {
+    if (
+      fs.existsSync(resolvedPath) &&
+      fs.statSync(resolvedPath).isDirectory()
+    ) {
       return resolvedPath;
     } else {
       console.warn(`[shiny] Override path does not exist: ${resolvedPath}`);

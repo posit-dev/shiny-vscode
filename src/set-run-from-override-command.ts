@@ -1,11 +1,11 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { isShinyAppFilename } from "./extension";
+import type { RunFromOption } from "./working-directory";
 import {
   getRMultiFileAppSiblings,
   validateWorkingDirectory,
 } from "./working-directory";
-import type { RunFromOption } from "./working-directory";
 
 interface WorkingDirOption extends vscode.QuickPickItem {
   value: "projectRoot" | "appDirectory" | "custom";
@@ -50,9 +50,8 @@ export async function setRunFromOverride(): Promise<void> {
   }
 
   const config = vscode.workspace.getConfiguration("shiny");
-  const inspectedOverrides = config.inspect<Record<string, string>>(
-    "runFromOverrides"
-  );
+  const inspectedOverrides =
+    config.inspect<Record<string, string>>("runFromOverrides");
   const overrides = inspectedOverrides?.workspaceValue || {};
   const globalDefault = config.get<RunFromOption>("runFrom", "projectRoot");
 
@@ -133,9 +132,7 @@ export async function setRunFromOverride(): Promise<void> {
       : relativeTargetPath.split(path.sep).join("/");
 
   const filesToUpdate =
-    languageId === "r"
-      ? getRMultiFileAppSiblings(appFilePath)
-      : [appFilePath];
+    languageId === "r" ? getRMultiFileAppSiblings(appFilePath) : [appFilePath];
 
   const newOverrides = { ...overrides };
 

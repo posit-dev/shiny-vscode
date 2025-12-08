@@ -134,6 +134,7 @@
       "title": "Shiny",
       "properties": {
         "shiny.previewType": {
+          "order": 1,
           "scope": "window",
           "type": "string",
           "description": "Where should the Shiny app preview open?",
@@ -152,36 +153,40 @@
           ]
         },
         "shiny.timeoutOpenBrowser": {
+          "order": 2,
           "type": "integer",
           "default": 10,
           "description": "Maximum wait time (in seconds) for the Shiny app to be ready before opening the browser."
         },
-        "shiny.python.port": {
-          "type": "integer",
-          "default": 0,
-          "description": "The port number Shiny should listen on when running a Shiny for Python app. (Use 0 to choose a random port.)"
+        "shiny.runFrom": {
+          "order": 3,
+          "scope": "window",
+          "type": "string",
+          "description": "Default working directory for running Shiny apps",
+          "enum": [
+            "projectRoot",
+            "appDirectory"
+          ],
+          "default": "projectRoot",
+          "enumDescriptions": [
+            "Run apps from the workspace root directory",
+            "Run apps from the directory containing the app file"
+          ]
         },
-        "shiny.python.autoreloadPort": {
-          "type": "integer",
-          "default": 0,
-          "description": "The port number Shiny should use for a supplemental WebSocket channel it uses to support reload-on-save. (Use 0 to choose a random port.)"
-        },
-        "shiny.python.debugJustMyCode": {
-          "type": "boolean",
-          "default": true,
-          "description": "When running the \"Debug Shiny App\" command, only step through user-written code. Disable this to allow stepping through library code."
-        },
-        "shiny.r.port": {
-          "type": "integer",
-          "default": 0,
-          "description": "The port number Shiny should listen on when running a Shiny for R app. (Use 0 to choose a random port.)"
-        },
-        "shiny.r.devmode": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
+        "shiny.runFromOverrides": {
+          "order": 4,
+          "scope": "resource",
+          "type": "object",
+          "description": "Override working directory for specific app files. This setting maps workspace-relative file paths (using forward slashes) to workspace-relative directory paths. You can use an empty string (`\"\"`) to run an app from the project root. Note that you can use the \"Run this app from...\" command from an active app file to configure this setting for that app.",
+          "default": {},
+          "patternProperties": {
+            "^.*\\.(py|R)$": {
+              "type": "string"
+            }
+          }
         },
         "shiny.shinylive.appMode": {
+          "order": 5,
           "type": "string",
           "default": "ask",
           "description": "Which Shinylive mode to use when creating a Shinylive app.",
@@ -197,6 +202,7 @@
           ]
         },
         "shiny.shinylive.openAction": {
+          "order": 6,
           "type": "string",
           "default": "ask",
           "description": "Choose the default action upon creating a Shinylive link.",
@@ -212,11 +218,13 @@
           ]
         },
         "shiny.shinylive.includeHeader": {
+          "order": 7,
           "type": "boolean",
           "default": true,
           "description": "Include the Shiny header when creating Shinylive app links. Only relevant for app mode Shinylive links."
         },
         "shiny.shinylive.host": {
+          "order": 8,
           "type": "string",
           "default": "https://shinylive.io",
           "description": "The default Shinylive host to use when creating Shinylive app links.",
@@ -229,30 +237,35 @@
             "Uses the latest development version of Shiny in Python or R."
           ]
         },
-        "shiny.runFrom": {
-          "scope": "window",
-          "type": "string",
-          "description": "Default working directory for running Shiny apps",
-          "enum": [
-            "projectRoot",
-            "appDirectory"
-          ],
-          "default": "projectRoot",
-          "enumDescriptions": [
-            "Run apps from the workspace root directory",
-            "Run apps from the directory containing the app file"
-          ]
+        "shiny.python.port": {
+          "order": 9,
+          "type": "integer",
+          "default": 0,
+          "description": "The port number Shiny should listen on when running a Shiny for Python app. (Use 0 to choose a random port.)"
         },
-        "shiny.runFromOverrides": {
-          "scope": "resource",
-          "type": "object",
-          "description": "Override working directory for specific app files. Keys are workspace-relative file paths (with forward slashes), values are workspace-relative directory paths (empty string for project root).",
-          "default": {},
-          "patternProperties": {
-            "^.*\\.(py|R)$": {
-              "type": "string"
-            }
-          }
+        "shiny.python.autoreloadPort": {
+          "order": 10,
+          "type": "integer",
+          "default": 0,
+          "description": "The port number Shiny should use for a supplemental WebSocket channel it uses to support reload-on-save. (Use 0 to choose a random port.)"
+        },
+        "shiny.python.debugJustMyCode": {
+          "order": 11,
+          "type": "boolean",
+          "default": true,
+          "description": "When running the \"Debug Shiny App\" command, only step through user-written code. Disable this to allow stepping through library code."
+        },
+        "shiny.r.port": {
+          "order": 12,
+          "type": "integer",
+          "default": 0,
+          "description": "The port number Shiny should listen on when running a Shiny for R app. (Use 0 to choose a random port.)"
+        },
+        "shiny.r.devmode": {
+          "order": 13,
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
         }
       }
     },

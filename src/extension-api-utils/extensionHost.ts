@@ -2,6 +2,8 @@ import type * as positron from "positron";
 import * as vscode from "vscode";
 
 type PositronApi = typeof positron;
+export type PreviewSource = positron.PreviewSource;
+export type PreviewSourceType = positron.PreviewSourceType;
 
 declare global {
   function acquirePositronApi(): PositronApi;
@@ -17,12 +19,31 @@ export interface HostWebviewPanel extends vscode.Disposable {
 }
 export function getExtensionHostPreview():
   | void
-  | ((url: string) => HostWebviewPanel) {
+  | ((url: string, source?: PreviewSource) => HostWebviewPanel) {
   const pst = getPositronAPI();
   if (!pst) {
     return;
   }
-  return (url: string) => pst.window.previewUrl(vscode.Uri.parse(url));
+  return (url: string, source?: PreviewSource) =>
+    pst.window.previewUrl(vscode.Uri.parse(url), source);
+}
+
+/**
+ * Get the PreviewSourceType.Terminal enum value from Positron's API.
+ * Returns undefined if not running in Positron or if the enum is not available.
+ */
+export function getPreviewSourceTypeTerminal(): number | undefined {
+  const pst = getPositronAPI();
+  if (!pst) {
+    return undefined;
+  }
+  // Access the enum from the Positron API
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const previewSourceType = (pst as any).PreviewSourceType;
+  if (previewSourceType?.Terminal !== undefined) {
+    return previewSourceType.Terminal;
+  }
+  return undefined;
 }
 
 export async function getPositronPreferredRuntime(

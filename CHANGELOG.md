@@ -4,7 +4,7 @@
 
 - New `shiny.timeoutOpenBrowser` option sets the maximum time to wait (in seconds) for a Shiny app to be ready before attempting to open it in the browser. (@olivroy #82)
 
-- In Positron, the Viewer pane now shows an interrupt button when running Shiny apps, allowing you to stop the app directly from the Viewer.
+- In Positron, the Viewer pane now shows an interrupt button when running Shiny apps, allowing you to stop the app directly from the Viewer. ([#103](https://github.com/posit-dev/shiny-vscode/pull/103))
 
 ## 1.1.0
 

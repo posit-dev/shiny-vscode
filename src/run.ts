@@ -18,6 +18,55 @@ import {
 
 const DEBUG_NAME = "Debug Shiny app";
 
+// Track the currently running Shiny terminal
+let activeShinyTerminal: vscode.Terminal | undefined;
+
+// Callback to notify when app running state changes
+let onAppRunningStateChange: ((running: boolean) => void) | undefined;
+
+/**
+ * Set a callback to be notified when the app running state changes.
+ */
+export function setAppRunningStateChangeCallback(
+  callback: (running: boolean) => void
+): void {
+  onAppRunningStateChange = callback;
+}
+
+/**
+ * Check if a Shiny app is currently running.
+ */
+export function isAppRunning(): boolean {
+  return activeShinyTerminal !== undefined;
+}
+
+/**
+ * Stop the currently running Shiny app by disposing the terminal.
+ */
+export function stopApp(): void {
+  if (activeShinyTerminal) {
+    activeShinyTerminal.dispose();
+    // The terminal close handler will set activeShinyTerminal to undefined
+  }
+}
+
+function setActiveShinyTerminal(terminal: vscode.Terminal | undefined): void {
+  activeShinyTerminal = terminal;
+  onAppRunningStateChange?.(terminal !== undefined);
+}
+
+/**
+ * Register a listener to clear the active terminal when it's closed.
+ * This should be called once during extension activation.
+ */
+export function registerTerminalCloseHandler(): vscode.Disposable {
+  return vscode.window.onDidCloseTerminal((closedTerminal) => {
+    if (closedTerminal === activeShinyTerminal) {
+      setActiveShinyTerminal(undefined);
+    }
+  });
+}
+
 /* Shiny for Python --------------------------------------------------------- */
 
 export async function pyRunApp(): Promise<void> {
@@ -55,6 +104,9 @@ export async function pyRunApp(): Promise<void> {
       ...envVarsForTerminal(),
     },
   });
+
+  // Track this as the active Shiny terminal
+  setActiveShinyTerminal(terminal);
 
   // Wait until the server port and auto-reload ports are both available.
   const serverPortsAvailable = await Promise.all([
@@ -178,6 +230,9 @@ export async function rRunApp(): Promise<void> {
       ...envVarsForTerminal(),
     },
   });
+
+  // Track this as the active Shiny terminal
+  setActiveShinyTerminal(terminal);
 
   // Wait until the server port and auto-reload ports are both available.
   if (!(await waitUntilServerPortIsAvailable(port))) {

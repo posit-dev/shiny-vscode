@@ -84,6 +84,12 @@
       {
         "command": "shiny.assistant.applyChangesToWorkspaceFromDiffView",
         "title": "Apply changes"
+      },
+      {
+        "category": "Shiny",
+        "command": "shiny.stopApp",
+        "title": "Stop Shiny App",
+        "icon": "$(debug-stop)"
       }
     ],
     "menus": {
@@ -98,6 +104,10 @@
         {
           "command": "shiny.shinylive.createFromExplorer",
           "when": "false"
+        },
+        {
+          "command": "shiny.stopApp",
+          "when": "shiny.appRunning"
         }
       ],
       "editor/title/run": [
@@ -107,14 +117,19 @@
           "when": "shiny.python.active && shellExecutionSupported"
         },
         {
+          "command": "shiny.r.runApp",
+          "group": "navigation@-3",
+          "when": "shiny.r.active && shellExecutionSupported"
+        },
+        {
           "command": "shiny.python.debugApp",
           "group": "navigation@-2",
           "when": "shiny.python.active && shellExecutionSupported"
         },
         {
-          "command": "shiny.r.runApp",
-          "group": "navigation@-3",
-          "when": "shiny.r.active && shellExecutionSupported"
+          "command": "shiny.stopApp",
+          "group": "navigation@-1",
+          "when": "shiny.appRunning && (shiny.python.active || shiny.r.active)"
         }
       ],
       "editor/title": [
@@ -122,6 +137,16 @@
           "command": "shiny.assistant.applyChangesToWorkspaceFromDiffView",
           "group": "navigation",
           "when": "resourceScheme == multi-diff-editor"
+        },
+        {
+          "command": "shiny.stopApp",
+          "group": "navigation",
+          "when": "shiny.appRunning && !isPositron && activeWebviewPanelId == 'simpleBrowser.view'"
+        },
+        {
+          "command": "shiny.stopApp",
+          "group": "navigation",
+          "when": "shiny.appRunning && (shiny.python.active || shiny.r.active)"
         }
       ]
     },

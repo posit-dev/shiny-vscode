@@ -2,7 +2,15 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { activateAssistant, deactivateAssistant } from "./assistant/extension";
 import { handlePositShinyUri } from "./extension-onUri";
-import { onDidStartDebugSession, pyDebugApp, pyRunApp, rRunApp } from "./run";
+import {
+  onDidStartDebugSession,
+  pyDebugApp,
+  pyRunApp,
+  registerTerminalCloseHandler,
+  rRunApp,
+  setAppRunningStateChangeCallback,
+  stopApp,
+} from "./run";
 import {
   shinyliveCreateFromActiveEditor,
   shinyliveCreateFromExplorer,
@@ -15,6 +23,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
     vscode.commands.registerCommand("shiny.r.runApp", rRunApp),
+    vscode.commands.registerCommand("shiny.stopApp", stopApp),
     vscode.commands.registerCommand(
       "shiny.shinylive.createFromActiveEditor",
       shinyliveCreateFromActiveEditor
@@ -31,8 +40,16 @@ export async function activate(context: vscode.ExtensionContext) {
       async handleUri(uri: vscode.Uri): Promise<void> {
         await handlePositShinyUri(uri);
       },
-    })
+    }),
+    registerTerminalCloseHandler()
   );
+
+  // Set up callback to update context when app running state changes
+  setAppRunningStateChangeCallback((running) => {
+    vscode.commands.executeCommand("setContext", "shiny.appRunning", running);
+  });
+  // Initialize the context to false
+  vscode.commands.executeCommand("setContext", "shiny.appRunning", false);
 
   activateAssistant(context);
 

@@ -7,6 +7,23 @@
 
 declare module "positron" {
   /**
+   * The type of source that opened a preview.
+   */
+  export enum PreviewSourceType {
+    Runtime = 1,
+    Terminal = 2,
+  }
+
+  /**
+   * Information about the source that opened a preview.
+   */
+  export interface PreviewSource {
+    /** The type of source (Runtime or Terminal) */
+    type: PreviewSourceType;
+    /** The process ID of the source (for terminals) */
+    id?: number;
+  }
+  /**
    * LanguageRuntimeMetadata contains information about a language runtime that is known
    * before the runtime is started.
    */
@@ -88,10 +105,11 @@ declare module "positron" {
      * given URL.
      *
      * @param url The URL to preview
+     * @param source Optional source information for interrupt functionality
      *
      * @return New preview panel.
      */
-    export function previewUrl(url: vscode.Uri): PreviewPanel;
+    export function previewUrl(url: vscode.Uri, source?: PreviewSource): PreviewPanel;
 
     /**
      * Create and show a new preview panel for an HTML file. This is a

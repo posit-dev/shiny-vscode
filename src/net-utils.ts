@@ -2,7 +2,11 @@ import * as http from "http";
 import type { AddressInfo } from "net";
 import * as net from "net";
 import * as vscode from "vscode";
-import { getExtensionHostPreview } from "./extension-api-utils/extensionHost";
+import {
+  getExtensionHostPreview,
+  getPreviewSourceTypeTerminal,
+  type PreviewSource,
+} from "./extension-api-utils/extensionHost";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
 import { retryUntilTimeout } from "./retry-utils";
 
@@ -208,7 +212,7 @@ export async function openBrowserWhenReady(
   }
 
   const previewUrl = await getRemoteSafeUrl(port);
-  await openBrowser(previewUrl);
+  await openBrowser(previewUrl, terminal);
 }
 
 function configShinyPreviewType(): string {
@@ -217,7 +221,33 @@ function configShinyPreviewType(): string {
   );
 }
 
-export async function openBrowser(url: string): Promise<void> {
+/**
+ * Positron only: Build a PreviewSource from a terminal.
+ * The PreviewSource contains the terminal's process ID, which enables the
+ * stop/interrupt button in Positron's Viewer pane. In VS Code, we use a
+ * separate stop button in the editor title bar instead (see run.ts).
+ */
+async function buildPreviewSource(
+  terminal?: vscode.Terminal
+): Promise<PreviewSource | undefined> {
+  if (!terminal) {
+    return undefined;
+  }
+  const processId = await terminal.processId;
+  if (processId === undefined) {
+    return undefined;
+  }
+
+  // Try to get the enum value from Positron's API, fall back to hardcoded value
+  const terminalType = getPreviewSourceTypeTerminal() ?? 2;
+
+  return { type: terminalType, id: processId };
+}
+
+export async function openBrowser(
+  url: string,
+  terminal?: vscode.Terminal
+): Promise<void> {
   const previewType = configShinyPreviewType();
 
   switch (previewType) {
@@ -233,14 +263,18 @@ export async function openBrowser(url: string): Promise<void> {
     }
     // @ts-expect-error Fallthrough case in switch
     case "internal": {
+      // Positron path: Use Positron's Viewer pane with PreviewSource for stop button
       const hostPreview = getExtensionHostPreview();
       if (hostPreview) {
-        hostPreview(url);
+        const source = await buildPreviewSource(terminal);
+        hostPreview(url, source);
         return;
       }
-      // fallthrough to simpleBrowser default if no hostPreview feature
+      // fallthrough to simpleBrowser default if no hostPreview feature (VS Code)
     }
     default: {
+      // VS Code path: Use Simple Browser. Stop button is provided separately
+      // in the editor title bar (see package.json menus and run.ts).
       await vscode.commands.executeCommand("simpleBrowser.api.open", url, {
         preserveFocus: true,
         viewColumn: vscode.ViewColumn.Beside,

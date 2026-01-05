@@ -38,8 +38,7 @@ export function getPreviewSourceTypeTerminal(): number | undefined {
     return undefined;
   }
   // Access the enum from the Positron API
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const previewSourceType = (pst as any).PreviewSourceType;
+  const previewSourceType = pst.PreviewSourceType;
   if (previewSourceType?.Terminal !== undefined) {
     return previewSourceType.Terminal;
   }

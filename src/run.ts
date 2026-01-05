@@ -18,6 +18,15 @@ import {
 
 const DEBUG_NAME = "Debug Shiny app";
 
+// =============================================================================
+// Stop App Functionality (VS Code only)
+// -----------------------------------------------------------------------------
+// In Positron, the Viewer pane has a native stop button that uses PreviewSource
+// to interrupt the terminal process. In VS Code, we need to provide our own
+// stop button, so we track the active terminal and expose a stopApp() command.
+// The stop button appears in the editor title bar (see package.json menus).
+// =============================================================================
+
 // Track the currently running Shiny terminal
 let activeShinyTerminal: vscode.Terminal | undefined;
 
@@ -438,6 +447,11 @@ function getExtensionPath(): string | undefined {
 }
 
 export async function getRBinPath(bin: string): Promise<string> {
+  // Try multiple methods to find R, in order of preference:
+  // 1. Positron's preferred runtime (Positron only)
+  // 2. VS Code R extension config (VS Code only)
+  // 3. System PATH
+  // 4. Windows Registry (Windows only)
   return (
     (await getRPathFromPositron(bin)) ||
     getRPathFromConfig(bin) ||
@@ -447,6 +461,7 @@ export async function getRBinPath(bin: string): Promise<string> {
   );
 }
 
+// Positron only: Get R path from Positron's preferred runtime
 async function getRPathFromPositron(bin: string): Promise<string> {
   const runtimeMetadata = await getPositronPreferredRuntime("r");
   if (!runtimeMetadata) {
@@ -465,6 +480,7 @@ async function getRPathFromPositron(bin: string): Promise<string> {
   return path_join(path_dirname(runtimePath), bin + fileExt);
 }
 
+// Get R path from VS Code R extension configuration
 function getRPathFromConfig(bin: string): string {
   const { platform } = process;
   const fileExt = platform === "win32" ? ".exe" : "";

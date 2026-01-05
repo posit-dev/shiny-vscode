@@ -222,8 +222,10 @@ function configShinyPreviewType(): string {
 }
 
 /**
- * Build a PreviewSource from a terminal, if the terminal has a process ID.
- * This enables the interrupt button in Positron's Viewer pane.
+ * Positron only: Build a PreviewSource from a terminal.
+ * The PreviewSource contains the terminal's process ID, which enables the
+ * stop/interrupt button in Positron's Viewer pane. In VS Code, we use a
+ * separate stop button in the editor title bar instead (see run.ts).
  */
 async function buildPreviewSource(
   terminal?: vscode.Terminal
@@ -261,15 +263,18 @@ export async function openBrowser(
     }
     // @ts-expect-error Fallthrough case in switch
     case "internal": {
+      // Positron path: Use Positron's Viewer pane with PreviewSource for stop button
       const hostPreview = getExtensionHostPreview();
       if (hostPreview) {
         const source = await buildPreviewSource(terminal);
         hostPreview(url, source);
         return;
       }
-      // fallthrough to simpleBrowser default if no hostPreview feature
+      // fallthrough to simpleBrowser default if no hostPreview feature (VS Code)
     }
     default: {
+      // VS Code path: Use Simple Browser. Stop button is provided separately
+      // in the editor title bar (see package.json menus and run.ts).
       await vscode.commands.executeCommand("simpleBrowser.api.open", url, {
         preserveFocus: true,
         viewColumn: vscode.ViewColumn.Beside,

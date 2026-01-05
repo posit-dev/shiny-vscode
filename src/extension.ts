@@ -44,11 +44,13 @@ export async function activate(context: vscode.ExtensionContext) {
     registerTerminalCloseHandler()
   );
 
-  // Set up callback to update context when app running state changes
+  // Track app running state for stop button visibility.
+  // Note that in Positron, the Viewer pane also has its own stop button via
+  // PreviewSource, which is independent of this.
+  // This context controls the visibility of the stop button in package.json menus.
   setAppRunningStateChangeCallback((running) => {
     vscode.commands.executeCommand("setContext", "shiny.appRunning", running);
   });
-  // Initialize the context to false
   vscode.commands.executeCommand("setContext", "shiny.appRunning", false);
 
   activateAssistant(context);

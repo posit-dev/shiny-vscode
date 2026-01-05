@@ -60,7 +60,7 @@ export function getPreviewSourceTypeTerminal(): number | undefined {
 
 /**
  * Positron only: Get the preferred runtime for a language from Positron's API.
- * Used to find R interpreter path in Positron. Returns undefined in VS Code.
+ * Used to find R/Python interpreter path in Positron. Returns undefined in VS Code.
  */
 export async function getPositronPreferredRuntime(
   languageId: string

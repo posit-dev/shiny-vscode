@@ -6,6 +6,8 @@
 
 - In Positron, the Viewer pane now shows an interrupt button when running Shiny apps, allowing you to stop the app directly from the Viewer. ([#103](https://github.com/posit-dev/shiny-vscode/pull/103))
 
+New `shiny.runFrom` option can be used to run Shiny apps from the `"projectRoot"` (default) or the `"appDirectory"`. This can also be overridden at the app-level with a workspace `shiny.runFromOverride` setting. Use the new "Shiny: Run this app from..." command on an open Shiny app file to configure this setting for a specific app. (#102)
+
 ## 1.1.0
 
 - In Positron, the extension now uses the selected R runtime for Shiny for R apps. In VS Code, the extension also now consults the `r.rpath.mac`, `r.rpath.windows` or `r.rpath.linux` settings to find the R executable, before falling back to system settings. These settings are part of the [R Debugger extension](https://marketplace.visualstudio.com/items?itemName=RDebugger.r-debugger) ([#64](https://github.com/posit-dev/shiny-vscode/pull/64))

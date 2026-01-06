@@ -2,7 +2,9 @@
 
 ## [UNRELEASED]
 
-New `shiny.timeoutOpenBrowser` option sets the maximum time to wait (in seconds) for a Shiny app to be ready before attempting to open it in the browser. (@olivroy #82)
+- New `shiny.timeoutOpenBrowser` option sets the maximum time to wait (in seconds) for a Shiny app to be ready before attempting to open it in the browser. (@olivroy #82)
+
+- In Positron, the Viewer pane now shows an interrupt button when running Shiny apps, allowing you to stop the app directly from the Viewer. ([#103](https://github.com/posit-dev/shiny-vscode/pull/103))
 
 New `shiny.runFrom` option can be used to run Shiny apps from the `"projectRoot"` (default) or the `"appDirectory"`. This can also be overridden at the app-level with a workspace `shiny.runFromOverride` setting. Use the new "Shiny: Run this app from..." command on an open Shiny app file to configure this setting for a specific app. (#102)
 

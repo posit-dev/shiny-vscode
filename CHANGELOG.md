@@ -1,5 +1,9 @@
 # Change Log
 
+## [UNRELEASED]
+
+- The "Create Shinylive Link from Selected Files" context menu item now only appears when right-clicking on a Shiny app file (e.g., `app.py`, `app.R`, `ui.R`) or a folder. (#105)
+
 ## [1.3.3]
 
 - New `shiny.timeoutOpenBrowser` option sets the maximum time to wait (in seconds) for a Shiny app to be ready before attempting to open it in the browser. (@olivroy #82)

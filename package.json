@@ -103,7 +103,7 @@
         {
           "command": "shiny.shinylive.createFromExplorer",
           "group": "shinylive",
-          "when": "true"
+          "when": "explorerResourceIsFolder || resourceFilename =~ /^(app\\.(py|r)|(app[-_].+|.+[-_]app)\\.(py|r)|(ui|server|global)\\.r)$/i"
         }
       ],
       "commandPalette": [

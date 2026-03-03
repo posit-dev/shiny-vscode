@@ -4,11 +4,6 @@ import { isShinyAppFilename } from "../extension";
 import { isPositron } from "../extension-api-utils/extensionHost";
 import { type DiffError } from "./diff";
 import { langNameToProperName, type LangName } from "./language";
-import {
-  checkUsingDesiredModel,
-  desiredModelName,
-  displayDesiredModelSuggestion,
-} from "./llm-selection";
 import { checkPythonEnvironment } from "./project-language";
 import { ProposedFilePreviewProvider } from "./proposed-file-preview-provider";
 import { StreamingChatResponseHandler } from "./streaming-chat-response-handler";
@@ -42,7 +37,6 @@ export const projectSettings: ProjectSettings = {
   appSubdir: null,
 };
 
-const hasConfirmedDesiredModel = createPromiseWithStatus<boolean>();
 const hasContinuedAfterWorkspaceFolderSuggestion =
   createPromiseWithStatus<void>();
 
@@ -81,11 +75,6 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
           projectSettings.language = language;
           callback();
         }
-      ),
-      vscode.commands.registerCommand(
-        "shiny.assistant.continueAfterDesiredModelSuggestion",
-        (switchedToDesiredModel: boolean) =>
-          hasConfirmedDesiredModel.resolve(switchedToDesiredModel)
       ),
       vscode.commands.registerCommand(
         "shiny.assistant.continueAfterWorkspaceFolderSuggestion",
@@ -160,27 +149,6 @@ You can also ask me to explain the code in your Shiny app, or to help you with a
       );
       // chatResult.metadata.followups.push("Help me deploy my app.");
       return chatResult;
-    }
-
-    // ========================================================================
-    // If the user isn't using one of the desired LLM models, prompt them to
-    // switch.
-    // ========================================================================
-    if (
-      !checkUsingDesiredModel(request.model) &&
-      !hasConfirmedDesiredModel.isResolved() // Only prompt once
-    ) {
-      displayDesiredModelSuggestion(request.model.name, stream);
-
-      if (await hasConfirmedDesiredModel) {
-        stream.markdown(
-          new vscode.MarkdownString(
-            `Great! In the chat input box down below, switch to ${desiredModelName()}and then click on the $(refresh) button.\n\n`,
-            true
-          )
-        );
-        return chatResult;
-      }
     }
 
     // ========================================================================

@@ -1,6 +1,8 @@
 # Change Log
 
-## UNRELEASED
+## 1.3.4
+
+- Removed checking of model, because most models today perform well. (#107)
 
 - The "Create Shinylive Link from Selected Files" context menu item now only appears when right-clicking on a Shiny app file (e.g., `app.py`, `app.R`, `ui.R`) or a folder. (#105)
 

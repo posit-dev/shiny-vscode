@@ -83,26 +83,29 @@ export function registerTerminalCloseHandler(): vscode.Disposable {
 
 /* Shiny for Python --------------------------------------------------------- */
 
+function buildPyConsoleCode(appPath: string, port: number, cwd: string): string {
+  const args = [
+    JSON.stringify(appPath),
+    `host="127.0.0.1"`,
+    `port=${port}`,
+    `reload=True`,
+    `launch_browser=False`,
+  ];
+  return [
+    `import os; os.chdir(${JSON.stringify(cwd)})`,
+    `import shiny; shiny.run_app(${args.join(", ")})`,
+  ].join("\n");
+}
+
 export async function pyRunApp(): Promise<void> {
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
-    return runShinyAppInConsole(runAppApi, {
-      language: "python",
-      appUrlStrings: ["Uvicorn running on {{APP_URL}}"],
-      buildCode({ appPath, port, cwd }) {
-        const args = [
-          JSON.stringify(appPath),
-          `host="127.0.0.1"`,
-          `port=${port}`,
-          `reload=True`,
-          `launch_browser=False`,
-        ];
-        return [
-          `import os; os.chdir(${JSON.stringify(cwd)})`,
-          `import shiny; shiny.run_app(${args.join(", ")})`,
-        ].join("\n");
-      },
-    });
+    return runShinyAppInConsole(
+      runAppApi,
+      "python",
+      ["Uvicorn running on {{APP_URL}}"],
+      buildPyConsoleCode,
+    );
   }
 
   const path = getActiveEditorFile();
@@ -249,33 +252,38 @@ export async function pyDebugApp(): Promise<void> {
 }
 
 /* Shiny for R --------------------------------------------------------- */
+
+function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
+  const path = isShinyAppRPart(appPath) ? path_dirname(appPath) : appPath;
+  const useDevmode = vscode.workspace
+    .getConfiguration("shiny.r")
+    .get("devmode");
+
+  const lines: string[] = [];
+  lines.push(`setwd(${JSON.stringify(cwd)})`);
+
+  if (useDevmode) {
+    lines.push("shiny::devmode()");
+  } else {
+    lines.push("options(shiny.autoreload = TRUE)");
+  }
+
+  lines.push(
+    `shiny::runApp(${JSON.stringify(path)}, port = ${port}L, launch.browser = FALSE)`
+  );
+
+  return lines.join("\n");
+}
+
 export async function rRunApp(): Promise<void> {
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
-    return runShinyAppInConsole(runAppApi, {
-      language: "r",
-      appUrlStrings: ["Listening on {{APP_URL}}"],
-      buildCode({ appPath, port, cwd }) {
-        const path = isShinyAppRPart(appPath)
-          ? path_dirname(appPath)
-          : appPath;
-        const useDevmode = vscode.workspace
-          .getConfiguration("shiny.r")
-          .get("devmode");
-
-        const lines: string[] = [];
-        lines.push(`setwd(${JSON.stringify(cwd)})`);
-        if (useDevmode) {
-          lines.push("shiny::devmode()");
-        } else {
-          lines.push("options(shiny.autoreload = TRUE)");
-        }
-        lines.push(
-          `shiny::runApp(${JSON.stringify(path)}, port = ${port}L, launch.browser = FALSE)`
-        );
-        return lines.join("\n");
-      },
-    });
+    return runShinyAppInConsole(
+      runAppApi,
+      "r",
+      ["Listening on {{APP_URL}}"],
+      buildRConsoleCode,
+    );
   }
 
   const pathFile = getActiveEditorFile();
@@ -353,21 +361,19 @@ export async function rRunApp(): Promise<void> {
 
 async function runShinyAppInConsole(
   api: PositronRunApp,
-  options: {
-    language: "python" | "r";
-    appUrlStrings: string[];
-    buildCode(params: { appPath: string; port: number; cwd: string }): string;
-  }
+  language: "python" | "r",
+  appUrlStrings: string[],
+  buildCode: (appPath: string, port: number, cwd: string) => string,
 ): Promise<void> {
   await api.runApplicationInConsole({
     name: "Shiny",
     async getConsoleCode(_runtime, document, _urlPrefix) {
       const appPath = document.uri.fsPath;
-      const port = await getAppPort("run", options.language);
+      const port = await getAppPort("run", language);
       const cwd = await resolveWorkingDirectory(appPath);
-      return { code: options.buildCode({ appPath, port, cwd }) };
+      return { code: buildCode(appPath, port, cwd) };
     },
-    appUrlStrings: options.appUrlStrings,
+    appUrlStrings,
   });
 }
 

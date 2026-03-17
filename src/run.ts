@@ -83,31 +83,7 @@ export function registerTerminalCloseHandler(): vscode.Disposable {
 
 /* Shiny for Python --------------------------------------------------------- */
 
-function buildPyConsoleCode(appPath: string, port: number, cwd: string): string {
-  const args = [
-    JSON.stringify(appPath),
-    `host="127.0.0.1"`,
-    `port=${port}`,
-    `reload=True`,
-    `launch_browser=False`,
-  ];
-  return [
-    `import os; os.chdir(${JSON.stringify(cwd)})`,
-    `import shiny; shiny.run_app(${args.join(", ")})`,
-  ].join("\n");
-}
-
 export async function pyRunApp(): Promise<void> {
-  const runAppApi = await getPositronRunAppApi();
-  if (runAppApi) {
-    return runShinyAppInConsole(
-      runAppApi,
-      "python",
-      ["Uvicorn running on {{APP_URL}}"],
-      buildPyConsoleCode,
-    );
-  }
-
   const path = getActiveEditorFile();
   if (!path) {
     return;

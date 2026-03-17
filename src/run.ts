@@ -86,7 +86,23 @@ export function registerTerminalCloseHandler(): vscode.Disposable {
 export async function pyRunApp(): Promise<void> {
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
-    return pyRunAppInConsole(runAppApi);
+    return runShinyAppInConsole(runAppApi, {
+      language: "python",
+      appUrlStrings: ["Uvicorn running on {{APP_URL}}"],
+      buildCode({ appPath, port, cwd }) {
+        const args = [
+          JSON.stringify(appPath),
+          `host="127.0.0.1"`,
+          `port=${port}`,
+          `reload=True`,
+          `launch_browser=False`,
+        ];
+        return [
+          `import os; os.chdir(${JSON.stringify(cwd)})`,
+          `import shiny; shiny.run_app(${args.join(", ")})`,
+        ].join("\n");
+      },
+    });
   }
 
   const path = getActiveEditorFile();
@@ -186,33 +202,6 @@ export async function pyRunApp(): Promise<void> {
   }
 }
 
-async function pyRunAppInConsole(api: PositronRunApp): Promise<void> {
-  await api.runApplicationInConsole({
-    name: "Shiny",
-    async getConsoleCode(_runtime, document, _urlPrefix) {
-      const appPath = document.uri.fsPath;
-      const port = await getAppPort("run", "python");
-      const cwd = await resolveWorkingDirectory(appPath);
-
-      const runAppArgs = [
-        JSON.stringify(appPath),
-        `host="127.0.0.1"`,
-        `port=${port}`,
-        `reload=True`,
-        `launch_browser=False`,
-      ];
-
-      const code = [
-        `import os; os.chdir(${JSON.stringify(cwd)})`,
-        `import shiny; shiny.run_app(${runAppArgs.join(", ")})`,
-      ].join("\n");
-
-      return { code };
-    },
-    appUrlStrings: ["Uvicorn running on {{APP_URL}}"],
-  });
-}
-
 export async function pyDebugApp(): Promise<void> {
   if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
     await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
@@ -263,7 +252,30 @@ export async function pyDebugApp(): Promise<void> {
 export async function rRunApp(): Promise<void> {
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
-    return rRunAppInConsole(runAppApi);
+    return runShinyAppInConsole(runAppApi, {
+      language: "r",
+      appUrlStrings: ["Listening on {{APP_URL}}"],
+      buildCode({ appPath, port, cwd }) {
+        const path = isShinyAppRPart(appPath)
+          ? path_dirname(appPath)
+          : appPath;
+        const useDevmode = vscode.workspace
+          .getConfiguration("shiny.r")
+          .get("devmode");
+
+        const lines: string[] = [];
+        lines.push(`setwd(${JSON.stringify(cwd)})`);
+        if (useDevmode) {
+          lines.push("shiny::devmode()");
+        } else {
+          lines.push("options(shiny.autoreload = TRUE)");
+        }
+        lines.push(
+          `shiny::runApp(${JSON.stringify(path)}, port = ${port}L, launch.browser = FALSE)`
+        );
+        return lines.join("\n");
+      },
+    });
   }
 
   const pathFile = getActiveEditorFile();
@@ -339,40 +351,25 @@ export async function rRunApp(): Promise<void> {
   await openBrowserWhenReady(port, [], terminal);
 }
 
-async function rRunAppInConsole(api: PositronRunApp): Promise<void> {
+async function runShinyAppInConsole(
+  api: PositronRunApp,
+  options: {
+    language: "python" | "r";
+    appUrlStrings: string[];
+    buildCode(params: { appPath: string; port: number; cwd: string }): string;
+  }
+): Promise<void> {
   await api.runApplicationInConsole({
     name: "Shiny",
     async getConsoleCode(_runtime, document, _urlPrefix) {
-      const appFilePath = document.uri.fsPath;
-      const appPath = isShinyAppRPart(appFilePath)
-        ? path_dirname(appFilePath)
-        : appFilePath;
-      const port = await getAppPort("run", "r");
-      const cwd = await resolveWorkingDirectory(appFilePath);
-
-      const useDevmode = vscode.workspace
-        .getConfiguration("shiny.r")
-        .get("devmode");
-
-      const lines: string[] = [];
-      lines.push(`setwd(${JSON.stringify(cwd)})`);
-
-      if (useDevmode) {
-        lines.push("shiny::devmode()");
-      } else {
-        lines.push("options(shiny.autoreload = TRUE)");
-      }
-
-      lines.push(
-        `shiny::runApp(${JSON.stringify(appPath)}, port = ${port}L, launch.browser = FALSE)`
-      );
-
-      return { code: lines.join("\n") };
+      const appPath = document.uri.fsPath;
+      const port = await getAppPort("run", options.language);
+      const cwd = await resolveWorkingDirectory(appPath);
+      return { code: options.buildCode({ appPath, port, cwd }) };
     },
-    appUrlStrings: ["Listening on {{APP_URL}}"],
+    appUrlStrings: options.appUrlStrings,
   });
 }
-
 
 /* Utilities --------------------------------------------------------- */
 

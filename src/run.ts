@@ -4,7 +4,10 @@ import { dirname as path_dirname, join as path_join } from "path";
 import * as vscode from "vscode";
 import * as winreg from "winreg";
 import { isShinyAppRPart } from "./extension";
-import { getPositronPreferredRuntime } from "./extension-api-utils/extensionHost";
+import {
+  getPositronPreferredRuntime,
+  getPositronRunAppApi,
+} from "./extension-api-utils/extensionHost";
 import {
   openBrowser,
   openBrowserWhenReady,
@@ -16,6 +19,7 @@ import {
   escapeCommandForTerminal,
 } from "./shell-utils";
 import { resolveWorkingDirectory } from "./working-directory";
+import type { PositronRunApp } from "./positron-run-app";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -80,6 +84,11 @@ export function registerTerminalCloseHandler(): vscode.Disposable {
 /* Shiny for Python --------------------------------------------------------- */
 
 export async function pyRunApp(): Promise<void> {
+  const runAppApi = await getPositronRunAppApi();
+  if (runAppApi) {
+    return pyRunAppInConsole(runAppApi);
+  }
+
   const path = getActiveEditorFile();
   if (!path) {
     return;
@@ -177,6 +186,33 @@ export async function pyRunApp(): Promise<void> {
   }
 }
 
+async function pyRunAppInConsole(api: PositronRunApp): Promise<void> {
+  await api.runApplicationInConsole({
+    name: "Shiny",
+    async getConsoleCode(_runtime, document, _urlPrefix) {
+      const appPath = document.uri.fsPath;
+      const port = await getAppPort("run", "python");
+      const cwd = await resolveWorkingDirectory(appPath);
+
+      const runAppArgs = [
+        JSON.stringify(appPath),
+        `host="127.0.0.1"`,
+        `port=${port}`,
+        `reload=True`,
+        `launch_browser=False`,
+      ];
+
+      const code = [
+        `import os; os.chdir(${JSON.stringify(cwd)})`,
+        `import shiny; shiny.run_app(${runAppArgs.join(", ")})`,
+      ].join("\n");
+
+      return { code };
+    },
+    appUrlStrings: ["Uvicorn running on {{APP_URL}}"],
+  });
+}
+
 export async function pyDebugApp(): Promise<void> {
   if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
     await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
@@ -225,6 +261,11 @@ export async function pyDebugApp(): Promise<void> {
 
 /* Shiny for R --------------------------------------------------------- */
 export async function rRunApp(): Promise<void> {
+  const runAppApi = await getPositronRunAppApi();
+  if (runAppApi) {
+    return rRunAppInConsole(runAppApi);
+  }
+
   const pathFile = getActiveEditorFile();
   if (!pathFile) {
     return;
@@ -297,6 +338,41 @@ export async function rRunApp(): Promise<void> {
   // TODO: Support Codespaces
   await openBrowserWhenReady(port, [], terminal);
 }
+
+async function rRunAppInConsole(api: PositronRunApp): Promise<void> {
+  await api.runApplicationInConsole({
+    name: "Shiny",
+    async getConsoleCode(_runtime, document, _urlPrefix) {
+      const appFilePath = document.uri.fsPath;
+      const appPath = isShinyAppRPart(appFilePath)
+        ? path_dirname(appFilePath)
+        : appFilePath;
+      const port = await getAppPort("run", "r");
+      const cwd = await resolveWorkingDirectory(appFilePath);
+
+      const useDevmode = vscode.workspace
+        .getConfiguration("shiny.r")
+        .get("devmode");
+
+      const lines: string[] = [];
+      lines.push(`setwd(${JSON.stringify(cwd)})`);
+
+      if (useDevmode) {
+        lines.push("shiny::devmode()");
+      } else {
+        lines.push("options(shiny.autoreload = TRUE)");
+      }
+
+      lines.push(
+        `shiny::runApp(${JSON.stringify(appPath)}, port = ${port}L, launch.browser = FALSE)`
+      );
+
+      return { code: lines.join("\n") };
+    },
+    appUrlStrings: ["Listening on {{APP_URL}}"],
+  });
+}
+
 
 /* Utilities --------------------------------------------------------- */
 

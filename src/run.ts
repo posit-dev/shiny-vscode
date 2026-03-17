@@ -341,6 +341,7 @@ async function runShinyAppInConsole(
   appUrlStrings: string[],
   buildCode: (appPath: string, port: number, cwd: string) => string,
 ): Promise<void> {
+  await saveActiveEditorFile();
   await api.runApplicationInConsole({
     name: "Shiny",
     async getConsoleCode(_runtime, document, _urlPrefix) {

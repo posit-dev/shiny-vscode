@@ -259,6 +259,7 @@ export async function rRunApp(): Promise<void> {
       "r",
       ["Listening on {{APP_URL}}"],
       buildRConsoleCode,
+      "ark",
     );
   }
 
@@ -340,10 +341,12 @@ async function runShinyAppInConsole(
   language: "python" | "r",
   appUrlStrings: string[],
   buildCode: (appPath: string, port: number, cwd: string) => string,
+  debugAdapterType?: string,
 ): Promise<void> {
   await saveActiveEditorFile();
   await api.runApplicationInConsole({
     name: "Shiny",
+    debugAdapterType,
     async getConsoleCode(_runtime, document, _urlPrefix) {
       const appPath = document.uri.fsPath;
       const port = await getAppPort("run", language);

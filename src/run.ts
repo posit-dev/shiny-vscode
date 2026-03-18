@@ -254,13 +254,12 @@ function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
 export async function rRunApp(): Promise<void> {
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
-    return runShinyAppInConsole(
-      runAppApi,
-      "r",
-      ["Listening on {{APP_URL}}"],
-      buildRConsoleCode,
-      "ark",
-    );
+    return runShinyAppInConsole(runAppApi, {
+      language: "r",
+      appUrlStrings: ["Listening on {{APP_URL}}"],
+      buildCode: buildRConsoleCode,
+      debugAdapterType: "ark",
+    });
   }
 
   const pathFile = getActiveEditorFile();
@@ -336,24 +335,28 @@ export async function rRunApp(): Promise<void> {
   await openBrowserWhenReady(port, [], terminal);
 }
 
+interface ConsoleAppOptions {
+  language: "python" | "r";
+  appUrlStrings: string[];
+  buildCode: (appPath: string, port: number, cwd: string) => string;
+  debugAdapterType?: string;
+}
+
 async function runShinyAppInConsole(
   api: PositronRunApp,
-  language: "python" | "r",
-  appUrlStrings: string[],
-  buildCode: (appPath: string, port: number, cwd: string) => string,
-  debugAdapterType?: string,
+  opts: ConsoleAppOptions,
 ): Promise<void> {
   await saveActiveEditorFile();
   await api.runApplicationInConsole({
     name: "Shiny",
-    debugAdapterType,
+    debugAdapterType: opts.debugAdapterType,
     async getConsoleCode(_runtime, document, _urlPrefix) {
       const appPath = document.uri.fsPath;
-      const port = await getAppPort("run", language);
+      const port = await getAppPort("run", opts.language);
       const cwd = await resolveWorkingDirectory(appPath);
-      return { code: buildCode(appPath, port, cwd) };
+      return { code: opts.buildCode(appPath, port, cwd) };
     },
-    appUrlStrings,
+    appUrlStrings: opts.appUrlStrings,
   });
 }
 

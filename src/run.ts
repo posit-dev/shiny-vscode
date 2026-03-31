@@ -4,7 +4,10 @@ import { dirname as path_dirname, join as path_join } from "path";
 import * as vscode from "vscode";
 import * as winreg from "winreg";
 import { isShinyAppRPart } from "./extension";
-import { getPositronPreferredRuntime } from "./extension-api-utils/extensionHost";
+import {
+  getPositronPreferredRuntime,
+  getPositronRunAppApi,
+} from "./extension-api-utils/extensionHost";
 import {
   openBrowser,
   openBrowserWhenReady,
@@ -16,6 +19,7 @@ import {
   escapeCommandForTerminal,
 } from "./shell-utils";
 import { resolveWorkingDirectory } from "./working-directory";
+import type { PositronRunApp } from "./positron-run-app";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -224,7 +228,40 @@ export async function pyDebugApp(): Promise<void> {
 }
 
 /* Shiny for R --------------------------------------------------------- */
+
+function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
+  const path = isShinyAppRPart(appPath) ? path_dirname(appPath) : appPath;
+  const useDevmode = vscode.workspace
+    .getConfiguration("shiny.r")
+    .get("devmode");
+
+  const lines: string[] = [];
+  lines.push(`setwd(${JSON.stringify(cwd)})`);
+
+  if (useDevmode) {
+    lines.push("shiny::devmode()");
+  } else {
+    lines.push("options(shiny.autoreload = TRUE)");
+  }
+
+  lines.push(
+    `shiny::runApp(${JSON.stringify(path)}, port = ${port}L, launch.browser = FALSE)`
+  );
+
+  return lines.join("\n");
+}
+
 export async function rRunApp(): Promise<void> {
+  const runAppApi = await getPositronRunAppApi();
+  if (runAppApi) {
+    return runShinyAppInConsole(runAppApi, {
+      language: "r",
+      appUrlStrings: ["Listening on {{APP_URL}}"],
+      buildCode: buildRConsoleCode,
+      debugAdapterType: "ark",
+    });
+  }
+
   const pathFile = getActiveEditorFile();
   if (!pathFile) {
     return;
@@ -296,6 +333,31 @@ export async function rRunApp(): Promise<void> {
   // if (process.env["CODESPACES"] === "true") {
   // TODO: Support Codespaces
   await openBrowserWhenReady(port, [], terminal);
+}
+
+interface ConsoleAppOptions {
+  language: "python" | "r";
+  appUrlStrings: string[];
+  buildCode: (appPath: string, port: number, cwd: string) => string;
+  debugAdapterType?: string;
+}
+
+async function runShinyAppInConsole(
+  api: PositronRunApp,
+  opts: ConsoleAppOptions,
+): Promise<void> {
+  await saveActiveEditorFile();
+  await api.runApplicationInConsole({
+    name: "Shiny",
+    debugAdapterType: opts.debugAdapterType,
+    async getConsoleCode(_runtime, document, _urlPrefix) {
+      const appPath = document.uri.fsPath;
+      const port = await getAppPort("run", opts.language);
+      const cwd = await resolveWorkingDirectory(appPath);
+      return { code: opts.buildCode(appPath, port, cwd) };
+    },
+    appUrlStrings: opts.appUrlStrings,
+  });
 }
 
 /* Utilities --------------------------------------------------------- */

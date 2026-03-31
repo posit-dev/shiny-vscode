@@ -8,6 +8,7 @@
 
 import type * as positron from "positron";
 import * as vscode from "vscode";
+import type { PositronRunApp } from "../positron-run-app";
 
 type PositronApi = typeof positron;
 export type PreviewSource = positron.PreviewSource;
@@ -92,4 +93,34 @@ export function getIdeName() {
   } else {
     return "VS Code";
   }
+}
+
+/**
+ * Get the `positron-run-app` extension API, if available and if it supports
+ * `runApplicationInConsole`. Returns `undefined` in VS Code or in older
+ * Positron versions that lack the console method.
+ */
+export async function getPositronRunAppApi(): Promise<
+  PositronRunApp | undefined
+> {
+  const ext =
+    vscode.extensions.getExtension<PositronRunApp>(
+      "positron.positron-run-app"
+    );
+  if (!ext) {
+    return undefined;
+  }
+
+  // Check that we've got a sufficiently recent version of Positron
+  let api: PositronRunApp | undefined;
+  try {
+    api = ext.isActive ? ext.exports : await ext.activate();
+  } catch {
+    return undefined;
+  }
+  if (typeof api?.runApplicationInConsole !== "function") {
+    return undefined;
+  }
+
+  return api;
 }

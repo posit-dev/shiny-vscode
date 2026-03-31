@@ -1,5 +1,9 @@
 # Change Log
 
+## 1.4.0
+
+- Added support for running R Shiny apps in the console in Positron (#108)
+
 ## 1.3.4
 
 - Removed checking of model, because most models today perform well. (#107)

@@ -42,6 +42,16 @@ interface RunAppOptionsBase {
 	name: string;
 
 	/**
+	 * How to preview the application once the URL is detected. Defaults
+	 * to `'internal'`.
+	 *
+	 * - `'internal'` — open in the Positron Viewer pane.
+	 * - `'external'` — open in an external browser.
+	 * - `'none'`     — skip URL detection and preview entirely.
+	 */
+	preview?: 'internal' | 'external' | 'none';
+
+	/**
 	 * The optional URL path at which to preview the application.
 	 */
 	urlPath?: string;

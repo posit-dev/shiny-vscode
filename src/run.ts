@@ -252,13 +252,25 @@ function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
 }
 
 export async function rRunApp(): Promise<void> {
+  const previewType =
+    vscode.workspace.getConfiguration().get<string>("shiny.previewType") || "internal";
+
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
+    // `"simple browser"` intentionally maps to `"internal"`
+    let preview: "internal" | "external" | "none";
+    switch (previewType) {
+      case "external": preview = "external"; break;
+      case "none": preview = "none"; break;
+      default: preview = "internal"; break;
+    }
+
     return runShinyAppInConsole(runAppApi, {
       language: "r",
       appUrlStrings: ["Listening on {{APP_URL}}"],
       buildCode: buildRConsoleCode,
       debugAdapterType: "ark",
+      preview,
     });
   }
 
@@ -340,6 +352,7 @@ interface ConsoleAppOptions {
   appUrlStrings: string[];
   buildCode: (appPath: string, port: number, cwd: string) => string;
   debugAdapterType?: string;
+  preview?: "internal" | "external" | "none";
 }
 
 async function runShinyAppInConsole(
@@ -357,6 +370,7 @@ async function runShinyAppInConsole(
       return { code: opts.buildCode(appPath, port, cwd) };
     },
     appUrlStrings: opts.appUrlStrings,
+    preview: opts.preview,
   });
 }
 

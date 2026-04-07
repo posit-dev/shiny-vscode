@@ -257,11 +257,11 @@ export async function rRunApp(): Promise<void> {
 
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
-    // `"simple browser"` intentionally maps to `"internal"`
-    let preview: "internal" | "external" | "none";
+    let preview: "internal" | "external" | "simple" | "none";
     switch (previewType) {
       case "external": preview = "external"; break;
       case "none": preview = "none"; break;
+      case "simple browser": preview = "simple"; break;
       default: preview = "internal"; break;
     }
 
@@ -352,7 +352,7 @@ interface ConsoleAppOptions {
   appUrlStrings: string[];
   buildCode: (appPath: string, port: number, cwd: string) => string;
   debugAdapterType?: string;
-  preview?: "internal" | "external" | "none";
+  preview?: "internal" | "external" | "simple" | "none";
 }
 
 async function runShinyAppInConsole(

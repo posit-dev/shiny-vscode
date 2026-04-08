@@ -19,7 +19,7 @@ import {
   escapeCommandForTerminal,
 } from "./shell-utils";
 import { resolveWorkingDirectory } from "./working-directory";
-import type { PositronRunApp } from "./positron-run-app";
+import type { PositronRunApp, PreviewMode } from "./positron-run-app";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -257,12 +257,12 @@ export async function rRunApp(): Promise<void> {
 
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
-    let preview: "internal" | "external" | "simple" | "none";
+    let preview: PreviewMode | "default";
     switch (previewType) {
       case "external": preview = "external"; break;
       case "none": preview = "none"; break;
-      case "simple browser": preview = "simple"; break;
-      default: preview = "internal"; break;
+      case "simple browser": preview = "editor"; break;
+      default: preview = "default"; break;
     }
 
     return runShinyAppInConsole(runAppApi, {
@@ -352,7 +352,7 @@ interface ConsoleAppOptions {
   appUrlStrings: string[];
   buildCode: (appPath: string, port: number, cwd: string) => string;
   debugAdapterType?: string;
-  preview?: "internal" | "external" | "simple" | "none";
+  preview?: PreviewMode | "default";
 }
 
 async function runShinyAppInConsole(

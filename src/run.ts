@@ -360,6 +360,7 @@ async function runShinyAppInConsole(
   opts: ConsoleAppOptions,
 ): Promise<void> {
   await saveActiveEditorFile();
+  const timeoutSec = vscode.workspace.getConfiguration().get<number>("shiny.timeoutOpenBrowser", 10);
   await api.runApplicationInConsole({
     name: "Shiny",
     debugAdapterType: opts.debugAdapterType,
@@ -371,6 +372,7 @@ async function runShinyAppInConsole(
     },
     appUrlStrings: opts.appUrlStrings,
     preview: opts.preview,
+    urlDetectionTimeout: timeoutSec * 1000,
   });
 }
 

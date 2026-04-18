@@ -172,7 +172,7 @@
           ],
           "default": "internal",
           "enumDescriptions": [
-            "Preview using the viewer pane in Positron or the Simple Browser in VS Code",
+            "Preview using the default internal preview in Positron (see positron.runApp.previewMode) or the Simple Browser in VS Code",
             "Preview using the Simple Browser (an internal, basic browser preview)",
             "Preview using an external web browser",
             "Don't automatically launch the app after starting"

@@ -165,14 +165,16 @@
           "type": "string",
           "description": "Where should the Shiny app preview open?",
           "enum": [
+            "default",
             "internal",
             "simple browser",
             "external",
             "none"
           ],
-          "default": "internal",
+          "default": "default",
           "enumDescriptions": [
-            "Preview using the viewer pane in Positron or the Simple Browser in VS Code",
+            "Use the default preview mode. In Positron, see `positron.runApp.previewMode`. In VS Code, uses the Simple Browser.",
+            "Preview using the Viewer pane in Positron or the Simple Browser in VS Code",
             "Preview using the Simple Browser (an internal, basic browser preview)",
             "Preview using an external web browser",
             "Don't automatically launch the app after starting"
@@ -182,6 +184,7 @@
           "order": 2,
           "type": "integer",
           "default": 10,
+          "minimum": 1,
           "description": "Maximum wait time (in seconds) for the Shiny app to be ready before opening the browser."
         },
         "shiny.runFrom": {

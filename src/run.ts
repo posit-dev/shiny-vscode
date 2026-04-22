@@ -9,6 +9,7 @@ import {
   getPositronRunAppApi,
 } from "./extension-api-utils/extensionHost";
 import {
+  configShinyTimeoutOpenBrowser,
   openBrowser,
   openBrowserWhenReady,
   waitUntilServerPortIsAvailable,
@@ -19,7 +20,7 @@ import {
   escapeCommandForTerminal,
 } from "./shell-utils";
 import { resolveWorkingDirectory } from "./working-directory";
-import type { PositronRunApp } from "./positron-run-app";
+import type { PositronRunApp, PreviewMode } from "./positron-run-app";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -252,13 +253,26 @@ function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
 }
 
 export async function rRunApp(): Promise<void> {
+  const previewType =
+    vscode.workspace.getConfiguration().get<string>("shiny.previewType") || "default";
+
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
+    let preview: PreviewMode | "default";
+    switch (previewType) {
+      case "internal": preview = "viewer"; break;
+      case "external": preview = "external"; break;
+      case "none": preview = "none"; break;
+      case "simple browser": preview = "editor"; break;
+      default: preview = "default"; break;
+    }
+
     return runShinyAppInConsole(runAppApi, {
       language: "r",
       appUrlStrings: ["Listening on {{APP_URL}}"],
       buildCode: buildRConsoleCode,
       debugAdapterType: "ark",
+      preview,
     });
   }
 
@@ -340,6 +354,7 @@ interface ConsoleAppOptions {
   appUrlStrings: string[];
   buildCode: (appPath: string, port: number, cwd: string) => string;
   debugAdapterType?: string;
+  preview?: PreviewMode | "default";
 }
 
 async function runShinyAppInConsole(
@@ -347,6 +362,7 @@ async function runShinyAppInConsole(
   opts: ConsoleAppOptions,
 ): Promise<void> {
   await saveActiveEditorFile();
+  const urlDetectionTimeout = configShinyTimeoutOpenBrowser();
   await api.runApplicationInConsole({
     name: "Shiny",
     debugAdapterType: opts.debugAdapterType,
@@ -357,6 +373,8 @@ async function runShinyAppInConsole(
       return { code: opts.buildCode(appPath, port, cwd) };
     },
     appUrlStrings: opts.appUrlStrings,
+    preview: opts.preview,
+    urlDetectionTimeout,
   });
 }
 

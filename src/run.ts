@@ -254,12 +254,13 @@ function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
 
 export async function rRunApp(): Promise<void> {
   const previewType =
-    vscode.workspace.getConfiguration().get<string>("shiny.previewType") || "internal";
+    vscode.workspace.getConfiguration().get<string>("shiny.previewType") || "default";
 
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
     let preview: PreviewMode | "default";
     switch (previewType) {
+      case "internal": preview = "viewer"; break;
       case "external": preview = "external"; break;
       case "none": preview = "none"; break;
       case "simple browser": preview = "editor"; break;

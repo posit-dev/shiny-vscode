@@ -1,5 +1,9 @@
 # Change Log
 
+## 1.4.1
+
+- Pass new `preview` option to positron-run-app. (#109)
+
 ## 1.4.0
 
 - Added support for running R Shiny apps in the console in Positron (#108)

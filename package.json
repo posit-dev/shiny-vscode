@@ -284,14 +284,29 @@
           "default": true,
           "description": "When running the \"Debug Shiny App\" command, only step through user-written code. Disable this to allow stepping through library code."
         },
-        "shiny.r.port": {
+        "shiny.python.otelInstrument": {
           "order": 12,
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Run Shiny apps under OpenTelemetry zero-code auto-instrumentation by wrapping the launch command with `opentelemetry-instrument` (provided by `pip install \"shiny[otel]\"`). Configure exporters via standard `OTEL_*` environment variables or `#shiny.python.otelInstrumentArgs#`. Applies to \"Run Shiny App\" only, not \"Debug Shiny App\"."
+        },
+        "shiny.python.otelInstrumentArgs": {
+          "order": 13,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Additional arguments passed to `opentelemetry-instrument` when `#shiny.python.otelInstrument#` is enabled. For example, `[\"--traces_exporter\", \"console\"]` prints spans to the terminal instead of exporting over OTLP."
+        },
+        "shiny.r.port": {
+          "order": 14,
           "type": "integer",
           "default": 0,
           "description": "The port number Shiny should listen on when running a Shiny for R app. (Use 0 to choose a random port.)"
         },
         "shiny.r.devmode": {
-          "order": 13,
+          "order": 15,
           "type": "boolean",
           "default": true,
           "markdownDescription": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."

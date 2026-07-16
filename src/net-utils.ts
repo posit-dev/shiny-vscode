@@ -8,6 +8,7 @@ import {
   type PreviewSource,
 } from "./extension-api-utils/extensionHost";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
+import type { PreviewMode } from "./positron-run-app";
 import { retryUntilTimeout } from "./retry-utils";
 
 /**
@@ -139,7 +140,7 @@ export async function openBrowserWhenReady(
   terminal?: vscode.Terminal,
   timeout: number = configShinyTimeoutOpenBrowser()
 ): Promise<void> {
-  if (configShinyPreviewType() === "none") {
+  if (configShinyPreviewTypeForTerminal() === "none") {
     // No need to wait for Shiny app to start or open the browser
     return;
   }
@@ -214,21 +215,41 @@ export async function openBrowserWhenReady(
 }
 
 /**
- * Reads `shiny.previewType`, resolving the `"default"` value for the Python path.
- *
- * The `"default"` preview type is understood by the R path (run.ts), which maps
- * it to positron-run-app's `preview` option. The Python path reaches the browser
- * through openBrowser / openBrowserWhenReady instead, and those don't go through
- * that API, so an unhandled `"default"` would fall through to the Simple Browser.
- * We treat it like `"internal"` here: Viewer pane in Positron, Simple Browser in
- * VS Code. This restores the behavior Python apps had before `"default"` became
- * the setting's default value.
+ * Reads `shiny.previewType` for apps run in a terminal (openBrowser /
+ * openBrowserWhenReady). This function has no positron-run-app `preview`
+ * option to defer to, so it resolves `"default"` itself, treating it like
+ * `"internal"`: Viewer pane in Positron, Simple Browser in VS Code.
  */
-function configShinyPreviewType(): string {
+function configShinyPreviewTypeForTerminal(): string {
   const previewType =
     vscode.workspace.getConfiguration().get<string>("shiny.previewType") ||
     "internal";
   return previewType === "default" ? "internal" : previewType;
+}
+
+/**
+ * Reads `shiny.previewType` for apps run via positron-run-app's console API,
+ * translating it into that API's `PreviewMode` vocabulary. `"default"` is
+ * passed through unresolved: positron-run-app understands that value itself,
+ * resolving it via its own `positron.runApp.previewMode` setting.
+ */
+export function configShinyPreviewTypeForPositronConsole(): PreviewMode | "default" {
+  const previewType =
+    vscode.workspace.getConfiguration().get<string>("shiny.previewType") ||
+    "default";
+
+  switch (previewType) {
+    case "internal":
+      return "viewer";
+    case "external":
+      return "external";
+    case "none":
+      return "none";
+    case "simple browser":
+      return "editor";
+    default:
+      return "default";
+  }
 }
 
 /**
@@ -258,7 +279,7 @@ export async function openBrowser(
   url: string,
   terminal?: vscode.Terminal
 ): Promise<void> {
-  const previewType = configShinyPreviewType();
+  const previewType = configShinyPreviewTypeForTerminal();
 
   switch (previewType) {
     case "none":

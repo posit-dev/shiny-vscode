@@ -8,6 +8,7 @@ import {
   type PreviewSource,
 } from "./extension-api-utils/extensionHost";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
+import type { PreviewMode } from "./positron-run-app";
 import { retryUntilTimeout } from "./retry-utils";
 
 /**
@@ -139,7 +140,7 @@ export async function openBrowserWhenReady(
   terminal?: vscode.Terminal,
   timeout: number = configShinyTimeoutOpenBrowser()
 ): Promise<void> {
-  if (configShinyPreviewType() === "none") {
+  if (configShinyPreviewTypeForTerminal() === "none") {
     // No need to wait for Shiny app to start or open the browser
     return;
   }
@@ -213,10 +214,42 @@ export async function openBrowserWhenReady(
   await openBrowser(previewUrl, terminal);
 }
 
-function configShinyPreviewType(): string {
-  return (
-    vscode.workspace.getConfiguration().get("shiny.previewType") || "internal"
-  );
+/**
+ * Reads `shiny.previewType` for apps run in a terminal (openBrowser /
+ * openBrowserWhenReady). This function has no positron-run-app `preview`
+ * option to defer to, so it resolves `"default"` itself, treating it like
+ * `"internal"`: Viewer pane in Positron, Simple Browser in VS Code.
+ */
+function configShinyPreviewTypeForTerminal(): string {
+  const previewType =
+    vscode.workspace.getConfiguration().get<string>("shiny.previewType") ||
+    "internal";
+  return previewType === "default" ? "internal" : previewType;
+}
+
+/**
+ * Reads `shiny.previewType` for apps run via positron-run-app's console API,
+ * translating it into that API's `PreviewMode` vocabulary. `"default"` is
+ * passed through unresolved: positron-run-app understands that value itself,
+ * resolving it via its own `positron.runApp.previewMode` setting.
+ */
+export function configShinyPreviewTypeForPositronConsole(): PreviewMode | "default" {
+  const previewType =
+    vscode.workspace.getConfiguration().get<string>("shiny.previewType") ||
+    "default";
+
+  switch (previewType) {
+    case "internal":
+      return "viewer";
+    case "external":
+      return "external";
+    case "none":
+      return "none";
+    case "simple browser":
+      return "editor";
+    default:
+      return "default";
+  }
 }
 
 /**
@@ -246,7 +279,7 @@ export async function openBrowser(
   url: string,
   terminal?: vscode.Terminal
 ): Promise<void> {
-  const previewType = configShinyPreviewType();
+  const previewType = configShinyPreviewTypeForTerminal();
 
   switch (previewType) {
     case "none":

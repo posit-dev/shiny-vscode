@@ -15,8 +15,10 @@ declare module "positron" {
    * The type of source that opened a preview.
    */
   export enum PreviewSourceType {
-    Runtime = 1,
-    Terminal = 2,
+    /** The preview was opened by a language runtime. */
+    Runtime = "runtime",
+    /** The preview was opened by a terminal. */
+    Terminal = "terminal",
   }
 
   /**

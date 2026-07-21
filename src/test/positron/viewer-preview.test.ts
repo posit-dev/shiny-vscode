@@ -15,16 +15,19 @@ import {
 
 suite("Positron: Viewer pane preview", () => {
   test("PreviewSourceType.Terminal is available from the Positron API", () => {
-    // buildPreviewSource() (src/net-utils.ts) falls back to a hardcoded 2
-    // when this is undefined — if this assertion fails, the Positron API
-    // shape changed and the extension is silently running on the fallback.
+    // buildPreviewSource() (src/net-utils.ts) falls back to a hardcoded
+    // "terminal" when this is undefined — if this assertion fails, the
+    // Positron API shape changed and the extension's vendored typings and
+    // fallback (src/types/positron.d.ts, src/net-utils.ts) need updating.
+    // This already caught real drift once: the enum changed from numeric
+    // (Terminal = 2) to string ("terminal") upstream.
     const terminalType = getPreviewSourceTypeTerminal();
-    assert.notStrictEqual(
+    assert.strictEqual(
       terminalType,
-      undefined,
-      "PreviewSourceType.Terminal should be exposed by the Positron API"
+      "terminal",
+      "PreviewSourceType.Terminal should be exposed by the Positron API " +
+        "with the wire value the extension's fallback hardcodes"
     );
-    assert.strictEqual(typeof terminalType, "number");
   });
 
   test("previewUrl opens a Viewer panel", () => {

@@ -3,5 +3,6 @@ dist
 node_modules
 __pycache__/
 .vscode-test/
+.positron-test/
 *.vsix
 *.tsbuildinfo

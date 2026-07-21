@@ -85,6 +85,22 @@ export function registerTerminalCloseHandler(): vscode.Disposable {
 
 /* Shiny for Python --------------------------------------------------------- */
 
+/**
+ * Find the `opentelemetry-instrument` entry-point script in the same
+ * environment as the selected Python interpreter. The script must be invoked
+ * directly (there is no `python -m` equivalent), and resolving it next to the
+ * interpreter ensures we use the selected environment rather than whatever is
+ * on the PATH.
+ */
+function findOtelInstrument(pythonExecutable: string): string | undefined {
+  const binDir = path_dirname(pythonExecutable);
+  const candidates = [
+    path_join(binDir, "opentelemetry-instrument"),
+    path_join(binDir, "opentelemetry-instrument.exe"),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
 export async function pyRunApp(): Promise<void> {
   const path = getActiveEditorFile();
   if (!path) {
@@ -149,7 +165,31 @@ export async function pyRunApp(): Promise<void> {
   args.push("--reload");
   args.push("--autoreload-port", autoreloadPort + "");
   args.push(path);
-  const cmdline = escapeCommandForTerminal(terminal, python, args);
+
+  let cmd = python;
+  let cmdArgs = args;
+  if (
+    vscode.workspace
+      .getConfiguration("shiny.python")
+      .get<boolean>("otelInstrument", false)
+  ) {
+    const otelInstrument = findOtelInstrument(python);
+    if (otelInstrument) {
+      const otelArgs = vscode.workspace
+        .getConfiguration("shiny.python")
+        .get<string[]>("otelInstrumentArgs", []);
+      cmd = otelInstrument;
+      cmdArgs = [...otelArgs, python, ...args];
+    } else {
+      vscode.window.showWarningMessage(
+        "The shiny.python.otelInstrument setting is enabled, but " +
+          "'opentelemetry-instrument' was not found in the selected Python " +
+          'environment. Install it with: pip install "shiny[otel]". ' +
+          "Running the app without instrumentation."
+      );
+    }
+  }
+  const cmdline = escapeCommandForTerminal(terminal, cmd, cmdArgs);
   terminal.sendText(cmdline);
 
   // Clear out the browser. Without this it can be a little confusing as to

@@ -1,5 +1,9 @@
 # Change Log
 
+## (development version)
+
+- New `shiny.python.otelInstrument` option runs Python apps under OpenTelemetry zero-code auto-instrumentation by wrapping the "Run Shiny App" launch with `opentelemetry-instrument` (provided by `pip install "shiny[otel]"`). Extra wrapper arguments (e.g. `--traces_exporter console`) can be set via `shiny.python.otelInstrumentArgs`. (#111)
+
 ## 1.4.1
 
 - Pass new `preview` option to positron-run-app. (#109)

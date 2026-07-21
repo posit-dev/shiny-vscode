@@ -40,6 +40,8 @@ This extension contributes the following settings for Python and R.
 
 - `shiny.python.port`: The port number to listen on when running a Shiny for Python app. (By default, 0, which will choose a random port for each workspace.)
 - `shiny.python.debugJustMyCode`: When running the "Debug Shiny App" command, only step through user-written code. Disable this to allow stepping through library code. (Defaults to true.)
+- `shiny.python.otelInstrument`: When `true`, the "Run Shiny App" command launches the app under [OpenTelemetry zero-code auto-instrumentation](https://opentelemetry.io/docs/zero-code/python/) by wrapping it with `opentelemetry-instrument` (provided by `pip install "shiny[otel]"`). Configure exporters via standard `OTEL_*` environment variables or `shiny.python.otelInstrumentArgs`. Does not apply to "Debug Shiny App". (Defaults to false.)
+- `shiny.python.otelInstrumentArgs`: Additional arguments passed to `opentelemetry-instrument` when `shiny.python.otelInstrument` is enabled. For example, `["--traces_exporter", "console"]` prints spans to the terminal instead of exporting over OTLP. (Defaults to `[]`.)
 
 Note that there is no setting for Python executable path or virtual environment. This extension uses whatever Python environment the VS Code Python extension thinks is active. If you find that the "Run Shiny App" and "Debug Shiny App" commands are launching with a different version of Python or different virtual environment than you intended, use the Python extension's [Select Interpreter](https://code.visualstudio.com/docs/python/environments#_working-with-python-interpreters) command to change it.
 

@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+      # TEMPORARY: remove before opening the PR. Lets the workflow run on
+      # this branch while it isn't reachable via pull_request or dispatch.
+      - jonv/positron-shiny-api-tests-b68e7b
   pull_request:
     branches:
       - main

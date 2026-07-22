@@ -1,5 +1,9 @@
 # Change Log
 
+## 1.4.2
+
+- Fixed a bug so that Shiny for Python apps now correctly open in the Viewer pane in Positron by default (#113).
+
 ## 1.4.1
 
 - Pass new `preview` option to positron-run-app. (#109)

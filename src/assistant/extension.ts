@@ -96,7 +96,7 @@ export function activateAssistant(extensionContext: vscode.ExtensionContext) {
   // Add the assistant disposables to the extension's subscriptions
   assistantDisposables.forEach((d) => extensionContext.subscriptions.push(d));
 
-  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  // // eslint-disable-next-line @typescript-eslint/no-floating-promises
   // checkPythonEnvironment();
 }
 

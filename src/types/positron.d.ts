@@ -7,11 +7,18 @@
 
 declare module "positron" {
   /**
+   * The version of the Positron API.
+   */
+  export const version: string;
+
+  /**
    * The type of source that opened a preview.
    */
   export enum PreviewSourceType {
-    Runtime = 1,
-    Terminal = 2,
+    /** The preview was opened by a language runtime. */
+    Runtime = "runtime",
+    /** The preview was opened by a terminal. */
+    Terminal = "terminal",
   }
 
   /**
@@ -109,7 +116,10 @@ declare module "positron" {
      *
      * @return New preview panel.
      */
-    export function previewUrl(url: vscode.Uri, source?: PreviewSource): PreviewPanel;
+    export function previewUrl(
+      url: vscode.Uri,
+      source?: PreviewSource
+    ): PreviewPanel;
 
     /**
      * Create and show a new preview panel for an HTML file. This is a

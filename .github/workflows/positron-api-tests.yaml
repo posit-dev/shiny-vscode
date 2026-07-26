@@ -1,0 +1,48 @@
+name: Positron API Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  POSITRON_CHANNEL: stable
+
+jobs:
+  test:
+    # @posit-dev/positron-test-electron currently supports macOS only.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: "npm"
+      - id: get-date
+        run: echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_OUTPUT
+        shell: bash
+      # Cache the Positron download, keyed by day so new stable builds are
+      # picked up within 24 hours.
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          path: .positron-test
+          key: positron-${{ env.POSITRON_CHANNEL }}-${{ steps.get-date.outputs.date }}
+      - run: npm ci
+      - name: Run Positron API tests
+        uses: posit-dev/setup-positron@main
+        with:
+          positron-channel: ${{ env.POSITRON_CHANNEL }}
+          run: npm run test-positron
+      - uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: .positron-test
+          key: positron-${{ env.POSITRON_CHANNEL }}-${{ steps.get-date.outputs.date }}

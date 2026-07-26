@@ -325,9 +325,12 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "node ./out/test/runTest.js",
+    "pretest-positron": "npm run compile",
+    "test-positron": "node ./scripts/run-positron-tests.mjs",
     "vsix": "npx --yes @vscode/vsce package"
   },
   "devDependencies": {
+    "@posit-dev/positron-test-electron": "^0.0.2",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "20.11.22",

@@ -6,6 +6,7 @@ import {
   getExtensionHostPreview,
   getPreviewSourceTypeTerminal,
   type PreviewSource,
+  type PreviewSourceType,
 } from "./extension-api-utils/extensionHost";
 import { getRemoteSafeUrl } from "./extension-api-utils/getRemoteSafeUrl";
 import type { PreviewMode } from "./positron-run-app";
@@ -118,7 +119,9 @@ async function getTerminalClosedPromise(
  * @returns Open browser timeout in milliseconds.
  */
 export function configShinyTimeoutOpenBrowser(): number {
-  const seconds = vscode.workspace.getConfiguration().get<number>("shiny.timeoutOpenBrowser", 10);
+  const seconds = vscode.workspace
+    .getConfiguration()
+    .get<number>("shiny.timeoutOpenBrowser", 10);
   return Math.max(1, seconds) * 1000;
 }
 
@@ -233,7 +236,9 @@ function configShinyPreviewTypeForTerminal(): string {
  * passed through unresolved: positron-run-app understands that value itself,
  * resolving it via its own `positron.runApp.previewMode` setting.
  */
-export function configShinyPreviewTypeForPositronConsole(): PreviewMode | "default" {
+export function configShinyPreviewTypeForPositronConsole():
+  | PreviewMode
+  | "default" {
   const previewType =
     vscode.workspace.getConfiguration().get<string>("shiny.previewType") ||
     "default";
@@ -269,8 +274,10 @@ async function buildPreviewSource(
     return undefined;
   }
 
-  // Try to get the enum value from Positron's API, fall back to hardcoded value
-  const terminalType = getPreviewSourceTypeTerminal() ?? 2;
+  // Try to get the enum value from Positron's API, fall back to the
+  // hardcoded wire value ("terminal" on every Positron version we support).
+  const terminalType =
+    getPreviewSourceTypeTerminal() ?? ("terminal" as PreviewSourceType);
 
   return { type: terminalType, id: processId };
 }

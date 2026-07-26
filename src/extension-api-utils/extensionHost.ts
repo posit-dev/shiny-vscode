@@ -46,7 +46,7 @@ export function getExtensionHostPreview():
  * Get the PreviewSourceType.Terminal enum value from Positron's API.
  * Returns undefined if not running in Positron or if the enum is not available.
  */
-export function getPreviewSourceTypeTerminal(): number | undefined {
+export function getPreviewSourceTypeTerminal(): PreviewSourceType | undefined {
   const pst = getPositronAPI();
   if (!pst) {
     return undefined;
@@ -103,10 +103,9 @@ export function getIdeName() {
 export async function getPositronRunAppApi(): Promise<
   PositronRunApp | undefined
 > {
-  const ext =
-    vscode.extensions.getExtension<PositronRunApp>(
-      "positron.positron-run-app"
-    );
+  const ext = vscode.extensions.getExtension<PositronRunApp>(
+    "positron.positron-run-app"
+  );
   if (!ext) {
     return undefined;
   }

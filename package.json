@@ -330,7 +330,7 @@
     "vsix": "npx --yes @vscode/vsce package"
   },
   "devDependencies": {
-    "@posit-dev/positron-test-electron": "^0.0.2",
+    "@posit-dev/positron-test-electron": "^0.0.3",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "20.11.22",

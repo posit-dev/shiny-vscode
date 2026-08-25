@@ -87,6 +87,13 @@
       },
       {
         "category": "Shiny",
+        "command": "shiny.validateApp",
+        "title": "Validate Shiny App",
+        "icon": "$(pulse)",
+        "enablement": "(editorLangId == python || editorLangId == r) && shellExecutionSupported"
+      },
+      {
+        "category": "Shiny",
         "command": "shiny.stopApp",
         "title": "Stop Shiny App",
         "icon": "$(debug-stop)"
@@ -114,9 +121,18 @@
         {
           "command": "shiny.stopApp",
           "when": "shiny.appRunning"
+        },
+        {
+          "command": "shiny.validateApp",
+          "when": "shiny.python.active || shiny.r.active"
         }
       ],
       "editor/title/run": [
+        {
+          "command": "shiny.validateApp",
+          "group": "navigation@-4",
+          "when": "(shiny.python.active || shiny.r.active) && shellExecutionSupported"
+        },
         {
           "command": "shiny.python.runApp",
           "group": "navigation@-3",

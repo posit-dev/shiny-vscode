@@ -10,7 +10,7 @@ import {
 } from "./extension-api-utils/extensionHost";
 import {
   configShinyPreviewTypeForPositronConsole,
-  configShinyTimeoutOpenBrowser,
+  configShinyTimeoutOpenBrowserForPositronConsole,
   openBrowser,
   openBrowserWhenReady,
   waitUntilServerPortIsAvailable,
@@ -351,7 +351,7 @@ async function runShinyAppInConsole(
   opts: ConsoleAppOptions,
 ): Promise<void> {
   await saveActiveEditorFile();
-  const urlDetectionTimeout = configShinyTimeoutOpenBrowser();
+  const urlDetectionTimeout = configShinyTimeoutOpenBrowserForPositronConsole();
   await api.runApplicationInConsole({
     name: "Shiny",
     debugAdapterType: opts.debugAdapterType,

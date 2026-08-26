@@ -115,7 +115,11 @@ async function getTerminalClosedPromise(
 }
 
 /**
- * Reads `shiny.timeoutOpenBrowser`, which is provided in seconds.
+ * Reads `shiny.timeoutOpenBrowser` for the `openBrowserWhenReady` paths, which
+ * is provided in seconds. Those are apps run in a terminal and Python apps run
+ * under the debugger (see `onDidStartDebugSession`); both still apply in
+ * Positron. On these paths the value is how long we poll for the app's port
+ * before offering "Keep waiting".
  * @returns Open browser timeout in milliseconds.
  */
 export function configShinyTimeoutOpenBrowser(): number {
@@ -123,6 +127,37 @@ export function configShinyTimeoutOpenBrowser(): number {
     .getConfiguration()
     .get<number>("shiny.timeoutOpenBrowser", 10);
   return Math.max(1, seconds) * 1000;
+}
+
+/**
+ * Reads `shiny.timeoutOpenBrowser` for apps run via positron-run-app's console
+ * API, but only when the user set it themselves.
+ *
+ * positron-run-app has its own `positron.runApp.urlDetectionTimeout` setting
+ * (25s) for how long it watches console output for the app's URL. Any timeout we
+ * pass wins over it, so passing our own 10s default silently overrode a setting
+ * the user may have deliberately raised, and 10s is too short for an app whose
+ * startup loads many packages. Returning `undefined` lets that setting apply,
+ * while still honoring an explicit `shiny.timeoutOpenBrowser` value.
+ *
+ * @returns URL detection timeout in milliseconds, or `undefined` to defer to
+ * positron-run-app's own setting.
+ */
+export function configShinyTimeoutOpenBrowserForPositronConsole():
+  | number
+  | undefined {
+  const inspected = vscode.workspace
+    .getConfiguration()
+    .inspect<number>("shiny.timeoutOpenBrowser");
+
+  // Most specific scope wins, matching VS Code's own precedence. `defaultValue`
+  // is deliberately excluded: that is the case we want to defer on.
+  const seconds =
+    inspected?.workspaceFolderValue ??
+    inspected?.workspaceValue ??
+    inspected?.globalValue;
+
+  return seconds === undefined ? undefined : Math.max(1, seconds) * 1000;
 }
 
 /**

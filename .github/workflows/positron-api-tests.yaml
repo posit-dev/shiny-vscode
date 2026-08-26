@@ -17,8 +17,7 @@ env:
 
 jobs:
   test:
-    # @posit-dev/positron-test-electron currently supports macOS only.
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,15 +33,16 @@ jobs:
         id: cache
         with:
           path: .positron-test
-          key: positron-${{ env.POSITRON_CHANNEL }}-${{ steps.get-date.outputs.date }}
+          key: positron-${{ runner.os }}-${{ env.POSITRON_CHANNEL }}-${{ steps.get-date.outputs.date }}
       - run: npm ci
       - name: Run Positron API tests
-        uses: posit-dev/setup-positron@main
+        uses: posit-dev/setup-positron@v1
         with:
           positron-channel: ${{ env.POSITRON_CHANNEL }}
-          run: npm run test-positron
+          # Positron is an Electron app and needs a display server on Linux.
+          run: xvfb-run -a npm run test-positron
       - uses: actions/cache/save@v4
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           path: .positron-test
-          key: positron-${{ env.POSITRON_CHANNEL }}-${{ steps.get-date.outputs.date }}
+          key: positron-${{ runner.os }}-${{ env.POSITRON_CHANNEL }}-${{ steps.get-date.outputs.date }}

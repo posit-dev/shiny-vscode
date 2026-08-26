@@ -17,9 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Matches positron-api-tests.yaml. @vscode/test-electron 2.x supports
+      # Node 16 and later, so there is no reason for the two workflows to differ.
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.x"
+          node-version: "20.x"
           cache: "npm"
       - id: get-date
         run: echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_OUTPUT

@@ -39,7 +39,7 @@ async function validateActiveApp(): Promise<void> {
       "Shiny: No reactivity or configuration issues detected in active app."
     );
   } else {
-    vscode.window.showWarningMessage(
+    vscode.window.showErrorMessage(
       `Shiny: Found ${diags.length} potential issue(s). Check the Problems panel for details.`
     );
   }

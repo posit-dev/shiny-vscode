@@ -4,6 +4,18 @@ import {
   ShinyDiagnosticSeverity,
 } from "./rules";
 
+export function isShinyCode(text: string): boolean {
+  return (
+    text.includes("shiny") ||
+    text.includes("reactive") ||
+    text.includes("render") ||
+    text.includes("module") ||
+    text.includes("@module") ||
+    text.includes("NS(") ||
+    text.includes("moduleServer")
+  );
+}
+
 export function validateShinyCode(
   text: string,
   languageId: "python" | "r"
@@ -104,7 +116,7 @@ function validatePythonShinyCode(
       diagnostics.push({
         code: ShinyDiagnosticCode.blockingAsync,
         message: "Synchronous time.sleep() blocks the asyncio event loop. Use 'await asyncio.sleep()' or offload blocking I/O with 'asyncio.to_thread()'.",
-        severity: ShinyDiagnosticSeverity.warning,
+        severity: ShinyDiagnosticSeverity.error,
         range: {
           startLine: i,
           startChar: Math.max(0, charIndex),
@@ -120,7 +132,7 @@ function validatePythonShinyCode(
         diagnostics.push({
           code: ShinyDiagnosticCode.globalStateLeak,
           message: "User-specific reactive.value defined at global scope may leak state across sessions. Ensure session state is defined inside the server function.",
-          severity: ShinyDiagnosticSeverity.warning,
+          severity: ShinyDiagnosticSeverity.error,
           range: {
             startLine: i,
             startChar: Math.max(0, charIndex !== -1 ? charIndex : 0),
@@ -163,7 +175,7 @@ function validatePythonShinyCode(
         diagnostics.push({
           code: ShinyDiagnosticCode.idMismatch,
           message: `Output renderer '${renderFn.name}' has no matching UI output element (e.g. ui.output_text("${renderFn.name}")).`,
-          severity: ShinyDiagnosticSeverity.warning,
+          severity: ShinyDiagnosticSeverity.error,
           range: {
             startLine: renderFn.lineIndex,
             startChar: Math.max(0, charIndex),
@@ -268,7 +280,7 @@ function validateRShinyCode(
         diagnostics.push({
           code: ShinyDiagnosticCode.idMismatch,
           message: `Output renderer '${renderItem.name}' has no matching UI output element (e.g. plotOutput("${renderItem.name}") or textOutput("${renderItem.name}")).`,
-          severity: ShinyDiagnosticSeverity.warning,
+          severity: ShinyDiagnosticSeverity.error,
           range: {
             startLine: renderItem.lineIndex,
             startChar: Math.max(0, charIndex),

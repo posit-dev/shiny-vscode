@@ -129,11 +129,6 @@
       ],
       "editor/title/run": [
         {
-          "command": "shiny.validateApp",
-          "group": "navigation@-4",
-          "when": "(shiny.python.active || shiny.r.active) && shellExecutionSupported"
-        },
-        {
           "command": "shiny.python.runApp",
           "group": "navigation@-3",
           "when": "shiny.python.active && shellExecutionSupported"
@@ -311,6 +306,37 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
+        },
+        "shiny.diagnostics.run": {
+          "order": 14,
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "onType",
+            "onSave",
+            "off"
+          ],
+          "default": "onType",
+          "description": "When to run Shiny diagnostics.",
+          "enumDescriptions": [
+            "Validate Shiny code live as you type.",
+            "Validate Shiny code only when the file is saved.",
+            "Disable automated Shiny diagnostics."
+          ]
+        },
+        "shiny.diagnostics.python.enable": {
+          "order": 15,
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Shiny diagnostics for Python files."
+        },
+        "shiny.diagnostics.r.enable": {
+          "order": 16,
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Shiny diagnostics for R files."
         }
       }
     },

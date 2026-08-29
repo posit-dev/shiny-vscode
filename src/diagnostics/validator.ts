@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
-import { validateShinyCode } from "./engine";
+import { isShinyCode, validateShinyCode } from "./engine";
 import { ShinyDiagnosticSeverity } from "./rules";
+
+export { isShinyCode };
 
 export function validateShinyDocument(
   document: vscode.TextDocument
@@ -20,9 +22,9 @@ export function validateShinyDocument(
       raw.range.endChar
     );
     const severity =
-      raw.severity === ShinyDiagnosticSeverity.error
-        ? vscode.DiagnosticSeverity.Error
-        : vscode.DiagnosticSeverity.Warning;
+      raw.severity === ShinyDiagnosticSeverity.warning
+        ? vscode.DiagnosticSeverity.Warning
+        : vscode.DiagnosticSeverity.Error;
     const diag = new vscode.Diagnostic(range, raw.message, severity);
     diag.code = raw.code;
     diag.source = "shiny";
@@ -33,6 +35,7 @@ export function validateShinyDocument(
 export class ShinyDiagnosticsController implements vscode.Disposable {
   private diagnosticCollection: vscode.DiagnosticCollection;
   private disposables: vscode.Disposable[] = [];
+  private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
     this.diagnosticCollection = vscode.languages.createDiagnosticCollection("shiny");
@@ -40,31 +43,66 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
 
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument((event) => {
-        this.updateDiagnostics(event.document);
+        if (this.getRunMode() === "onType") {
+          this.debounceUpdate(event.document);
+        }
+      }),
+      vscode.workspace.onDidSaveTextDocument((document) => {
+        if (this.getRunMode() !== "off") {
+          this.updateDiagnostics(document);
+        }
       }),
       vscode.workspace.onDidOpenTextDocument((document) => {
-        this.updateDiagnostics(document);
+        if (this.getRunMode() !== "off") {
+          this.updateDiagnostics(document);
+        }
       }),
       vscode.workspace.onDidCloseTextDocument((document) => {
-        this.diagnosticCollection.delete(document.uri);
+        this.clearDocument(document.uri);
+      }),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration("shiny.diagnostics")) {
+          this.refreshAll();
+        }
       })
     );
 
-    if (vscode.window.activeTextEditor) {
-      this.updateDiagnostics(vscode.window.activeTextEditor.document);
+    this.refreshAll();
+  }
+
+  public getRunMode(): "onType" | "onSave" | "off" {
+    return vscode.workspace
+      .getConfiguration("shiny")
+      .get<"onType" | "onSave" | "off">("diagnostics.run", "onType");
+  }
+
+  public isLanguageEnabled(languageId: string): boolean {
+    if (languageId === "python") {
+      return vscode.workspace
+        .getConfiguration("shiny")
+        .get<boolean>("diagnostics.python.enable", true);
     }
+    if (languageId === "r") {
+      return vscode.workspace
+        .getConfiguration("shiny")
+        .get<boolean>("diagnostics.r.enable", true);
+    }
+    return false;
   }
 
   public updateDiagnostics(document: vscode.TextDocument): void {
-    if (
-      document.languageId !== "python" &&
-      document.languageId !== "r"
-    ) {
+    if (!this.isLanguageEnabled(document.languageId)) {
+      this.diagnosticCollection.delete(document.uri);
+      return;
+    }
+
+    if (this.getRunMode() === "off") {
+      this.diagnosticCollection.delete(document.uri);
       return;
     }
 
     const text = document.getText();
-    if (!text.includes("shiny") && !text.includes("reactive") && !text.includes("render")) {
+    if (!isShinyCode(text)) {
       this.diagnosticCollection.delete(document.uri);
       return;
     }
@@ -73,11 +111,49 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
     this.diagnosticCollection.set(document.uri, diags);
   }
 
+  public refreshAll(): void {
+    for (const doc of vscode.workspace.textDocuments) {
+      if (this.isLanguageEnabled(doc.languageId) && this.getRunMode() !== "off") {
+        this.updateDiagnostics(doc);
+      } else {
+        this.diagnosticCollection.delete(doc.uri);
+      }
+    }
+  }
+
+  private debounceUpdate(document: vscode.TextDocument): void {
+    const key = document.uri.toString();
+    const existing = this.debounceTimers.get(key);
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    const timer = setTimeout(() => {
+      this.debounceTimers.delete(key);
+      this.updateDiagnostics(document);
+    }, 250);
+
+    this.debounceTimers.set(key, timer);
+  }
+
+  private clearDocument(uri: vscode.Uri): void {
+    const key = uri.toString();
+    const timer = this.debounceTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.debounceTimers.delete(key);
+    }
+    this.diagnosticCollection.delete(uri);
+  }
+
   public clear(): void {
+    this.debounceTimers.forEach((timer) => clearTimeout(timer));
+    this.debounceTimers.clear();
     this.diagnosticCollection.clear();
   }
 
   public dispose(): void {
+    this.clear();
     this.disposables.forEach((d) => d.dispose());
   }
 }

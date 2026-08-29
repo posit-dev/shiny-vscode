@@ -1,5 +1,11 @@
 # Change Log
 
+## 1.5.0
+
+- Added live reactivity diagnostics and validation for Shiny apps and modules in Python and R (#117).
+- Added settings to configure diagnostics independently for Python and R (`shiny.diagnostics.python.*` and `shiny.diagnostics.r.*`) (#117).
+- Added "Shiny: Validate Shiny App" command in the Command Palette (#117).
+
 ## 1.4.2
 
 - Fixed a bug so that Shiny for Python apps now correctly open in the Viewer pane in Positron by default (#113).

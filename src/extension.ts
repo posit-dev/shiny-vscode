@@ -1,6 +1,10 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { activateAssistant, deactivateAssistant } from "./assistant/extension";
+import {
+  ShinyDiagnosticsController,
+  validateShinyDocument,
+} from "./diagnostics/validator";
 import { handlePositShinyUri } from "./extension-onUri";
 import {
   onDidStartDebugSession,
@@ -18,9 +22,36 @@ import {
   shinyliveSaveAppFromUrl,
 } from "./shinylive";
 
+let diagnosticsController: ShinyDiagnosticsController | undefined;
+
+async function validateActiveApp(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showInformationMessage("No active editor found to validate.");
+    return;
+  }
+
+  const diags = validateShinyDocument(editor.document);
+  diagnosticsController?.updateDiagnostics(editor.document);
+
+  if (diags.length === 0) {
+    vscode.window.showInformationMessage(
+      "Shiny: No reactivity or configuration issues detected in active app."
+    );
+  } else {
+    vscode.window.showErrorMessage(
+      `Shiny: Found ${diags.length} potential issue(s). Check the Problems panel for details.`
+    );
+  }
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   console.log("Activating Shiny extension");
+  diagnosticsController = new ShinyDiagnosticsController();
+
   context.subscriptions.push(
+    diagnosticsController,
+    vscode.commands.registerCommand("shiny.validateApp", validateActiveApp),
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
     vscode.commands.registerCommand("shiny.r.runApp", rRunApp),
@@ -91,6 +122,8 @@ export async function activate(context: vscode.ExtensionContext) {
 // this method is called when your extension is deactivated
 export function deactivate() {
   deactivateAssistant();
+  diagnosticsController?.dispose();
+  diagnosticsController = undefined;
 }
 
 function updateContext(language: "python" | "r"): boolean {

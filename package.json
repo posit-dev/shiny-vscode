@@ -2,7 +2,7 @@
   "name": "shiny",
   "displayName": "Shiny",
   "description": "Run and develop Shiny apps in Python or R.",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "publisher": "Posit",
   "icon": "images/logo.png",
   "repository": {
@@ -307,8 +307,15 @@
           "default": true,
           "markdownDescription": "Enable dev mode when running a Shiny for R app by running `shiny::devmode()` before launching the app."
         },
-        "shiny.diagnostics.run": {
+        "shiny.diagnostics.python.enable": {
           "order": 14,
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Shiny diagnostics for Python files."
+        },
+        "shiny.diagnostics.python.run": {
+          "order": 15,
           "scope": "window",
           "type": "string",
           "enum": [
@@ -317,19 +324,12 @@
             "off"
           ],
           "default": "onType",
-          "description": "When to run Shiny diagnostics.",
+          "description": "When to run Shiny diagnostics for Python files.",
           "enumDescriptions": [
-            "Validate Shiny code live as you type.",
-            "Validate Shiny code only when the file is saved.",
-            "Disable automated Shiny diagnostics."
+            "Validate Python Shiny code live as you type.",
+            "Validate Python Shiny code only when the file is saved.",
+            "Disable automated Python Shiny diagnostics."
           ]
-        },
-        "shiny.diagnostics.python.enable": {
-          "order": 15,
-          "scope": "window",
-          "type": "boolean",
-          "default": true,
-          "description": "Enable Shiny diagnostics for Python files."
         },
         "shiny.diagnostics.r.enable": {
           "order": 16,
@@ -337,6 +337,23 @@
           "type": "boolean",
           "default": true,
           "description": "Enable Shiny diagnostics for R files."
+        },
+        "shiny.diagnostics.r.run": {
+          "order": 17,
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "onType",
+            "onSave",
+            "off"
+          ],
+          "default": "onType",
+          "description": "When to run Shiny diagnostics for R files.",
+          "enumDescriptions": [
+            "Validate R Shiny code live as you type.",
+            "Validate R Shiny code only when the file is saved.",
+            "Disable automated R Shiny diagnostics."
+          ]
         }
       }
     },

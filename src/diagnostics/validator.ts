@@ -43,17 +43,17 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
 
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument((event) => {
-        if (this.getRunMode() === "onType") {
+        if (this.getRunMode(event.document.languageId) === "onType") {
           this.debounceUpdate(event.document);
         }
       }),
       vscode.workspace.onDidSaveTextDocument((document) => {
-        if (this.getRunMode() !== "off") {
+        if (this.getRunMode(document.languageId) !== "off") {
           this.updateDiagnostics(document);
         }
       }),
       vscode.workspace.onDidOpenTextDocument((document) => {
-        if (this.getRunMode() !== "off") {
+        if (this.getRunMode(document.languageId) !== "off") {
           this.updateDiagnostics(document);
         }
       }),
@@ -70,10 +70,18 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
     this.refreshAll();
   }
 
-  public getRunMode(): "onType" | "onSave" | "off" {
-    return vscode.workspace
-      .getConfiguration("shiny")
-      .get<"onType" | "onSave" | "off">("diagnostics.run", "onType");
+  public getRunMode(languageId: string): "onType" | "onSave" | "off" {
+    if (languageId === "python") {
+      return vscode.workspace
+        .getConfiguration("shiny")
+        .get<"onType" | "onSave" | "off">("diagnostics.python.run", "onType");
+    }
+    if (languageId === "r") {
+      return vscode.workspace
+        .getConfiguration("shiny")
+        .get<"onType" | "onSave" | "off">("diagnostics.r.run", "onType");
+    }
+    return "off";
   }
 
   public isLanguageEnabled(languageId: string): boolean {
@@ -96,7 +104,7 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
       return;
     }
 
-    if (this.getRunMode() === "off") {
+    if (this.getRunMode(document.languageId) === "off") {
       this.diagnosticCollection.delete(document.uri);
       return;
     }
@@ -113,7 +121,10 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
 
   public refreshAll(): void {
     for (const doc of vscode.workspace.textDocuments) {
-      if (this.isLanguageEnabled(doc.languageId) && this.getRunMode() !== "off") {
+      if (
+        this.isLanguageEnabled(doc.languageId) &&
+        this.getRunMode(doc.languageId) !== "off"
+      ) {
         this.updateDiagnostics(doc);
       } else {
         this.diagnosticCollection.delete(doc.uri);

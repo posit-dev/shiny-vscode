@@ -8,18 +8,77 @@ import * as positron from 'positron';
 import * as vscode from 'vscode';
 
 /**
- * Options returned from ${@link RunAppOptions.getTerminalOptions}.
+ * Options shared by every {@link RunAppTerminalOptions} variant.
  */
-export interface RunAppTerminalOptions {
+interface RunAppTerminalOptionsBase {
 	/**
-	 * The command line to run in the terminal.
+	 * The optional working directory to create the terminal with. When unset,
+	 * the terminal inherits the default working directory (typically the
+	 * workspace root).
 	 */
-	commandLine: string;
+	cwd?: string;
 
 	/**
 	 * The optional environment variables to create the terminal with.
 	 */
 	env?: { [key: string]: string | null | undefined };
+}
+
+/**
+ * Options returned from ${@link RunAppOptions.getTerminalOptions}.
+ *
+ * Provide the command to run in exactly one of two ways (the two forms are
+ * mutually exclusive):
+ *
+ * - {@link RunAppTerminalCommandLineOptions.commandLine commandLine}: a
+ *   pre-escaped command line string. The caller is responsible for
+ *   shell-escaping any paths or arguments.
+ * - {@link RunAppTerminalCommandOptions.command command} (with optional
+ *   {@link RunAppTerminalCommandOptions.args args}): the executable and its
+ *   arguments as separate values. positron-run-app builds the command line and
+ *   applies shell-appropriate escaping for the terminal's shell, so callers
+ *   don't have to worry about spaces in interpreter or application paths.
+ *
+ * Prefer the {@link RunAppTerminalCommandOptions.command command}/
+ * {@link RunAppTerminalCommandOptions.args args} form for new callers.
+ */
+export type RunAppTerminalOptions =
+	| RunAppTerminalCommandLineOptions
+	| RunAppTerminalCommandOptions;
+
+/**
+ * The pre-escaped command line form of {@link RunAppTerminalOptions}.
+ */
+export interface RunAppTerminalCommandLineOptions extends RunAppTerminalOptionsBase {
+	/**
+	 * The command line to run in the terminal. Must already be escaped for the
+	 * target shell.
+	 */
+	commandLine: string;
+
+	command?: never;
+	args?: never;
+}
+
+/**
+ * The executable-and-arguments form of {@link RunAppTerminalOptions}, escaped
+ * for the terminal's shell by positron-run-app.
+ */
+export interface RunAppTerminalCommandOptions extends RunAppTerminalOptionsBase {
+	/**
+	 * The executable to run (e.g. an interpreter path). positron-run-app escapes
+	 * {@link command} and {@link args} for the terminal's shell and runs the
+	 * resulting command line.
+	 */
+	command: string;
+
+	/**
+	 * The arguments to pass to {@link command}. Each argument is escaped
+	 * independently for the terminal's shell.
+	 */
+	args?: string[];
+
+	commandLine?: never;
 }
 
 /**
@@ -36,7 +95,7 @@ export interface RunAppConsoleCode {
  * How to preview the application once the URL is detected.
  *
  * - `'viewer'`   — open in the Positron Viewer pane.
- * - `'editor'`   — open in the Simple Browser editor.
+ * - `'editor'`   — open in an editor tab.
  * - `'external'` — open in an external browser.
  * - `'none'`     — skip URL detection and preview entirely.
  * - `'manual'`   — detect the URL but return it to the caller
@@ -153,6 +212,14 @@ export interface DebugAppOptions {
 	): vscode.DebugConfiguration | undefined | Promise<vscode.DebugConfiguration | undefined>;
 
 	/**
+	 * How to preview the application once the URL is detected.
+	 *
+	 * Defaults to `'default'`, which resolves to the user's
+	 * `positron.runApp.previewMode` setting (initially `'viewer'`).
+	 */
+	preview?: PreviewMode | 'default';
+
+	/**
 	 * The optional URL path at which to preview the application.
 	 */
 	urlPath?: string;
@@ -182,10 +249,13 @@ export interface PositronRunApp {
 	 * Run an application in the terminal.
 	 *
 	 * @param options Options for running the application.
-	 * @returns If terminal shell integration is supported, resolves when the
-	 *  application server has started, otherwise resolves when the command has
-	 *  been sent to the terminal. When `preview` is `'manual'`, resolves with
-	 *  the detected URL (rejects if detection fails).
+	 * @returns If terminal shell integration is supported, resolves with the
+	 *  app's external URL (proxied when the environment requires it, e.g. on
+	 *  Posit Workbench; plain localhost on desktop) once the URL has been
+	 *  detected in the terminal output, or `undefined` if detection timed out.
+	 *  Without shell integration, resolves with `undefined` when the command
+	 *  has been sent to the terminal. Never rejects: failures show an error
+	 *  notification and resolve with `undefined`.
 	 */
 	runApplication(options: RunAppOptions): Promise<vscode.Uri | undefined>;
 
@@ -193,10 +263,11 @@ export interface PositronRunApp {
 	 * Run an application in a new console session.
 	 *
 	 * @param options Options for running the application.
-	 * @returns Resolves when the application server has started, or when the
-	 *  code has been sent to the console if URL detection times out. When
-	 *  `preview` is `'manual'`, resolves with the detected URL (rejects if
-	 *  detection fails).
+	 * @returns Resolves with the app's external URL (proxied when the
+	 *  environment requires it; plain localhost on desktop) once the URL has
+	 *  been detected in the console output, or `undefined` when `preview` is
+	 *  `'none'`. Never rejects: failures (including detection timeout) show an
+	 *  error notification and resolve with `undefined`.
 	 */
 	runApplicationInConsole(options: RunConsoleAppOptions): Promise<vscode.Uri | undefined>;
 
@@ -204,8 +275,13 @@ export interface PositronRunApp {
 	 * Debug an application.
 	 *
 	 * @param options Options for debugging the application.
-	 * @returns If terminal shell integration is supported, resolves when the application server has
-	 *  started, otherwise resolves when the debug session has started.
+	 * @returns If terminal shell integration is supported, resolves with the
+	 *  app's external URL (proxied when the environment requires it; plain
+	 *  localhost on desktop) once the URL has been detected in the terminal
+	 *  output, or `undefined` if detection timed out. Without shell
+	 *  integration, resolves with `undefined` when the debug session has
+	 *  started. Never rejects: failures show an error notification and resolve
+	 *  with `undefined`.
 	 */
-	debugApplication(options: DebugAppOptions): Promise<void>;
+	debugApplication(options: DebugAppOptions): Promise<vscode.Uri | undefined>;
 }

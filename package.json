@@ -46,21 +46,33 @@
         "command": "shiny.python.runApp",
         "title": "Run Shiny App",
         "icon": "$(play)",
-        "enablement": "editorLangId == python && shellExecutionSupported"
+        "enablement": "editorLangId == python && shellExecutionSupported",
+        "agent": {
+          "description": "Run the active editor's file as a Shiny for Python app in a dedicated terminal and open it in a preview pane (the Viewer in Positron). The extension manages the terminal, waits for the app to start, and builds the user-facing URL, including any proxying the environment requires (none on desktop; required on Posit Workbench), so prefer this over starting the app from a shell. Open the app file in an editor first; the command is disabled unless the active editor is a Python file. Re-running restarts the app.",
+          "returns": "The app's user-facing URL as a vscode.Uri (serialized as its scheme/authority/path components), or nothing if the app did not start before the timeout or the shiny.previewType setting is 'none'."
+        }
       },
       {
         "category": "Shiny",
         "command": "shiny.python.debugApp",
         "title": "Debug Shiny App",
         "icon": "$(debug-alt)",
-        "enablement": "editorLangId == python && shellExecutionSupported"
+        "enablement": "editorLangId == python && shellExecutionSupported",
+        "agent": {
+          "description": "Run the active editor's file as a Shiny for Python app under the Python debugger and open it in a preview pane. Use only when the user explicitly asks to debug their app; the user sets breakpoints in the editor gutter. To simply run the app, use shiny.python.runApp instead. Open the app file in an editor first; the command is disabled unless the active editor is a Python file.",
+          "returns": "The app's user-facing URL as a vscode.Uri (serialized as its scheme/authority/path components), or nothing if the app did not start before the timeout."
+        }
       },
       {
         "category": "Shiny",
         "command": "shiny.r.runApp",
         "title": "Run Shiny App",
         "icon": "$(play)",
-        "enablement": "editorLangId == r && shellExecutionSupported"
+        "enablement": "editorLangId == r && shellExecutionSupported",
+        "agent": {
+          "description": "Run the active editor's file as a Shiny for R app and open it in a preview pane (the Viewer in Positron). In Positron the app runs in the R console; elsewhere it runs in a dedicated terminal. The extension waits for the app to start and builds the user-facing URL, including any proxying the environment requires (none on desktop; required on Posit Workbench), so prefer this over starting the app from a shell. Open the app file in an editor first; the command is disabled unless the active editor is an R file. Re-running restarts the app.",
+          "returns": "The app's user-facing URL as a vscode.Uri (serialized as its scheme/authority/path components), or nothing if the app did not start before the timeout or the shiny.previewType setting is 'none'."
+        }
       },
       {
         "category": "Shiny",
@@ -89,7 +101,10 @@
         "category": "Shiny",
         "command": "shiny.stopApp",
         "title": "Stop Shiny App",
-        "icon": "$(debug-stop)"
+        "icon": "$(debug-stop)",
+        "agent": {
+          "description": "Stop the running Shiny app by closing its dedicated terminal. Only stops apps that were started in a terminal (shiny.python.runApp anywhere, or shiny.r.runApp outside Positron). In Positron, Shiny for R apps run in the R console instead; stop those with the Viewer pane's stop button or by interrupting the console."
+        }
       },
       {
         "category": "Shiny",

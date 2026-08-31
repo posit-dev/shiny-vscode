@@ -11,6 +11,7 @@ import {
 import {
   configShinyPreviewTypeForPositronConsole,
   configShinyTimeoutOpenBrowser,
+  getAppUrlWhenReady,
   openBrowser,
   openBrowserWhenReady,
   waitUntilServerPortIsAvailable,
@@ -85,7 +86,7 @@ export function registerTerminalCloseHandler(): vscode.Disposable {
 
 /* Shiny for Python --------------------------------------------------------- */
 
-export async function pyRunApp(): Promise<void> {
+export async function pyRunApp(): Promise<vscode.Uri | undefined> {
   const path = getActiveEditorFile();
   if (!path) {
     return;
@@ -176,14 +177,14 @@ export async function pyRunApp(): Promise<void> {
     //
     // So that's what we do on Cloudspaces: send the browser to the autoreload
     // port instead of the main port.
-    await openBrowserWhenReady(autoreloadPort, [port], terminal);
+    return await openBrowserWhenReady(autoreloadPort, [port], terminal);
   } else {
     // For non-Cloudspace environments, simply go to the main port.
-    await openBrowserWhenReady(port, [autoreloadPort], terminal);
+    return await openBrowserWhenReady(port, [autoreloadPort], terminal);
   }
 }
 
-export async function pyDebugApp(): Promise<void> {
+export async function pyDebugApp(): Promise<vscode.Uri | undefined> {
   if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
     await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
   }
@@ -212,7 +213,7 @@ export async function pyDebugApp(): Promise<void> {
 
   const cwd = await resolveWorkingDirectory(path);
 
-  await vscode.debug.startDebugging(undefined, {
+  const started = await vscode.debug.startDebugging(undefined, {
     type: "python",
     name: DEBUG_NAME,
     request: "launch",
@@ -223,10 +224,15 @@ export async function pyDebugApp(): Promise<void> {
     justMyCode,
     stopOnEntry: false,
   });
+  if (!started) {
+    return;
+  }
 
   // Don't spawn browser. We do so in onDidStartDebugSession instead, so when
   // VSCode restarts the debugger instead of us, the SimpleBrowser is still
-  // opened.
+  // opened. Here we only wait for the app to come up so programmatic callers
+  // (e.g. Positron's agent commands) learn the app's URL.
+  return await getAppUrlWhenReady(port);
 }
 
 /* Shiny for R --------------------------------------------------------- */
@@ -253,7 +259,7 @@ function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
   return lines.join("\n");
 }
 
-export async function rRunApp(): Promise<void> {
+export async function rRunApp(): Promise<vscode.Uri | undefined> {
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
     return runShinyAppInConsole(runAppApi, {
@@ -335,7 +341,7 @@ export async function rRunApp(): Promise<void> {
 
   // if (process.env["CODESPACES"] === "true") {
   // TODO: Support Codespaces
-  await openBrowserWhenReady(port, [], terminal);
+  return await openBrowserWhenReady(port, [], terminal);
 }
 
 interface ConsoleAppOptions {
@@ -349,10 +355,10 @@ interface ConsoleAppOptions {
 async function runShinyAppInConsole(
   api: PositronRunApp,
   opts: ConsoleAppOptions,
-): Promise<void> {
+): Promise<vscode.Uri | undefined> {
   await saveActiveEditorFile();
   const urlDetectionTimeout = configShinyTimeoutOpenBrowser();
-  await api.runApplicationInConsole({
+  return await api.runApplicationInConsole({
     name: "Shiny",
     debugAdapterType: opts.debugAdapterType,
     async getConsoleCode(_runtime, document, _urlPrefix) {

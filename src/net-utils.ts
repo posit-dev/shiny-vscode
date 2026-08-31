@@ -136,13 +136,16 @@ export function configShinyTimeoutOpenBrowser(): number {
  * process or keep waiting. We start with a low 10s (or the shiny.timeoutOpenBrowser option)
  *  wait because some apps might fail quickly, but we increase to 30s
  *  if the user chooses to keep waiting.
+ * @returns The app's user-facing URL (proxied when the environment requires
+ * it, e.g. on Posit Workbench), or undefined if the app didn't start before
+ * the timeout or `shiny.previewType` is `"none"`.
  */
 export async function openBrowserWhenReady(
   port: number,
   additionalPorts: number[] = [],
   terminal?: vscode.Terminal,
   timeout: number = configShinyTimeoutOpenBrowser()
-): Promise<void> {
+): Promise<vscode.Uri | undefined> {
   if (configShinyPreviewTypeForTerminal() === "none") {
     // No need to wait for Shiny app to start or open the browser
     return;
@@ -215,6 +218,27 @@ export async function openBrowserWhenReady(
 
   const previewUrl = await getRemoteSafeUrl(port);
   await openBrowser(previewUrl, terminal);
+  return vscode.Uri.parse(previewUrl);
+}
+
+/**
+ * Waits for the app's port to accept connections, then resolves the app's
+ * user-facing URL (proxied when the environment requires it, e.g. on Posit
+ * Workbench). Unlike `openBrowserWhenReady`, this never opens a preview and
+ * shows no progress UI, so it can run alongside it without duplicating UI.
+ * @returns The app's URL, or undefined if the port didn't open in time.
+ */
+export async function getAppUrlWhenReady(
+  port: number,
+  timeout: number = configShinyTimeoutOpenBrowser()
+): Promise<vscode.Uri | undefined> {
+  const portOpen = await retryUntilTimeout(timeout, () =>
+    isPortOpen("127.0.0.1", port)
+  );
+  if (!portOpen) {
+    return undefined;
+  }
+  return vscode.Uri.parse(await getRemoteSafeUrl(port));
 }
 
 /**

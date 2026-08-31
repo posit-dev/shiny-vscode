@@ -1,5 +1,11 @@
 # Change Log
 
+## Unreleased
+
+- The "Run Shiny App" and "Debug Shiny App" commands now resolve with the app's user-facing URL (as a `vscode.Uri`), or `undefined` if the app didn't start in time, so programmatic callers can learn where the app is running.
+
+- In Positron, the `shiny.python.runApp`, `shiny.python.debugApp`, `shiny.r.runApp`, and `shiny.stopApp` commands are now exposed to AI agents with machine-readable descriptions and return-value docs.
+
 ## 1.4.2
 
 - Fixed a bug so that Shiny for Python apps now correctly open in the Viewer pane in Positron by default (#113).

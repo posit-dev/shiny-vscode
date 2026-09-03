@@ -1,5 +1,9 @@
 # Change Log
 
+## 1.4.3
+
+- When running Shiny apps in the Positron console, the extension no longer overrides Positron's own `positron.runApp.urlDetectionTimeout` setting with its shorter default timeout; apps that take a while to start are now given Positron's full 25 seconds to be detected. Explicitly setting `shiny.timeoutOpenBrowser` still overrides the timeout. (#118)
+
 ## 1.4.2
 
 - Fixed a bug so that Shiny for Python apps now correctly open in the Viewer pane in Positron by default (#113).

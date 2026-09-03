@@ -1,23 +1,11 @@
 import { glob } from "glob";
 import * as path from "path";
 
-// `import =` so esbuild emits a plain require: mocha is CJS, and esbuild's
-// ESM interop namespace for `import * as` is not constructable.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import MochaModule = require("mocha");
-
-// mocha 10 exported the Mocha class as `module.exports` itself; mocha 12
-// exports an ESM-style namespace with the class on `.Mocha`/`.default`.
-// @types/mocha still declares the old `export =` shape, hence the cast.
-const MochaCtor =
-  typeof MochaModule === "function"
-    ? MochaModule
-    : ((MochaModule as unknown as { Mocha?: typeof MochaModule }).Mocha ??
-      (MochaModule as unknown as { default: typeof MochaModule }).default);
+import { mochaCtor } from "../mocha-ctor";
 
 export async function run(): Promise<void> {
   // Create the mocha test
-  const mocha = new MochaCtor({
+  const mocha = new mochaCtor({
     ui: "tdd",
     color: true,
   });

@@ -185,7 +185,7 @@
           "type": "integer",
           "default": 10,
           "minimum": 1,
-          "description": "Maximum wait time (in seconds) for the Shiny app to be ready before opening the browser."
+          "markdownDescription": "Maximum wait time (in seconds) for the Shiny app to be ready before opening the browser. In Positron, apps that run in a console session use `#positron.runApp.urlDetectionTimeout#` instead, unless you set this value yourself."
         },
         "shiny.runFrom": {
           "order": 3,
@@ -339,7 +339,7 @@
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
     "@vscode/python-extension": "^1.0.5",
-    "@vscode/test-electron": "^2.1.3",
+    "@vscode/test-electron": "^3.1.0",
     "concurrently": "^9.1.0",
     "esbuild": "^0.25.2",
     "eslint": "^9.15.0",

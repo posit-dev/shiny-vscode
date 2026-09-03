@@ -1,0 +1,46 @@
+name: Extension Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Matches positron-api-tests.yaml. Both workflows use Node 22 so that
+      # bumping to @vscode/test-electron 3.x (engines: node >=22) doesn't
+      # split the versions.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "npm"
+      - id: get-date
+        run: echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_OUTPUT
+        shell: bash
+      # Cache the VS Code download, keyed by day so new stable builds are
+      # picked up within 24 hours.
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          path: .vscode-test
+          key: vscode-test-${{ runner.os }}-${{ steps.get-date.outputs.date }}
+      - run: npm ci
+      # The VS Code test host needs a display, which Linux runners lack.
+      # `npm test` also type-checks and lints, by way of the pretest script.
+      - name: Run extension tests
+        run: xvfb-run -a npm test
+      - uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: .vscode-test
+          key: vscode-test-${{ runner.os }}-${{ steps.get-date.outputs.date }}

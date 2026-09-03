@@ -16,11 +16,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Matches positron-api-tests.yaml. Both workflows use Node 22 so that
       # bumping to @vscode/test-electron 3.x (engines: node >=22) doesn't
       # split the versions.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
           cache: "npm"
@@ -29,7 +29,7 @@ jobs:
         shell: bash
       # Cache the VS Code download, keyed by day so new stable builds are
       # picked up within 24 hours.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         id: cache
         with:
           path: .vscode-test
@@ -39,7 +39,7 @@ jobs:
       # `npm test` also type-checks and lints, by way of the pretest script.
       - name: Run extension tests
         run: xvfb-run -a npm test
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           path: .vscode-test

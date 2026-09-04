@@ -16,12 +16,12 @@ import {
   waitUntilServerPortIsAvailable,
 } from "./net-utils";
 import { getAppPort, getAutoreloadPort } from "./port-settings";
+import type { PositronRunApp, PreviewMode } from "./positron-run-app";
 import {
   envVarsForShell as envVarsForTerminal,
   escapeCommandForTerminal,
 } from "./shell-utils";
 import { resolveWorkingDirectory } from "./working-directory";
-import type { PositronRunApp, PreviewMode } from "./positron-run-app";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -85,19 +85,24 @@ export function registerTerminalCloseHandler(): vscode.Disposable {
 
 /* Shiny for Python --------------------------------------------------------- */
 
-export async function pyRunApp(): Promise<void> {
-  const path = getActiveEditorFile();
-  if (!path) {
+// Called with:
+// - `vscode.Uri` when the user clicks an editor title button
+// - `string` when an agent uses the `positronCommand` tool
+// - `undefined` when the user uses it from the command palette
+export async function pyRunApp(uri?: vscode.Uri | string): Promise<void> {
+  const document = await resolveAppDocument(uri);
+  if (!document) {
     return;
   }
+  const path = document.uri.fsPath;
 
   if (!(await checkForPythonExtension())) {
     return;
   }
 
-  await saveActiveEditorFile();
+  await saveDocument(document);
 
-  const python = await getSelectedPythonInterpreter();
+  const python = await getSelectedPythonInterpreter(document.uri);
   if (!python) {
     return;
   }
@@ -183,23 +188,28 @@ export async function pyRunApp(): Promise<void> {
   }
 }
 
-export async function pyDebugApp(): Promise<void> {
+// Called with:
+// - `vscode.Uri` when the user clicks an editor title button
+// - `string` when an agent uses the `positronCommand` tool
+// - `undefined` when the user uses it from the command palette
+export async function pyDebugApp(uri?: vscode.Uri | string): Promise<void> {
   if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
     await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
   }
 
-  const path = getActiveEditorFile();
-  if (!path) {
+  const document = await resolveAppDocument(uri);
+  if (!document) {
     return;
   }
+  const path = document.uri.fsPath;
 
   if (!(await checkForPythonExtension())) {
     return;
   }
 
-  await saveActiveEditorFile();
+  await saveDocument(document);
 
-  const python = await getSelectedPythonInterpreter();
+  const python = await getSelectedPythonInterpreter(document.uri);
   if (!python) {
     return;
   }
@@ -253,10 +263,23 @@ function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
   return lines.join("\n");
 }
 
-export async function rRunApp(): Promise<void> {
+// Called with:
+// - `vscode.Uri` when the user clicks an editor title button
+// - `string` when an agent uses the `positronCommand` tool
+// - `undefined` when the user uses it from the command palette
+export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
   const runAppApi = await getPositronRunAppApi();
   if (runAppApi) {
     return runShinyAppInConsole(runAppApi, {
+      // Leave this `undefined` when no URI was passed: the Run App API falls
+      // back to the active editor itself.
+      //
+      // Positron versions whose bundled positron-run-app extension predates
+      // this option ignore it and use the active editor regardless, so on
+      // those the command runs the active editor's app rather than `uri`'s.
+      // That's the behaviour we had before, and it corrects itself once
+      // Positron is updated.
+      document: await openAppDocument(uri),
       language: "r",
       appUrlStrings: ["Listening on {{APP_URL}}"],
       buildCode: buildRConsoleCode,
@@ -265,12 +288,13 @@ export async function rRunApp(): Promise<void> {
     });
   }
 
-  const pathFile = getActiveEditorFile();
-  if (!pathFile) {
+  const document = await resolveAppDocument(uri);
+  if (!document) {
     return;
   }
+  const pathFile = document.uri.fsPath;
 
-  await saveActiveEditorFile();
+  await saveDocument(document);
 
   const path = isShinyAppRPart(pathFile) ? path_dirname(pathFile) : pathFile;
 
@@ -339,6 +363,8 @@ export async function rRunApp(): Promise<void> {
 }
 
 interface ConsoleAppOptions {
+  /** The document to run. When omitted, the Run App API uses the active editor's. */
+  document?: vscode.TextDocument;
   language: "python" | "r";
   appUrlStrings: string[];
   buildCode: (appPath: string, port: number, cwd: string) => string;
@@ -348,12 +374,16 @@ interface ConsoleAppOptions {
 
 async function runShinyAppInConsole(
   api: PositronRunApp,
-  opts: ConsoleAppOptions,
+  opts: ConsoleAppOptions
 ): Promise<void> {
-  await saveActiveEditorFile();
+  // Not `resolveAppDocument`: that's for the terminal path, which needs a
+  // concrete document and errors when there is none. Here the Run App API owns
+  // the fallback, so mirror it to save whichever document it will run.
+  await saveDocument(opts.document ?? vscode.window.activeTextEditor?.document);
   const urlDetectionTimeout = configShinyTimeoutOpenBrowserForPositronConsole();
   await api.runApplicationInConsole({
     name: "Shiny",
+    document: opts.document,
     debugAdapterType: opts.debugAdapterType,
     async getConsoleCode(_runtime, document, _urlPrefix) {
       const appPath = document.uri.fsPath;
@@ -473,9 +503,14 @@ async function checkForPythonExtension(): Promise<boolean> {
 
 /**
  * Gets the currently selected Python interpreter, according to the Python extension.
+ *
+ * @param resource The document the interpreter will run, used to resolve
+ *  workspace-folder-scoped interpreter settings.
  * @returns A path, or false if no interpreter is selected.
  */
-export async function getSelectedPythonInterpreter(): Promise<string | false> {
+export async function getSelectedPythonInterpreter(
+  resource?: vscode.Uri
+): Promise<string | false> {
   // Gather details of the current Python interpreter. We want to make sure
   // only to re-use a terminal if it's using the same interpreter.
   const pythonAPI: PythonExtension = await PythonExtension.api();
@@ -483,7 +518,7 @@ export async function getSelectedPythonInterpreter(): Promise<string | false> {
   // The getActiveEnvironmentPath docstring says: "Note that this can be an
   // invalid environment, use resolveEnvironment to get full details."
   const unresolvedEnv = pythonAPI.environments.getActiveEnvironmentPath(
-    vscode.window.activeTextEditor?.document.uri
+    resource ?? vscode.window.activeTextEditor?.document.uri
   );
   const resolvedEnv =
     await pythonAPI.environments.resolveEnvironment(unresolvedEnv);
@@ -498,18 +533,54 @@ export async function getSelectedPythonInterpreter(): Promise<string | false> {
   return resolvedEnv.path;
 }
 
-function getActiveEditorFile(): string | undefined {
-  const appPath = vscode.window.activeTextEditor?.document.uri.fsPath;
-  if (typeof appPath !== "string") {
-    vscode.window.showErrorMessage("No active file");
-    return;
+/**
+ * Open the document for a run or debug command's `uri` argument.
+ *
+ * @returns The document to run, or `undefined` when no URI was passed, leaving
+ *  the caller to fall back to the active editor.
+ * @throws When the URI can't be opened, e.g. it names a file that isn't there.
+ *  Rethrown rather than reported here: VS Code shows a rejected command's
+ *  error to the user, and passes it back to an agent that invoked the command.
+ */
+async function openAppDocument(
+  uri?: vscode.Uri | string
+): Promise<vscode.TextDocument | undefined> {
+  if (uri === undefined) {
+    return undefined;
   }
-  return appPath;
+  try {
+    // Parse rather than `Uri.file` so a scheme without slashes (untitled:,
+    // vscode-notebook-cell:) survives the round trip through a string.
+    return await vscode.workspace.openTextDocument(
+      typeof uri === "string" ? vscode.Uri.parse(uri) : uri
+    );
+  } catch (error) {
+    // VS Code's message names the URI and the reason but not Shiny, so on its
+    // own it reads as if it came from nowhere.
+    throw new Error(
+      `Cannot run Shiny app. Reason: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 }
 
-async function saveActiveEditorFile(): Promise<void> {
-  if (vscode.window.activeTextEditor?.document.isDirty) {
-    await vscode.window.activeTextEditor?.document.save();
+/** The document to run: the command's `uri` argument, else the active editor's. */
+async function resolveAppDocument(
+  uri?: vscode.Uri | string
+): Promise<vscode.TextDocument | undefined> {
+  const document =
+    (await openAppDocument(uri)) ?? vscode.window.activeTextEditor?.document;
+  if (!document) {
+    vscode.window.showErrorMessage("No active file");
+    return undefined;
+  }
+  return document;
+}
+
+async function saveDocument(
+  document: vscode.TextDocument | undefined
+): Promise<void> {
+  if (document?.isDirty) {
+    await document.save();
   }
 }
 

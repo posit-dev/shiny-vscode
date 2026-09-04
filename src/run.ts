@@ -16,12 +16,12 @@ import {
   waitUntilServerPortIsAvailable,
 } from "./net-utils";
 import { getAppPort, getAutoreloadPort } from "./port-settings";
+import type { PositronRunApp, PreviewMode } from "./positron-run-app";
 import {
   envVarsForShell as envVarsForTerminal,
   escapeCommandForTerminal,
 } from "./shell-utils";
 import { resolveWorkingDirectory } from "./working-directory";
-import type { PositronRunApp, PreviewMode } from "./positron-run-app";
 
 const DEBUG_NAME = "Debug Shiny app";
 
@@ -374,7 +374,7 @@ interface ConsoleAppOptions {
 
 async function runShinyAppInConsole(
   api: PositronRunApp,
-  opts: ConsoleAppOptions,
+  opts: ConsoleAppOptions
 ): Promise<void> {
   // Not `resolveAppDocument`: that's for the terminal path, which needs a
   // concrete document and errors when there is none. Here the Run App API owns
@@ -538,6 +538,9 @@ export async function getSelectedPythonInterpreter(
  *
  * @returns The document to run, or `undefined` when no URI was passed, leaving
  *  the caller to fall back to the active editor.
+ * @throws When the URI can't be opened, e.g. it names a file that isn't there.
+ *  Rethrown rather than reported here: VS Code shows a rejected command's
+ *  error to the user, and passes it back to an agent that invoked the command.
  */
 async function openAppDocument(
   uri?: vscode.Uri | string
@@ -545,11 +548,19 @@ async function openAppDocument(
   if (uri === undefined) {
     return undefined;
   }
-  // Parse rather than `Uri.file` so a scheme without slashes (untitled:,
-  // vscode-notebook-cell:) survives the round trip through a string.
-  return vscode.workspace.openTextDocument(
-    typeof uri === "string" ? vscode.Uri.parse(uri) : uri
-  );
+  try {
+    // Parse rather than `Uri.file` so a scheme without slashes (untitled:,
+    // vscode-notebook-cell:) survives the round trip through a string.
+    return await vscode.workspace.openTextDocument(
+      typeof uri === "string" ? vscode.Uri.parse(uri) : uri
+    );
+  } catch (error) {
+    // VS Code's message names the URI and the reason but not Shiny, so on its
+    // own it reads as if it came from nowhere.
+    throw new Error(
+      `Cannot run Shiny app. Reason: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 }
 
 /** The document to run: the command's `uri` argument, else the active editor's. */

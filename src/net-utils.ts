@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as http from "http";
 import type { AddressInfo } from "net";
 import * as net from "net";
@@ -161,6 +162,68 @@ export function configShinyTimeoutOpenBrowserForPositronConsole():
 }
 
 /**
+ * The possible outcomes of waiting for an app to start in openBrowserWhenReady.
+ */
+type WaitForAppOutcome =
+  | { kind: "ports"; ports: (boolean | undefined)[] }
+  | { kind: "terminal-closed" }
+  | { kind: "app-failed"; status: string };
+
+/**
+ * Watches a status file written by the app launcher script
+ * (rscripts/runShinyApp.R) so that a failed app startup can be reported
+ * immediately instead of waiting for the port-open timeout. The launcher
+ * writes "error" followed by the error message if startup fails, or "exited"
+ * if the app process finished before ever listening on its port.
+ *
+ * @param statusFile Path of the status file to watch.
+ * @returns `status`, a promise that resolves with the file's contents if and
+ * when they appear (it never rejects), and `dispose`, which stops watching.
+ */
+export function watchAppStatusFile(statusFile: string): {
+  status: Promise<string>;
+  dispose: () => void;
+} {
+  let interval: NodeJS.Timeout | undefined;
+  const status = new Promise<string>((resolve) => {
+    interval = setInterval(() => {
+      fs.promises
+        .readFile(statusFile, "utf8")
+        .then((contents) => {
+          if (contents.trim().length > 0) {
+            resolve(contents);
+          }
+        })
+        .catch(() => {
+          // The launcher hasn't written the file yet; keep polling.
+        });
+    }, 150);
+  });
+  return {
+    status,
+    dispose: () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    },
+  };
+}
+
+/**
+ * Interprets the contents of the launcher's status file (see
+ * watchAppStatusFile) as a user-facing message.
+ */
+export function appStatusFileMessage(contents: string): string {
+  const [firstLine, ...rest] = contents.trim().split("\n");
+  const details = rest.join(" ").trim();
+  if (firstLine === "error") {
+    return `Shiny app failed to start${details ? `: ${details}` : "."}`;
+  }
+  // "exited": the app process finished before its port ever opened.
+  return "Shiny app exited before it finished starting, so we have not opened the preview.";
+}
+
+/**
  * Opens a browser for the specified port, once that port is open. Handles
  * translating http://localhost:<port> into a proxy URL, if necessary.
  * @param port The port to open the browser for.
@@ -171,19 +234,23 @@ export function configShinyTimeoutOpenBrowserForPositronConsole():
  * process or keep waiting. We start with a low 10s (or the shiny.timeoutOpenBrowser option)
  *  wait because some apps might fail quickly, but we increase to 30s
  *  if the user chooses to keep waiting.
+ * @param appFailure Optional promise that resolves with the launcher status
+ * file's contents if the app fails to start (see watchAppStatusFile), letting
+ * us report the failure immediately instead of waiting for `timeout`.
  */
 export async function openBrowserWhenReady(
   port: number,
   additionalPorts: number[] = [],
   terminal?: vscode.Terminal,
-  timeout: number = configShinyTimeoutOpenBrowser()
+  timeout: number = configShinyTimeoutOpenBrowser(),
+  appFailure?: Promise<string>
 ): Promise<void> {
   if (configShinyPreviewTypeForTerminal() === "none") {
     // No need to wait for Shiny app to start or open the browser
     return;
   }
 
-  const portsOpenResult = await vscode.window.withProgress(
+  const waitOutcome = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
       title: "Waiting for Shiny app to start...",
@@ -206,24 +273,48 @@ export async function openBrowserWhenReady(
         })
       );
 
-      const portsOpenPromise = Promise.all(portsOpen);
-      if (!terminal) {
-        return portsOpenPromise;
-      } else {
-        return Promise.race([
-          portsOpenPromise,
-          getTerminalClosedPromise(terminal),
-        ]);
+      const contenders: Promise<WaitForAppOutcome>[] = [
+        Promise.all(portsOpen).then((ports) => ({ kind: "ports" as const, ports })),
+      ];
+      if (terminal) {
+        contenders.push(
+          getTerminalClosedPromise(terminal).then(() => ({
+            kind: "terminal-closed" as const,
+          }))
+        );
       }
+      if (appFailure) {
+        contenders.push(
+          appFailure.then((status) => ({ kind: "app-failed" as const, status }))
+        );
+      }
+      return Promise.race(contenders);
     }
   );
 
-  if (!Array.isArray(portsOpenResult) || terminal?.exitStatus !== undefined) {
+  if (
+    waitOutcome.kind === "terminal-closed" ||
+    terminal?.exitStatus !== undefined
+  ) {
     console.warn("[shiny] Terminal has been closed, will not launch browser");
     return;
   }
 
-  if (portsOpenResult.filter((p) => !p).length > 0) {
+  if (waitOutcome.kind === "app-failed") {
+    console.warn(
+      `[shiny] Shiny app failed to start, not launching browser: ${waitOutcome.status}`
+    );
+    const action = await vscode.window.showErrorMessage(
+      appStatusFileMessage(waitOutcome.status),
+      ...(terminal ? (["Show Shiny process"] as const) : [])
+    );
+    if (action === "Show Shiny process") {
+      terminal?.show();
+    }
+    return;
+  }
+
+  if (waitOutcome.ports.filter((p) => !p).length > 0) {
     const timeoutStr = Math.floor(timeout / 1000);
     const action = await vscode.window.showErrorMessage(
       `Shiny app took longer than ${timeoutStr}s to start so we have not opened the preview.`,
@@ -237,7 +328,13 @@ export async function openBrowserWhenReady(
         );
         return;
       }
-      return openBrowserWhenReady(port, additionalPorts, terminal, 30000);
+      return openBrowserWhenReady(
+        port,
+        additionalPorts,
+        terminal,
+        30000,
+        appFailure
+      );
     }
     if (action === "Show Shiny process") {
       terminal?.show();

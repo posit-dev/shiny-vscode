@@ -1,5 +1,6 @@
 import { PythonExtension } from "@vscode/python-extension";
 import * as fs from "fs";
+import * as os from "os";
 import { dirname as path_dirname, join as path_join } from "path";
 import * as vscode from "vscode";
 import * as winreg from "winreg";
@@ -14,6 +15,7 @@ import {
   openBrowser,
   openBrowserWhenReady,
   waitUntilServerPortIsAvailable,
+  watchAppStatusFile,
 } from "./net-utils";
 import { getAppPort, getAutoreloadPort } from "./port-settings";
 import type { PositronRunApp, PreviewMode } from "./positron-run-app";
@@ -304,10 +306,20 @@ export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
 
   const cwd = await resolveWorkingDirectory(pathFile);
 
+  // runShinyApp.R writes to this file if the app fails to start (or exits
+  // before serving), so openBrowserWhenReady can fail fast instead of waiting
+  // for the port-open timeout. Unique per run to avoid reading stale status.
+  const statusFile = path_join(
+    os.tmpdir(),
+    `shiny-vscode-run-${Date.now()}-${Math.floor(Math.random() * 1e6)}.status`
+  );
+
   const terminal = await createTerminalAndCloseOthersWithSameName({
     name: "Shiny",
     cwd: cwd,
     env: {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      SHINY_RUN_APP_STATUS_FILE: statusFile,
       // We save this here so escapeCommandForTerminal knows what shell
       // semantics to use when escaping arguments. A bit magical, but oh well.
       ...envVarsForTerminal(),
@@ -359,7 +371,15 @@ export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
 
   // if (process.env["CODESPACES"] === "true") {
   // TODO: Support Codespaces
-  await openBrowserWhenReady(port, [], terminal);
+  const appStatus = watchAppStatusFile(statusFile);
+  try {
+    await openBrowserWhenReady(port, [], terminal, undefined, appStatus.status);
+  } finally {
+    appStatus.dispose();
+    fs.promises.unlink(statusFile).catch(() => {
+      // Best-effort cleanup; the launcher may never have written the file.
+    });
+  }
 }
 
 interface ConsoleAppOptions {

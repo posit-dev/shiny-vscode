@@ -2,6 +2,8 @@
 
 ## UNRELEASED
 
+- When a Shiny for R app run in a VS Code terminal fails to start (e.g. an error in `app.R`), the failure is now reported immediately, with the R error message, instead of after the startup timeout. (#123)
+
 - Run Shiny App and Debug Shiny App now run the file whose button was clicked, rather than the focused editor's file. The commands also take an optional URI, so a keybinding's `args` or an agent can run a file without first opening and focusing it. (#117)
 
 ## 1.4.3

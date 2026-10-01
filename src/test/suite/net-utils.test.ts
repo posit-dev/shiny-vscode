@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { configShinyTimeoutOpenBrowserForPositronConsole } from "../../net-utils";
+import {
+  appStatusFileMessage,
+  configShinyTimeoutOpenBrowserForPositronConsole,
+} from "../../net-utils";
 
 const SETTING = "shiny.timeoutOpenBrowser";
 
@@ -80,6 +83,33 @@ suite("configShinyTimeoutOpenBrowserForPositronConsole", () => {
     assert.strictEqual(
       configShinyTimeoutOpenBrowserForPositronConsole(),
       30_000
+    );
+  });
+});
+
+suite("appStatusFileMessage", () => {
+  test("surfaces the launcher's error message", () => {
+    assert.strictEqual(
+      appStatusFileMessage("error\nobject 'broken_title' not found\n"),
+      "Shiny app failed to start: object 'broken_title' not found"
+    );
+  });
+
+  test("joins multi-line error details into one line", () => {
+    assert.strictEqual(
+      appStatusFileMessage("error\nfirst line\nsecond line"),
+      "Shiny app failed to start: first line second line"
+    );
+  });
+
+  test("handles an error status with no details", () => {
+    assert.strictEqual(appStatusFileMessage("error"), "Shiny app failed to start.");
+  });
+
+  test("explains plain exits without blaming an error", () => {
+    assert.strictEqual(
+      appStatusFileMessage("exited"),
+      "Shiny app exited before it finished starting, so we have not opened the preview."
     );
   });
 });

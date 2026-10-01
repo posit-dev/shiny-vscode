@@ -1,14 +1,11 @@
 import { glob } from "glob";
 import * as path from "path";
 
-// `import =` so esbuild emits a plain require: mocha is a CJS constructor,
-// and esbuild's ESM interop namespace for `import * as` is not constructable.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import Mocha = require("mocha");
+import { mochaCtor } from "../mocha-ctor";
 
 export async function run(): Promise<void> {
   // Create the mocha test
-  const mocha = new Mocha({
+  const mocha = new mochaCtor({
     ui: "tdd",
     color: true,
   });

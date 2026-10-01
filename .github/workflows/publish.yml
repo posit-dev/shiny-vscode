@@ -14,10 +14,10 @@ jobs:
   build-vsix:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20.x"
+          node-version: "22.x"
 
       - run: npm ci
 
@@ -28,7 +28,7 @@ jobs:
         run: npm run vsix
 
       - name: Upload extension to Actions Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shiny-vscode
           path: "shiny*.vsix"
@@ -62,10 +62,10 @@ jobs:
       needs.check-ref.outputs.should_publish == 'true' &&
       github.repository_owner == 'posit-dev'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20.x"
+          node-version: "22.x"
 
       - run: npm ci
 
@@ -86,10 +86,10 @@ jobs:
       needs.check-ref.outputs.should_publish == 'true' &&
       github.repository_owner == 'posit-dev'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20.x"
+          node-version: "22.x"
 
       - run: npm ci
 

@@ -1,10 +1,18 @@
 # Change Log
 
+## UNRELEASED
+
+- Run Shiny App and Debug Shiny App now run the file whose button was clicked, rather than the focused editor's file. The commands also take an optional URI, so a keybinding's `args` or an agent can run a file without first opening and focusing it. (#117)
+
 ## 1.5.0
 
 - Added live reactivity diagnostics and validation for Shiny apps and modules in Python and R (#117).
 - Added settings to configure diagnostics independently for Python and R (`shiny.diagnostics.python.*` and `shiny.diagnostics.r.*`) (#117).
 - Added "Shiny: Validate Shiny App" command in the Command Palette (#117).
+
+## 1.4.3
+
+- When running Shiny apps in the Positron console, the extension no longer overrides Positron's own `positron.runApp.urlDetectionTimeout` setting with its shorter default timeout; apps that take a while to start are now given Positron's full 25 seconds to be detected. Explicitly setting `shiny.timeoutOpenBrowser` still overrides the timeout. (#118)
 
 ## 1.4.2
 

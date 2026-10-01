@@ -6,9 +6,11 @@ import * as vscode from "vscode";
 import * as winreg from "winreg";
 import { isShinyAppRPart } from "./extension";
 import {
+  getPositronApi,
   getPositronPreferredRuntime,
   getPositronRunAppApi,
 } from "./extension-api-utils/extensionHost";
+import { watchConsoleSessionForStartupFailure } from "./extension-api-utils/runtime-startup-watch";
 import {
   configShinyPreviewTypeForPositronConsole,
   configShinyTimeoutOpenBrowserForPositronConsole,
@@ -401,7 +403,17 @@ async function runShinyAppInConsole(
   // the fallback, so mirror it to save whichever document it will run.
   await saveDocument(opts.document ?? vscode.window.activeTextEditor?.document);
   const urlDetectionTimeout = configShinyTimeoutOpenBrowserForPositronConsole();
-  await api.runApplicationInConsole({
+
+  // Watch the console session while the app starts: app servers block the
+  // session while they run, so the session going back to idle before the
+  // app's URL is detected means startup failed. Reporting that beats waiting
+  // for the URL detection timeout.
+  const pst = getPositronApi();
+  const startupWatch = pst
+    ? watchConsoleSessionForStartupFailure(pst, opts.language)
+    : undefined;
+
+  const runPromise = api.runApplicationInConsole({
     name: "Shiny",
     document: opts.document,
     debugAdapterType: opts.debugAdapterType,
@@ -415,6 +427,37 @@ async function runShinyAppInConsole(
     preview: opts.preview,
     urlDetectionTimeout,
   });
+
+  if (!startupWatch) {
+    await runPromise;
+    return;
+  }
+
+  try {
+    const outcome = await Promise.race([
+      runPromise.then(
+        () => ({ kind: "settled" }) as const,
+        (err) => ({ kind: "rejected", err }) as const
+      ),
+      startupWatch.failure.then(() => ({ kind: "failed" }) as const),
+    ]);
+
+    if (outcome.kind === "rejected") {
+      throw outcome.err;
+    }
+    if (outcome.kind === "failed") {
+      // The user has been told what happened; keep a later rejection of the
+      // run promise (e.g. its own detection timeout) from surfacing as an
+      // unhandled rejection.
+      runPromise.catch(() => {});
+      const consoleName = opts.language === "r" ? "R" : "Python";
+      vscode.window.showErrorMessage(
+        `Shiny app failed to start. Check the ${consoleName} console for the error.`
+      );
+    }
+  } finally {
+    startupWatch.dispose();
+  }
 }
 
 /* Utilities --------------------------------------------------------- */

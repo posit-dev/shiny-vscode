@@ -121,7 +121,7 @@ suite("appStatusFileMessage", () => {
   test("strips ANSI hyperlinks from the launcher's error message", () => {
     assert.strictEqual(
       appStatusFileMessage(
-        "error\nfailed: \x1B]8;;https://example.com\x1B\\docs\x1B]8;;\x1B\\\\\n"
+        "error\nfailed: \x1B]8;;https://example.com\x1B\\docs\x1B]8;;\x1B\\\n"
       ),
       "Shiny app failed to start: failed: docs"
     );

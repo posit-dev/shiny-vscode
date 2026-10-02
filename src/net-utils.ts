@@ -103,16 +103,20 @@ export async function isServerPortAvailable(port: number): Promise<boolean> {
   return p;
 }
 
-async function getTerminalClosedPromise(
-  terminal: vscode.Terminal
-): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
-    vscode.window.onDidCloseTerminal((term) => {
-      if (term === terminal) {
-        resolve(true);
-      }
-    });
+function getTerminalClosedPromise(terminal: vscode.Terminal): {
+  promise: Promise<boolean>;
+  dispose: () => void;
+} {
+  let resolveClosed!: (value: boolean) => void;
+  const promise = new Promise<boolean>((resolve) => {
+    resolveClosed = resolve;
   });
+  const subscription = vscode.window.onDidCloseTerminal((term) => {
+    if (term === terminal) {
+      resolveClosed(true);
+    }
+  });
+  return { promise, dispose: () => subscription.dispose() };
 }
 
 /**
@@ -299,9 +303,13 @@ export async function openBrowserWhenReady(
           ports,
         })),
       ];
+      let terminalClosed:
+        | ReturnType<typeof getTerminalClosedPromise>
+        | undefined;
       if (terminal) {
+        terminalClosed = getTerminalClosedPromise(terminal);
         contenders.push(
-          getTerminalClosedPromise(terminal).then(() => ({
+          terminalClosed.promise.then(() => ({
             kind: "terminal-closed" as const,
           }))
         );
@@ -311,7 +319,9 @@ export async function openBrowserWhenReady(
           appFailure.then((status) => ({ kind: "app-failed" as const, status }))
         );
       }
-      return Promise.race(contenders);
+      // The terminal-closed listener usually loses the race, so dispose it
+      // once the wait settles instead of leaking one listener per wait.
+      return Promise.race(contenders).finally(() => terminalClosed?.dispose());
     }
   );
 
@@ -341,7 +351,7 @@ export async function openBrowserWhenReady(
     const timeoutStr = Math.floor(timeout / 1000);
     const action = await vscode.window.showErrorMessage(
       `Shiny app took longer than ${timeoutStr}s to start so we have not opened the preview.`,
-      terminal ? "Show Shiny process" : "",
+      ...(terminal ? (["Show Shiny process"] as const) : []),
       "Keep waiting"
     );
     if (action === "Keep waiting") {

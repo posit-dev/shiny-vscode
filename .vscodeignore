@@ -17,3 +17,6 @@ eslint.config.mjs
 out/test/**
 .windsurfrules
 temp/**
+.mypy_cache/**
+.venv/**
+__pycache__/**

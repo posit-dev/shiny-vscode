@@ -18,6 +18,34 @@ It also provides a couple of code snippets in both Python and R:
 
 For a complete Shiny for Python experience in VS Code, please [visit our docs for more information](https://shiny.posit.co/py/docs/install-create-run.html#vs-code), including instructions for configuring the type checker and debugger for use with Shiny.
 
+### Validation
+
+Shiny diagnostics check Python and R apps and modules as you type. Diagnostics
+appear in the Problems panel. Run **Shiny: Validate Shiny App** to check the active
+file manually; a clean result does not show a notification.
+
+Use `# shiny: ignore` at the end of a line to suppress its diagnostics, or
+`# shiny: ignore-next-line` on the preceding line. Optionally list rule codes to
+suppress only those rules:
+
+```python
+@render.text
+def result():
+    return input.callback  # shiny: ignore UNCALLED_INPUT
+```
+
+The same comment syntax works in R and in Python's `shiny validate` CLI and
+startup validation. Without rule codes, a directive suppresses all Shiny checks
+on that line. With codes, only matching rules are suppressed; use the code shown
+in the diagnostic (for example, `shiny.uncalledReactive` or `UNCALLED_INPUT`).
+Directives in strings have no effect. Validation suppressions do not bypass
+runtime errors.
+
+Configure automatic diagnostics separately for Python and R with
+`shiny.diagnostics.python.enable` / `shiny.diagnostics.r.enable` and
+`shiny.diagnostics.python.run` / `shiny.diagnostics.r.run` (`onType`, `onSave`, or
+`off`).
+
 ### Shinylive
 
 You can use the extension to create shareable links to your apps using [Shinylive](https://shinylive.io), a free service for sharing Shiny apps via static hosting. Shinylive links encode the app's code and data in the URL, so you can share your app with others without needing to deploy it to a server. When the link is opened, the app runs in the user's browser using special version of Python or R that can run in the browser.
@@ -62,6 +90,7 @@ By default, Shiny apps run from the workspace root directory. This works well fo
 The extension provides two settings to control the working directory:
 
 - `shiny.runFrom`: Global default for all apps in the workspace
+
   - `"projectRoot"` (default): Run apps from the workspace root
   - `"appDirectory"`: Run apps from the directory containing the app file
 

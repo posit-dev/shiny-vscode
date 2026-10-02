@@ -54,9 +54,11 @@ export function watchConsoleSessionForStartupFailure(
   idleFailureThresholdMs: number = IDLE_FAILURE_THRESHOLD_MS
 ): StartupFailureWatch {
   const disposables: vscode.Disposable[] = [];
+  let sessionDisposable: vscode.Disposable | undefined;
   let idleTimer: NodeJS.Timeout | undefined;
   let sawBusy = false;
   let settled = false;
+  let disposed = false;
 
   let resolveFailure!: () => void;
   const failure = new Promise<void>((resolve) => {
@@ -79,7 +81,7 @@ export function watchConsoleSessionForStartupFailure(
   };
 
   const onState = (state: positron.RuntimeState) => {
-    if (settled) {
+    if (settled || disposed) {
       return;
     }
     if (state === pst.RuntimeState.Busy) {
@@ -99,14 +101,20 @@ export function watchConsoleSessionForStartupFailure(
   let attachedSession: positron.LanguageRuntimeSession | undefined;
   const attach = (session: positron.LanguageRuntimeSession | undefined) => {
     if (
+      disposed ||
       !session ||
       session === attachedSession ||
       session.runtimeMetadata.languageId !== languageId
     ) {
       return;
     }
+    // A different console session took over: drop the previous session's
+    // listener and re-arm, so its busy/idle events can't fail this startup.
+    sessionDisposable?.dispose();
+    sawBusy = false;
+    clearIdleTimer();
     attachedSession = session;
-    disposables.push(session.onDidChangeRuntimeState(onState));
+    sessionDisposable = session.onDidChangeRuntimeState(onState);
   };
 
   // The console session usually already exists as the foreground session by
@@ -122,7 +130,9 @@ export function watchConsoleSessionForStartupFailure(
   return {
     failure,
     dispose: () => {
+      disposed = true;
       clearIdleTimer();
+      sessionDisposable?.dispose();
       disposables.forEach((d) => d.dispose());
     },
   };

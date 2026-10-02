@@ -1,19 +1,23 @@
 import { PythonExtension } from "@vscode/python-extension";
 import * as fs from "fs";
+import * as os from "os";
 import { dirname as path_dirname, join as path_join } from "path";
 import * as vscode from "vscode";
 import * as winreg from "winreg";
 import { isShinyAppRPart } from "./extension";
 import {
+  getPositronApi,
   getPositronPreferredRuntime,
   getPositronRunAppApi,
 } from "./extension-api-utils/extensionHost";
+import { watchConsoleSessionForStartupFailure } from "./extension-api-utils/runtime-startup-watch";
 import {
   configShinyPreviewTypeForPositronConsole,
   configShinyTimeoutOpenBrowserForPositronConsole,
   openBrowser,
   openBrowserWhenReady,
   waitUntilServerPortIsAvailable,
+  watchAppStatusFile,
 } from "./net-utils";
 import { getAppPort, getAutoreloadPort } from "./port-settings";
 import type { PositronRunApp, PreviewMode } from "./positron-run-app";
@@ -268,7 +272,14 @@ function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
 // - `string` when an agent uses the `positronCommand` tool
 // - `undefined` when the user uses it from the command palette
 export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
-  const runAppApi = await getPositronRunAppApi();
+  // Undocumented `shiny.r.runAppIn`: "console" (default) or "terminal".
+  // Only meaningful in Positron, where it forces the terminal path, in which
+  // this extension owns the startup wait and its dialogs (#123).
+  const runAppIn = vscode.workspace
+    .getConfiguration("shiny.r")
+    .get<"console" | "terminal">("runAppIn", "console");
+  const runAppApi =
+    runAppIn === "terminal" ? undefined : await getPositronRunAppApi();
   if (runAppApi) {
     return runShinyAppInConsole(runAppApi, {
       // Leave this `undefined` when no URI was passed: the Run App API falls
@@ -304,10 +315,20 @@ export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
 
   const cwd = await resolveWorkingDirectory(pathFile);
 
+  // runShinyApp.R writes to this file if the app fails to start (or exits
+  // before serving), so openBrowserWhenReady can fail fast instead of waiting
+  // for the port-open timeout. Unique per run to avoid reading stale status.
+  const statusFile = path_join(
+    os.tmpdir(),
+    `shiny-vscode-run-${Date.now()}-${Math.floor(Math.random() * 1e6)}.status`
+  );
+
   const terminal = await createTerminalAndCloseOthersWithSameName({
     name: "Shiny",
     cwd: cwd,
     env: {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      SHINY_RUN_APP_STATUS_FILE: statusFile,
       // We save this here so escapeCommandForTerminal knows what shell
       // semantics to use when escaping arguments. A bit magical, but oh well.
       ...envVarsForTerminal(),
@@ -359,7 +380,15 @@ export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
 
   // if (process.env["CODESPACES"] === "true") {
   // TODO: Support Codespaces
-  await openBrowserWhenReady(port, [], terminal);
+  const appStatus = watchAppStatusFile(statusFile);
+  try {
+    await openBrowserWhenReady(port, [], terminal, undefined, appStatus.status);
+  } finally {
+    appStatus.dispose();
+    fs.promises.unlink(statusFile).catch(() => {
+      // Best-effort cleanup; the launcher may never have written the file.
+    });
+  }
 }
 
 interface ConsoleAppOptions {
@@ -381,7 +410,17 @@ async function runShinyAppInConsole(
   // the fallback, so mirror it to save whichever document it will run.
   await saveDocument(opts.document ?? vscode.window.activeTextEditor?.document);
   const urlDetectionTimeout = configShinyTimeoutOpenBrowserForPositronConsole();
-  await api.runApplicationInConsole({
+
+  // Watch the console session while the app starts: app servers block the
+  // session while they run, so the session going back to idle before the
+  // app's URL is detected means startup failed. Reporting that beats waiting
+  // for the URL detection timeout.
+  const pst = getPositronApi();
+  const startupWatch = pst
+    ? watchConsoleSessionForStartupFailure(pst, opts.language)
+    : undefined;
+
+  const runPromise = api.runApplicationInConsole({
     name: "Shiny",
     document: opts.document,
     debugAdapterType: opts.debugAdapterType,
@@ -395,6 +434,37 @@ async function runShinyAppInConsole(
     preview: opts.preview,
     urlDetectionTimeout,
   });
+
+  if (!startupWatch) {
+    await runPromise;
+    return;
+  }
+
+  try {
+    const outcome = await Promise.race([
+      runPromise.then(
+        () => ({ kind: "settled" }) as const,
+        (err) => ({ kind: "rejected", err }) as const
+      ),
+      startupWatch.failure.then(() => ({ kind: "failed" }) as const),
+    ]);
+
+    if (outcome.kind === "rejected") {
+      throw outcome.err;
+    }
+    if (outcome.kind === "failed") {
+      // The user has been told what happened; keep a later rejection of the
+      // run promise (e.g. its own detection timeout) from surfacing as an
+      // unhandled rejection.
+      runPromise.catch(() => {});
+      const consoleName = opts.language === "r" ? "R" : "Python";
+      vscode.window.showErrorMessage(
+        `Shiny app failed to start. Check the ${consoleName} console for the error.`
+      );
+    }
+  } finally {
+    startupWatch.dispose();
+  }
 }
 
 /* Utilities --------------------------------------------------------- */

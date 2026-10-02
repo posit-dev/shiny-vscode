@@ -272,7 +272,14 @@ function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
 // - `string` when an agent uses the `positronCommand` tool
 // - `undefined` when the user uses it from the command palette
 export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
-  const runAppApi = await getPositronRunAppApi();
+  // Undocumented `shiny.r.runAppIn`: "console" (default) or "terminal".
+  // Only meaningful in Positron, where it forces the terminal path, in which
+  // this extension owns the startup wait and its dialogs (#123).
+  const runLocation = vscode.workspace
+    .getConfiguration("shiny.r")
+    .get<"console" | "terminal">("runLocation", "console");
+  const runAppApi =
+    runLocation === "terminal" ? undefined : await getPositronRunAppApi();
   if (runAppApi) {
     return runShinyAppInConsole(runAppApi, {
       // Leave this `undefined` when no URI was passed: the Run App API falls

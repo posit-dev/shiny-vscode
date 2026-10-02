@@ -211,16 +211,36 @@ export function watchAppStatusFile(statusFile: string): {
 
 /**
  * Interprets the contents of the launcher's status file (see
- * watchAppStatusFile) as a user-facing message.
+ * watchAppStatusFile) as a user-facing message. Error details are stripped of
+ * the ANSI escape codes R's cli package emits when it detects a terminal,
+ * flattened onto one line, and capped so long tracebacks don't overrun the
+ * notification; the full error is always available in the Shiny terminal.
+ * (showErrorMessage only accepts plain strings -- MarkdownString and its code
+ * blocks are not an option -- and the toast collapses newlines anyway.)
  */
 export function appStatusFileMessage(contents: string): string {
   const [firstLine, ...rest] = contents.trim().split("\n");
-  const details = rest.join(" ").trim();
   if (firstLine === "error") {
+    const details = formatStatusDetails(rest.join(" "));
     return `Shiny app failed to start${details ? `: ${details}` : "."}`;
   }
   // "exited": the app process finished before its port ever opened.
   return "Shiny app exited before it finished starting, so we have not opened the preview.";
+}
+
+/** Matches ANSI escape sequences: CSI (styles, cursor movement) and OSC (e.g. hyperlinks). */
+// eslint-disable-next-line no-control-regex -- matching ANSI escapes requires control characters
+const ANSI_ESCAPE = /\x1B(?:\[[0-9;?]*[a-zA-Z]|\][^\x07\x1B]*(?:\x07|\x1B\\))/g;
+
+/** Longest error details shown in a notification before truncating. */
+const MAX_STATUS_DETAILS = 300;
+
+function formatStatusDetails(raw: string): string {
+  const cleaned = raw.replace(ANSI_ESCAPE, "").replace(/\s+/g, " ").trim();
+  if (cleaned.length <= MAX_STATUS_DETAILS) {
+    return cleaned;
+  }
+  return cleaned.slice(0, MAX_STATUS_DETAILS).trimEnd() + "…";
 }
 
 /**
@@ -274,7 +294,10 @@ export async function openBrowserWhenReady(
       );
 
       const contenders: Promise<WaitForAppOutcome>[] = [
-        Promise.all(portsOpen).then((ports) => ({ kind: "ports" as const, ports })),
+        Promise.all(portsOpen).then((ports) => ({
+          kind: "ports" as const,
+          ports,
+        })),
       ];
       if (terminal) {
         contenders.push(

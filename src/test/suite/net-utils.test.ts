@@ -95,7 +95,7 @@ suite("appStatusFileMessage", () => {
     );
   });
 
-  test("joins multi-line error details into one line", () => {
+  test("flattens multi-line error details into one line", () => {
     assert.strictEqual(
       appStatusFileMessage("error\nfirst line\nsecond line"),
       "Shiny app failed to start: first line second line"
@@ -103,7 +103,44 @@ suite("appStatusFileMessage", () => {
   });
 
   test("handles an error status with no details", () => {
-    assert.strictEqual(appStatusFileMessage("error"), "Shiny app failed to start.");
+    assert.strictEqual(
+      appStatusFileMessage("error"),
+      "Shiny app failed to start."
+    );
+  });
+
+  test("strips ANSI styling from the launcher's error message", () => {
+    assert.strictEqual(
+      appStatusFileMessage(
+        "error\n\x1B[1m\x1B[22mI haven't built that yet. \x1B[36m\u2139\x1B[39m but I will one day!\n"
+      ),
+      "Shiny app failed to start: I haven't built that yet. \u2139 but I will one day!"
+    );
+  });
+
+  test("strips ANSI hyperlinks from the launcher's error message", () => {
+    assert.strictEqual(
+      appStatusFileMessage(
+        "error\nfailed: \x1B]8;;https://example.com\x1B\\docs\x1B]8;;\x1B\\\\\n"
+      ),
+      "Shiny app failed to start: failed: docs"
+    );
+  });
+
+  test("caps long error details for the notification", () => {
+    const message = appStatusFileMessage(`error\n${"a".repeat(500)}`);
+    assert.ok(
+      message.startsWith(`Shiny app failed to start: ${"a".repeat(300)}`)
+    );
+    assert.ok(message.endsWith("…"));
+  });
+
+  test("does not truncate error details at the cap boundary", () => {
+    const details = "a".repeat(300);
+    assert.strictEqual(
+      appStatusFileMessage(`error\n${details}`),
+      `Shiny app failed to start: ${details}`
+    );
   });
 
   test("explains plain exits without blaming an error", () => {

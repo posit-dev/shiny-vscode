@@ -389,6 +389,7 @@
     "vsix": "npx --yes @vscode/vsce package"
   },
   "devDependencies": {
+    "@davisvaughan/tree-sitter-r": "1.3.0",
     "@posit-dev/positron-test-electron": "^0.0.3",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
@@ -410,10 +411,14 @@
     "prettier": "^3.3.3",
     "prettier-plugin-organize-imports": "^4.1.0",
     "squirrelly": "^9.1.0",
+    "tree-sitter-python": "0.25.0",
     "tsx": "^4.19.3",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.15.0",
     "winreg": "^1.2.5"
   },
-  "extensionDependencies": []
+  "extensionDependencies": [],
+  "dependencies": {
+    "web-tree-sitter": "0.27.0"
+  }
 }

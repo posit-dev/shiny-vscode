@@ -1,4 +1,5 @@
 export enum ShinyDiagnosticCode {
+  uncalledInput = "UNCALLED_INPUT",
   uncalledReactive = "shiny.uncalledReactive",
   blockingAsync = "shiny.blockingAsync",
   calcSideEffect = "shiny.calcSideEffect",

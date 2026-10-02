@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
-import { isShinyCode, validateShinyCode } from "./engine";
+import { validateShinyCode } from "./engine";
 import { ShinyDiagnosticSeverity } from "./rules";
 
-export { isShinyCode };
+export { isShinyCode } from "../shiny-detection";
 
 export function validateShinyDocument(
   document: vscode.TextDocument
@@ -38,7 +38,8 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
-    this.diagnosticCollection = vscode.languages.createDiagnosticCollection("shiny");
+    this.diagnosticCollection =
+      vscode.languages.createDiagnosticCollection("shiny");
     this.disposables.push(this.diagnosticCollection);
 
     this.disposables.push(
@@ -105,12 +106,6 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
     }
 
     if (this.getRunMode(document.languageId) === "off") {
-      this.diagnosticCollection.delete(document.uri);
-      return;
-    }
-
-    const text = document.getText();
-    if (!isShinyCode(text)) {
       this.diagnosticCollection.delete(document.uri);
       return;
     }

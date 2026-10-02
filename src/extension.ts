@@ -1,6 +1,6 @@
-import * as path from "path";
 import * as vscode from "vscode";
 import { activateAssistant, deactivateAssistant } from "./assistant/extension";
+import { initializeParsers } from "./diagnostics/parser";
 import {
   ShinyDiagnosticsController,
   validateShinyDocument,
@@ -16,11 +16,13 @@ import {
   stopApp,
 } from "./run";
 import { setRunFromOverride } from "./set-run-from-override-command";
+import { isShinyAppFilename, isShinyCode } from "./shiny-detection";
 import {
   shinyliveCreateFromActiveEditor,
   shinyliveCreateFromExplorer,
   shinyliveSaveAppFromUrl,
 } from "./shinylive";
+export { isShinyAppFilename, isShinyAppRPart } from "./shiny-detection";
 
 let diagnosticsController: ShinyDiagnosticsController | undefined;
 
@@ -34,11 +36,7 @@ async function validateActiveApp(): Promise<void> {
   const diags = validateShinyDocument(editor.document);
   diagnosticsController?.updateDiagnostics(editor.document);
 
-  if (diags.length === 0) {
-    vscode.window.showInformationMessage(
-      "Shiny: No reactivity or configuration issues detected in active app."
-    );
-  } else {
+  if (diags.length > 0) {
     vscode.window.showErrorMessage(
       `Shiny: Found ${diags.length} potential issue(s). Check the Problems panel for details.`
     );
@@ -47,6 +45,7 @@ async function validateActiveApp(): Promise<void> {
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log("Activating Shiny extension");
+  await initializeParsers();
   diagnosticsController = new ShinyDiagnosticsController();
 
   context.subscriptions.push(
@@ -139,7 +138,7 @@ function updateContext(language: "python" | "r"): boolean {
     !editor.document.isUntitled &&
     !!editor.document.fileName &&
     isShinyAppFilename(editor.document.fileName, language) &&
-    editor.document.getText().search(/\bshiny\b/) >= 0;
+    isShinyCode(editor.document.getText(), language);
 
   vscode.commands.executeCommand("setContext", shinyContext, active);
   return active;
@@ -203,66 +202,4 @@ class Throttler {
     this._clearTimer();
     this._pending = false;
   }
-}
-
-/**
- * Determines whether a file is a Shiny application entry point based on its
- * filename.
- *
- * This function checks if a given filename follows the naming conventions for
- * Shiny application entry points in either Python or R. It validates against
- * several patterns:
- *
- * - Direct match: `app.py` or `app.R`
- * - Prefixed patterns: `app-*.py`, `app_*.py`, `app-*.R`, or `app_*.R`
- * - Suffixed patterns: `*-app.py`, `*_app.py`, `*-app.R`, or `*_app.R`
- * - For R files only: additional R-specific Shiny app patterns via
- *   `isShinyAppRPart`
- *
- * @param filename - The path or filename to check
- * @param language - The programming language, either "python" or "r"
- * @returns `true` if the filename matches a Shiny app pattern, `false`
- * otherwise
- */
-export function isShinyAppFilename(
-  filename: string,
-  language: string
-): boolean {
-  filename = path.basename(filename);
-
-  const extension = { python: "py", r: "R" }[language];
-
-  // Only .py or .R files
-  if (!new RegExp(`\\.${extension}$`, "i").test(filename)) {
-    return false;
-  }
-
-  // Accepted patterns:
-  // app.py|R
-  const rxApp = new RegExp(`^app\\.${extension}$`, "i");
-  // app-*.py|R
-  // app_*.py|R
-  const rxAppDash = new RegExp(`^app[-_].+\\.${extension}$`, "i");
-  // *-app.py|R
-  // *_app.py|R
-  const rxDashApp = new RegExp(`[-_]app\\.${extension}$`, "i");
-
-  if (rxApp.test(filename)) {
-    return true;
-  } else if (rxAppDash.test(filename)) {
-    return true;
-  } else if (rxDashApp.test(filename)) {
-    return true;
-  }
-
-  if (language === "r") {
-    return isShinyAppRPart(filename);
-  }
-
-  return false;
-}
-
-export function isShinyAppRPart(filename: string): boolean {
-  filename = path.basename(filename);
-  return ["ui.r", "server.r", "global.r"].includes(filename.toLowerCase());
 }

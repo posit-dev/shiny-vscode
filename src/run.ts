@@ -275,11 +275,11 @@ export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
   // Undocumented `shiny.r.runAppIn`: "console" (default) or "terminal".
   // Only meaningful in Positron, where it forces the terminal path, in which
   // this extension owns the startup wait and its dialogs (#123).
-  const runLocation = vscode.workspace
+  const runAppIn = vscode.workspace
     .getConfiguration("shiny.r")
-    .get<"console" | "terminal">("runLocation", "console");
+    .get<"console" | "terminal">("runAppIn", "console");
   const runAppApi =
-    runLocation === "terminal" ? undefined : await getPositronRunAppApi();
+    runAppIn === "terminal" ? undefined : await getPositronRunAppApi();
   if (runAppApi) {
     return runShinyAppInConsole(runAppApi, {
       // Leave this `undefined` when no URI was passed: the Run App API falls

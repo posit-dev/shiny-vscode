@@ -11,8 +11,11 @@ const SHINY_APP_LANGUAGES: ShinyAppLanguage[] = ["python", "r"];
  */
 const DETECT_ON_CHANGE_DELAY = 500;
 
-/** Detected Shiny app language by document URI, for open documents that are Shiny apps. */
-const languageByUri = new Map<string, ShinyAppLanguage>();
+/** Detected Shiny app by document URI string, for open documents that are Shiny apps. */
+const appByUri = new Map<
+  string,
+  { uri: vscode.Uri; language: ShinyAppLanguage }
+>();
 
 /**
  * Detect Shiny apps in open documents and keep the app resource context keys
@@ -63,20 +66,20 @@ export function detectShinyApp(document: vscode.TextDocument): void {
   const uri = document.uri.toString();
   const language = getShinyAppLanguage(document);
 
-  if (language === languageByUri.get(uri)) {
+  if (language === appByUri.get(uri)?.language) {
     return;
   }
   if (language) {
-    languageByUri.set(uri, language);
+    appByUri.set(uri, { uri: document.uri, language });
   } else {
-    languageByUri.delete(uri);
+    appByUri.delete(uri);
   }
   updateAppResourceContexts();
 }
 
 /** Stop tracking a closed document, and update the app resource context keys. */
 export function forgetShinyApp(document: vscode.TextDocument): void {
-  if (languageByUri.delete(document.uri.toString())) {
+  if (appByUri.delete(document.uri.toString())) {
     updateAppResourceContexts();
   }
 }
@@ -101,10 +104,15 @@ function getShinyAppLanguage(
 }
 
 function updateAppResourceContexts(): void {
+  // Pass Uri objects, not strings: on web and remote hosts the extension host
+  // sees file: URIs while the editor's `resource` key is vscode-remote:, and
+  // only Uri objects are transformed to match before the workbench stringifies
+  // them.
+  const apps = Array.from(appByUri.values());
   for (const language of SHINY_APP_LANGUAGES) {
-    const uris = Array.from(languageByUri)
-      .filter(([, appLanguage]) => appLanguage === language)
-      .map(([uri]) => uri);
+    const uris = apps
+      .filter((app) => app.language === language)
+      .map((app) => app.uri);
     vscode.commands.executeCommand(
       "setContext",
       `shiny.${language}.appResources`,

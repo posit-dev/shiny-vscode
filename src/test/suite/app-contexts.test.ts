@@ -33,6 +33,19 @@ suite("Shiny app resource context keys", () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
+  /**
+   * The URIs most recently set for a context key, as strings.
+   * Asserts that they were set as Uri objects, which, unlike strings, are
+   * transformed to match the editor's `resource` on web and remote hosts.
+   */
+  function getContext(key: string): string[] | undefined {
+    const uris = contextByKey.get(key) as unknown[] | undefined;
+    return uris?.map((uri) => {
+      assert.ok(uri instanceof vscode.Uri, `Expected a Uri, got ${uri}`);
+      return uri.toString();
+    });
+  }
+
   /** Write a file to the temp dir and open it as a text document. */
   async function openDocument(
     filename: string,
@@ -50,10 +63,10 @@ suite("Shiny app resource context keys", () => {
     detectShinyApp(pyApp);
     detectShinyApp(rApp);
 
-    assert.deepStrictEqual(contextByKey.get("shiny.python.appResources"), [
+    assert.deepStrictEqual(getContext("shiny.python.appResources"), [
       pyApp.uri.toString(),
     ]);
-    assert.deepStrictEqual(contextByKey.get("shiny.r.appResources"), [
+    assert.deepStrictEqual(getContext("shiny.r.appResources"), [
       rApp.uri.toString(),
     ]);
   });
@@ -66,10 +79,7 @@ suite("Shiny app resource context keys", () => {
     detectShinyApp(dashApp);
 
     // Nothing changed, so the context keys weren't updated.
-    assert.strictEqual(
-      contextByKey.get("shiny.python.appResources"),
-      undefined
-    );
+    assert.strictEqual(getContext("shiny.python.appResources"), undefined);
   });
 
   test("Stop tracking an app when it is forgotten", async () => {
@@ -77,16 +87,12 @@ suite("Shiny app resource context keys", () => {
 
     detectShinyApp(rApp);
     assert.ok(
-      (contextByKey.get("shiny.r.appResources") as string[]).includes(
-        rApp.uri.toString()
-      )
+      getContext("shiny.r.appResources")!.includes(rApp.uri.toString())
     );
 
     forgetShinyApp(rApp);
     assert.ok(
-      !(contextByKey.get("shiny.r.appResources") as string[]).includes(
-        rApp.uri.toString()
-      )
+      !getContext("shiny.r.appResources")!.includes(rApp.uri.toString())
     );
   });
 });

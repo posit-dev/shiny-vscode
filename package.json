@@ -120,22 +120,22 @@
         {
           "command": "shiny.python.runApp",
           "group": "navigation@-3",
-          "when": "shiny.python.active && shellExecutionSupported"
+          "when": "resource in shiny.python.appResources && shellExecutionSupported"
         },
         {
           "command": "shiny.r.runApp",
           "group": "navigation@-3",
-          "when": "shiny.r.active && shellExecutionSupported"
+          "when": "resource in shiny.r.appResources && shellExecutionSupported"
         },
         {
           "command": "shiny.python.debugApp",
           "group": "navigation@-2",
-          "when": "shiny.python.active && shellExecutionSupported"
+          "when": "resource in shiny.python.appResources && shellExecutionSupported"
         },
         {
           "command": "shiny.stopApp",
           "group": "navigation@-1",
-          "when": "shiny.appRunning && (shiny.python.active || shiny.r.active)"
+          "when": "shiny.appRunning && (resource in shiny.python.appResources || resource in shiny.r.appResources)"
         }
       ],
       "editor/title": [
@@ -152,7 +152,7 @@
         {
           "command": "shiny.stopApp",
           "group": "navigation",
-          "when": "shiny.appRunning && (shiny.python.active || shiny.r.active)"
+          "when": "shiny.appRunning && (resource in shiny.python.appResources || resource in shiny.r.appResources)"
         }
       ]
     },

@@ -3,7 +3,7 @@ import * as fs from "fs";
 import { dirname as path_dirname, join as path_join } from "path";
 import * as vscode from "vscode";
 import * as winreg from "winreg";
-import { isShinyAppRPart } from "./extension";
+import { isShinyAppRPart } from "./app-filename";
 import {
   getPositronPreferredRuntime,
   getPositronRunAppApi,

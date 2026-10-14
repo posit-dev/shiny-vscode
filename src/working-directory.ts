@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import { isShinyAppRPart } from "./extension";
+import { isShinyAppRPart } from "./app-filename";
 
 export type RunFromOption = "projectRoot" | "appDirectory";
 

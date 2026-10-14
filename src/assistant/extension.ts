@@ -128,6 +128,19 @@ export function registerShinyChatParticipant(
     };
 
     // ========================================================================
+    // Deprecation notice, shown once at the start of each chat session
+    // ========================================================================
+    if (chatContext.history.length === 0) {
+      stream.markdown(`> **Shiny Assistant is deprecated** and will be removed in a future release of the Shiny extension.
+>
+> Check out [Posit Assistant](https://assistant.posit.co), our agentic assistant for data science in Positron and RStudio, where our assistant development is now focused. It covers a lot of the same ground as Shiny Assistant.
+>
+> Have questions or feedback? Let us know at [posit-dev/assistant-feedback](https://github.com/posit-dev/assistant-feedback/issues).
+
+`);
+    }
+
+    // ========================================================================
     // Commands
     // ========================================================================
     if (request.command === "start") {

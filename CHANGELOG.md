@@ -2,6 +2,8 @@
 
 ## UNRELEASED
 
+- Shiny Assistant (`@shiny`) is deprecated and will be removed in v1.6.0. The assistant now shows a deprecation notice at the start of each chat session, pointing to [Posit Assistant](https://assistant.posit.co), where assistant development is now focused.
+
 - Run Shiny App and Debug Shiny App now run the file whose button was clicked, rather than the focused editor's file. The commands also take an optional URI, so a keybinding's `args` or an agent can run a file without first opening and focusing it. (#117)
 
 ## 1.4.3

@@ -301,9 +301,9 @@
     "chatParticipants": [
       {
         "id": "chat.shiny-assistant",
-        "fullName": "Shiny Assistant",
+        "fullName": "Shiny Assistant (Deprecated)",
         "name": "shiny",
-        "description": "How can I help you?",
+        "description": "Deprecated. Use Posit Assistant at https://assistant.posit.co instead.",
         "isSticky": true,
         "commands": [
           {

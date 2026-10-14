@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { isShinyAppFilename } from "../extension";
+import { isShinyAppFilename } from "../app-filename";
 import { isPositron } from "../extension-api-utils/extensionHost";
 import { type DiffError } from "./diff";
 import { langNameToProperName, type LangName } from "./language";

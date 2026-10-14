@@ -2,7 +2,7 @@ import { isBinary } from "istextorbinary";
 import * as lzstring from "lz-string";
 import * as path from "path";
 import * as vscode from "vscode";
-import { isShinyAppFilename } from "./extension";
+import { isShinyAppFilename } from "./app-filename";
 
 type ShinyliveFile = {
   name: string;

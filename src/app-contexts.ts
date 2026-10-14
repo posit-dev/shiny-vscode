@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { isShinyAppFilename } from "./extension";
+import { isShinyAppFilename } from "./app-filename";
 
 type ShinyAppLanguage = "python" | "r";
 

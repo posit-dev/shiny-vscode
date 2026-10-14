@@ -57,9 +57,18 @@ async function getForwardedWorkbenchUrl(local_port: number): Promise<string> {
   });
 
   if (port_forward_cmd_output.status === "error") {
-    Error(
+    throw new Error(
       "Failed to get Posit workbench forwarded port. Error msg:\n" +
         port_forward_cmd_output.errorMsgs
+    );
+  }
+
+  const forwarded_port = port_forward_cmd_output.stdout[0]?.trim();
+  if (!forwarded_port || !/^\d+$/.test(forwarded_port)) {
+    throw new Error(
+      "Failed to get Posit workbench forwarded port. Output:\n" +
+        port_forward_cmd_output.stdout.join("") +
+        port_forward_cmd_output.stderr.join("")
     );
   }
 
@@ -68,7 +77,6 @@ async function getForwardedWorkbenchUrl(local_port: number): Promise<string> {
   if (!server_url || !session_url) {
     throw new Error("Can't find URL for workbench.");
   }
-  const forwarded_port = port_forward_cmd_output.stdout[0];
 
   return `${server_url}${session_url.slice(1)}p/${forwarded_port}/`;
 }

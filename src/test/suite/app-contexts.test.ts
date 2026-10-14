@@ -1,98 +1,214 @@
 import * as assert from "assert";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 import * as vscode from "vscode";
-import { detectShinyApp, forgetShinyApp } from "../../app-contexts";
+import {
+  activateAppDetection,
+  type AppDetectionHost,
+} from "../../app-contexts";
 
-suite("Shiny app resource context keys", () => {
-  let tempDir: string;
-  let contextByKey: Map<string, unknown>;
-  let originalExecuteCommand: typeof vscode.commands.executeCommand;
+/** Short delay for detecting edits so tests don't wait long. */
+const DETECT_LATER_DELAY = 10;
+
+/** Wait for longer than `DETECT_LATER_DELAY`. */
+function waitForDetectLater(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, DETECT_LATER_DELAY * 5));
+}
+
+/** A text document with only the members that app detection reads. */
+function fakeDocument(
+  fileName: string,
+  languageId: string,
+  text: string,
+  scheme = "file"
+): vscode.TextDocument & { text: string } {
+  const document = {
+    uri: vscode.Uri.from({ scheme, path: fileName }),
+    fileName,
+    languageId,
+    text,
+    getText: () => document.text,
+  };
+  return document as unknown as vscode.TextDocument & { text: string };
+}
+
+suite("Shiny app detection", () => {
+  let subscriptions: vscode.Disposable[];
+  let onDidOpen: vscode.EventEmitter<vscode.TextDocument>;
+  let onDidChange: vscode.EventEmitter<vscode.TextDocumentChangeEvent>;
+  let onDidClose: vscode.EventEmitter<vscode.TextDocument>;
+  let host: AppDetectionHost;
+  let contextValueByKey: Map<string, vscode.Uri[]>;
+  let setContextCount: number;
 
   setup(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "shiny-app-contexts-"));
-    contextByKey = new Map();
-
-    // Record setContext calls instead of applying them.
-    originalExecuteCommand = vscode.commands.executeCommand;
-    vscode.commands.executeCommand = (async (
-      command: string,
-      ...args: unknown[]
-    ) => {
-      if (command === "setContext") {
-        contextByKey.set(args[0] as string, args[1]);
-        return;
-      }
-      return originalExecuteCommand(command, ...args);
-    }) as typeof vscode.commands.executeCommand;
+    subscriptions = [];
+    onDidOpen = new vscode.EventEmitter();
+    onDidChange = new vscode.EventEmitter();
+    onDidClose = new vscode.EventEmitter();
+    subscriptions.push(onDidOpen, onDidChange, onDidClose);
+    contextValueByKey = new Map();
+    setContextCount = 0;
+    host = {
+      workspace: {
+        textDocuments: [],
+        onDidOpenTextDocument: onDidOpen.event,
+        onDidChangeTextDocument: onDidChange.event,
+        onDidCloseTextDocument: onDidClose.event,
+      },
+      setContext: (key, value) => {
+        setContextCount++;
+        contextValueByKey.set(key, value);
+      },
+    };
   });
 
   teardown(() => {
-    vscode.commands.executeCommand = originalExecuteCommand;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    subscriptions.forEach((subscription) => subscription.dispose());
   });
 
-  /**
-   * The URIs most recently set for a context key, as strings.
-   * Asserts that they were set as Uri objects, which, unlike strings, are
-   * transformed to match the editor's `resource` on web and remote hosts.
-   */
-  function getContext(key: string): string[] | undefined {
-    const uris = contextByKey.get(key) as unknown[] | undefined;
-    return uris?.map((uri) => {
-      assert.ok(uri instanceof vscode.Uri, `Expected a Uri, got ${uri}`);
-      return uri.toString();
+  /** Start app detection with already open documents. */
+  function activate(...textDocuments: vscode.TextDocument[]): void {
+    host.workspace = { ...host.workspace, textDocuments };
+    activateAppDetection({ subscriptions }, host, DETECT_LATER_DELAY);
+  }
+
+  /** Replace a document's text and fire its change event. */
+  function edit(
+    document: vscode.TextDocument & { text: string },
+    text: string
+  ) {
+    document.text = text;
+    onDidChange.fire({
+      document,
+      contentChanges: [{} as vscode.TextDocumentContentChangeEvent],
+      reason: undefined,
     });
   }
 
-  /** Write a file to the temp dir and open it as a text document. */
-  async function openDocument(
-    filename: string,
-    content: string
-  ): Promise<vscode.TextDocument> {
-    const filePath = path.join(tempDir, filename);
-    fs.writeFileSync(filePath, content);
-    return vscode.workspace.openTextDocument(filePath);
+  /** The app resources context key for a language, as strings. */
+  function getAppResources(language: "python" | "r"): string[] {
+    const uris = contextValueByKey.get(`shiny.${language}.appResources`);
+    return uris!.map((uri) => uri.toString());
   }
 
-  test("Track Python and R Shiny apps by their own document", async () => {
-    const pyApp = await openDocument("app.py", "from shiny import App\n");
-    const rApp = await openDocument("app.R", "library(shiny)\n");
+  test("Detect apps that are already open", () => {
+    const pyApp = fakeDocument("/w/app.py", "python", "import shiny\n");
 
-    detectShinyApp(pyApp);
-    detectShinyApp(rApp);
+    activate(pyApp);
 
-    assert.deepStrictEqual(getContext("shiny.python.appResources"), [
-      pyApp.uri.toString(),
-    ]);
-    assert.deepStrictEqual(getContext("shiny.r.appResources"), [
-      rApp.uri.toString(),
-    ]);
+    assert.deepStrictEqual(getAppResources("python"), [pyApp.uri.toString()]);
+    assert.deepStrictEqual(getAppResources("r"), []);
   });
 
-  test("Ignore documents that are not Shiny apps", async () => {
-    const script = await openDocument("script.py", "from shiny import App\n");
-    const dashApp = await openDocument("dash_app.py", "import dash\n");
+  test("Clear the context keys when no apps are open", () => {
+    activate();
 
-    detectShinyApp(script);
-    detectShinyApp(dashApp);
-
-    // Nothing changed, so the context keys weren't updated.
-    assert.strictEqual(getContext("shiny.python.appResources"), undefined);
+    assert.deepStrictEqual(getAppResources("python"), []);
+    assert.deepStrictEqual(getAppResources("r"), []);
   });
 
-  test("Stop tracking an app when it is forgotten", async () => {
-    const rApp = await openDocument("app.R", "library(shiny)\n");
+  test("Detect Python and R apps when they are opened", () => {
+    const pyApp = fakeDocument("/w/app.py", "python", "import shiny\n");
+    const rApp = fakeDocument("/w/app.R", "r", "library(shiny)\n");
+    activate();
 
-    detectShinyApp(rApp);
-    assert.ok(
-      getContext("shiny.r.appResources")!.includes(rApp.uri.toString())
+    onDidOpen.fire(pyApp);
+    onDidOpen.fire(rApp);
+
+    assert.deepStrictEqual(getAppResources("python"), [pyApp.uri.toString()]);
+    assert.deepStrictEqual(getAppResources("r"), [rApp.uri.toString()]);
+  });
+
+  test("Ignore documents that are not Shiny apps", () => {
+    activate();
+
+    onDidOpen.fire(fakeDocument("/w/script.py", "python", "import shiny\n"));
+    onDidOpen.fire(fakeDocument("/w/dash_app.py", "python", "import dash\n"));
+    onDidOpen.fire(fakeDocument("/w/app.py", "plaintext", "import shiny\n"));
+
+    assert.deepStrictEqual(getAppResources("python"), []);
+  });
+
+  test("Ignore apps that are not files on disk", () => {
+    activate();
+
+    onDidOpen.fire(
+      fakeDocument("/w/app.py", "python", "import shiny\n", "untitled")
+    );
+    onDidOpen.fire(
+      fakeDocument("/w/app.py", "python", "import shiny\n", "git")
     );
 
-    forgetShinyApp(rApp);
-    assert.ok(
-      !getContext("shiny.r.appResources")!.includes(rApp.uri.toString())
-    );
+    assert.deepStrictEqual(getAppResources("python"), []);
+  });
+
+  test("Stop tracking an app when it is closed", () => {
+    const rApp = fakeDocument("/w/app.R", "r", "library(shiny)\n");
+    activate(rApp);
+
+    onDidClose.fire(rApp);
+
+    assert.deepStrictEqual(getAppResources("r"), []);
+  });
+
+  test("Set context keys only when the apps change", () => {
+    const pyApp = fakeDocument("/w/app.py", "python", "import shiny\n");
+    const script = fakeDocument("/w/script.py", "python", "import shiny\n");
+    activate(pyApp);
+    const initialCount = setContextCount;
+
+    onDidOpen.fire(pyApp);
+    onDidOpen.fire(script);
+    onDidClose.fire(script);
+
+    assert.strictEqual(setContextCount, initialCount);
+  });
+
+  test("Redetect an app when its language changes", () => {
+    const pyApp = fakeDocument("/w/app.py", "python", "import shiny\n");
+    activate(pyApp);
+
+    // VS Code changes a document's language by closing and reopening it.
+    onDidClose.fire(pyApp);
+    onDidOpen.fire(fakeDocument("/w/app.py", "plaintext", "import shiny\n"));
+
+    assert.deepStrictEqual(getAppResources("python"), []);
+  });
+
+  test("Detect an app once edits settle", async () => {
+    const pyApp = fakeDocument("/w/app.py", "python", "print(1)\n");
+    activate(pyApp);
+
+    edit(pyApp, "import shiny\n");
+    edit(pyApp, "import shiny\nprint(1)\n");
+    assert.deepStrictEqual(getAppResources("python"), []);
+
+    await waitForDetectLater();
+    assert.deepStrictEqual(getAppResources("python"), [pyApp.uri.toString()]);
+  });
+
+  test("Skip changes that only affect the dirty state", async () => {
+    const pyApp = fakeDocument("/w/app.py", "python", "print(1)\n");
+    activate(pyApp);
+
+    pyApp.text = "import shiny\n";
+    onDidChange.fire({
+      document: pyApp,
+      contentChanges: [],
+      reason: undefined,
+    });
+
+    await waitForDetectLater();
+    assert.deepStrictEqual(getAppResources("python"), []);
+  });
+
+  test("Cancel a delayed detection when the document is closed", async () => {
+    const pyApp = fakeDocument("/w/app.py", "python", "print(1)\n");
+    activate(pyApp);
+
+    edit(pyApp, "import shiny\n");
+    onDidClose.fire(pyApp);
+
+    await waitForDetectLater();
+    assert.deepStrictEqual(getAppResources("python"), []);
   });
 });

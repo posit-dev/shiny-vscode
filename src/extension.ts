@@ -60,7 +60,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   activateAssistant(context);
 
-  activateAppDetection(context);
+  activateAppDetection(context, {
+    workspace: vscode.workspace,
+    setContext: (key, value) => {
+      vscode.commands.executeCommand("setContext", key, value);
+    },
+  });
 
   vscode.debug.onDidStartDebugSession(onDidStartDebugSession);
 }

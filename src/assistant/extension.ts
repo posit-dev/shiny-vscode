@@ -133,7 +133,7 @@ export function registerShinyChatParticipant(
     if (chatContext.history.length === 0) {
       const deprecationPitch = isPositron()
         ? "Check out [Posit Assistant](https://assistant.posit.co), our agentic assistant for data science in Positron, where our assistant development is now focused. It covers a lot of the same ground as Shiny Assistant."
-        : "You can continue using Copilot without Shiny Assistant. To try Posit Assistant, our agentic assistant for data science where our assistant development is now focused, [download Positron](https://positron.posit.co) and [get started](https://assistant.posit.co) today.";
+        : "You can continue using Copilot without Shiny Assistant. To try [Posit Assistant](https://assistant.posit.co), our agentic assistant for data science where our assistant development is now focused, [download Positron](https://positron.posit.co) and get started today.";
       stream.markdown(`> **Shiny Assistant is deprecated** and will be removed in a future release of the Shiny extension.
 >
 > ${deprecationPitch}

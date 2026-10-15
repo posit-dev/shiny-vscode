@@ -270,16 +270,14 @@ async def update_dashboard(
     query: Annotated[str, 'A DuckDB SQL query; must be a SELECT statement, or "".']
 ):
     "Modifies the data presented in the data dashboard based on the provided SQL query"
-    async with reactive.lock():
-        current_query.set(query)
-        await reactive.flush()
+    current_query.set(query)
 ```
 
 ::: callout-note
-### Reactive locking
+### Setting reactive values from a tool
 
-Since this tool runs within a [non-blocking message stream](genai-tools.qmd#non-blocking-streams) (i.e., `.append_message_stream()`), in order to prevent race conditions, it must lock reactivity graph when updating reactive value(s).
-If the tool was, instead, running in a [blocking stream](genai-chatbots.qmd#message-stream-context), the `reactive.lock()` and `reactive.flush()` wouldn't be necessary.
+This tool runs within a [non-blocking message stream](genai-chatbots.qmd#non-blocking-streams) (i.e., `.append_message_stream()`), outside of any reactive effect.
+It can still set a reactive value directly: setting a value schedules a reactive update, so `current_data()` and the views that depend on it update while the response continues to stream.
 :::
 
 The final crucial piece is that, in order for the LLM to generate accurate SQL, it needs to know the schema of the dataset.

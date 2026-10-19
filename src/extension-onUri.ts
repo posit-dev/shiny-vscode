@@ -1,4 +1,3 @@
-import { URLSearchParams } from "url";
 import * as vscode from "vscode";
 import {
   shinyliveSaveAppFromUrl,
@@ -12,16 +11,28 @@ export async function handlePositShinyUri(uri: vscode.Uri): Promise<void> {
     return;
   }
 
-  const encodedUrl = new URLSearchParams(uri.query).get("url");
+  // VS Code has already percent-decoded the query. Keep everything after
+  // `url=`, including embedded &, +, and %, rather than parsing it as form data.
+  let url = uri.query.match(/(?:^|&)url=(.*)/s)?.[1];
 
-  if (!encodedUrl) {
+  if (!url) {
     vscode.window.showErrorMessage(
       "No URL provided in the Open from Shinylive link."
     );
     return;
   }
 
-  const url = decodeURIComponent(encodedUrl);
+  // Links built with searchParams.set("url", encodeURIComponent(url)) are
+  // double-encoded. Decode the remaining layer only if no URL scheme is present;
+  // already-decoded URLs may contain literal percent signs that must be kept.
+  if (!/^[a-z][a-z\d+.-]*:/i.test(url)) {
+    try {
+      url = decodeURIComponent(url);
+    } catch {
+      // Leave malformed encoding for the URL decoder to reject below.
+    }
+  }
+
   const bundle = shinyliveUrlDecode(url);
 
   if (!bundle) {

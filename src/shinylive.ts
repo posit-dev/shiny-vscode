@@ -1,3 +1,4 @@
+import { isUtf8 } from "buffer";
 import { isBinary } from "istextorbinary";
 import * as lzstring from "lz-string";
 import * as path from "path";
@@ -289,9 +290,15 @@ export async function shinyliveCreateFromExplorer(
       }
 
       const contentRaw = Buffer.from(await vscode.workspace.fs.readFile(file));
-      // Inspect bytes, not extensions: some data formats are unknown to the
-      // extension lists, and .sqlite is even classified as text.
-      const type = isBinary(null, contentRaw) ? "binary" : "text";
+      // Preserve known binary formats and inspect bytes for unknown or
+      // misclassified extensions. The detector samples bytes, so also validate
+      // the entire buffer before decoding it as UTF-8 to avoid data loss.
+      const type =
+        isBinary(file.fsPath) ||
+        isBinary(null, contentRaw) ||
+        !isUtf8(contentRaw)
+          ? "binary"
+          : "text";
       const content = contentRaw.toString(
         type === "binary" ? "base64" : "utf8"
       );
@@ -466,7 +473,7 @@ async function askUserForOutputFile(
   if (!uri) {
     // Reset the last used directory if the user cancels, otherwise they can
     // get stuck in the "local" directory picker on remote vscode instances
-    lastUsedDir = initDir || vscode.Uri.file(".");
+    lastUsedDir = initDir;
 
     return;
   }
@@ -495,7 +502,7 @@ async function askUserForOutputDirectory(): Promise<vscode.Uri | undefined> {
   if (!uri) {
     // Reset the last used directory if the user cancels, otherwise they can
     // get stuck in the "local" directory picker on remote vscode instances
-    lastUsedDir = defaultUri || vscode.Uri.file(".");
+    lastUsedDir = defaultUri;
 
     return;
   }

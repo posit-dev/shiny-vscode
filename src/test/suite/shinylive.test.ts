@@ -40,24 +40,54 @@ suite("Shinylive links", () => {
       .forEach((undo) => undo());
   });
 
-  test("Single-file import opens the save dialog without a workspace or prior directory", async () => {
+  test("Repeated single-file save cancellation leaves no default directory without a workspace", async () => {
     stub(vscode.workspace, "workspaceFolders", undefined);
-    let options: vscode.SaveDialogOptions | undefined;
+    const options: vscode.SaveDialogOptions[] = [];
     stub(
       vscode.window,
       "showSaveDialog",
       async (value: vscode.SaveDialogOptions) => {
-        options = value;
+        options.push(value);
         return undefined;
       }
     );
+    const url = linkForJson(JSON.stringify(appFiles));
 
-    await shinyliveSaveAppFromUrl(linkForJson(JSON.stringify(appFiles)));
+    await shinyliveSaveAppFromUrl(url);
+    await shinyliveSaveAppFromUrl(url);
 
-    assert.ok(options, "The save dialog must be reached");
-    assert.strictEqual(options.defaultUri, undefined);
+    assert.strictEqual(options.length, 2, "Both save dialogs must be reached");
+    assert.deepStrictEqual(
+      options.map((option) => option.defaultUri),
+      [undefined, undefined]
+    );
     // eslint-disable-next-line @typescript-eslint/naming-convention
-    assert.deepStrictEqual(options.filters, { Python: ["py"] });
+    assert.deepStrictEqual(options[0].filters, { Python: ["py"] });
+  });
+
+  test("Repeated multi-file save cancellation leaves no default directory without a workspace", async () => {
+    stub(vscode.workspace, "workspaceFolders", undefined);
+    const options: vscode.SaveDialogOptions[] = [];
+    stub(
+      vscode.window,
+      "showSaveDialog",
+      async (value: vscode.SaveDialogOptions) => {
+        options.push(value);
+        return undefined;
+      }
+    );
+    const url = linkForJson(
+      JSON.stringify([...appFiles, { name: "data.txt", content: "data" }])
+    );
+
+    await shinyliveSaveAppFromUrl(url);
+    await shinyliveSaveAppFromUrl(url);
+
+    assert.strictEqual(options.length, 2, "Both save dialogs must be reached");
+    assert.deepStrictEqual(
+      options.map((option) => option.defaultUri),
+      [undefined, undefined]
+    );
   });
 
   for (const header of ["", "h=0&"]) {
@@ -260,15 +290,44 @@ suite("Shinylive links", () => {
     );
     try {
       const binary = Buffer.from([0x58, 0x0a, 0, 0, 0, 3, 0xff, 0x80]);
+      // The start/middle/end samples are printable ASCII, but byte 40 is not UTF-8.
+      const hiddenInvalidUtf8 = Buffer.alloc(256, 0x41);
+      hiddenInvalidUtf8[40] = 0xff;
       const fixtures = [
-        { name: "app.py", bytes: Buffer.from(appFiles[0].content) },
+        {
+          name: "app.py",
+          bytes: Buffer.from(appFiles[0].content),
+          expectedType: undefined,
+        },
         ...["rds", "parquet", "sqlite", "xlsx", "unknown"].map((ext) => ({
           name: `data.${ext}`,
           bytes: binary,
+          expectedType: "binary",
         })),
+        {
+          name: "sampled.png",
+          bytes: hiddenInvalidUtf8,
+          expectedType: "binary",
+        },
+        {
+          name: "sampled.unknown",
+          bytes: hiddenInvalidUtf8,
+          expectedType: "binary",
+        },
+        {
+          name: "known-binary.png",
+          bytes: Buffer.from("Printable ASCII"),
+          expectedType: "binary",
+        },
+        {
+          name: "empty.unknown",
+          bytes: Buffer.alloc(0),
+          expectedType: undefined,
+        },
         {
           name: "notes.unknown",
           bytes: Buffer.from("Unicode text: café 日本語\n"),
+          expectedType: undefined,
         },
       ];
       await Promise.all(
@@ -304,11 +363,7 @@ suite("Shinylive links", () => {
         const file: (typeof bundle.files)[number] | undefined =
           bundle.files.find((candidate) => candidate.name === fixture.name);
         assert.ok(file, fixture.name);
-        assert.strictEqual(
-          file.type,
-          fixture.bytes === binary ? "binary" : undefined,
-          fixture.name
-        );
+        assert.strictEqual(file.type, fixture.expectedType, fixture.name);
         assert.deepStrictEqual(
           Buffer.from(file.content, file.type === "binary" ? "base64" : "utf8"),
           fixture.bytes,

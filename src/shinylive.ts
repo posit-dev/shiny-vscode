@@ -1,3 +1,4 @@
+import { isUtf8 } from "buffer";
 import { isBinary } from "istextorbinary";
 import * as lzstring from "lz-string";
 import * as path from "path";
@@ -277,7 +278,6 @@ export async function shinyliveCreateFromExplorer(
 
   const files = await Promise.all(
     allFilesSorted.map(async (file: vscode.Uri): Promise<ShinyliveFile> => {
-      const type = isBinary(file.fsPath) ? "binary" : "text";
       let name = pathRelativeToRootDir(file);
 
       // Primary file needs to be `app.R` or `app.py` (or ui/server.R)
@@ -289,11 +289,19 @@ export async function shinyliveCreateFromExplorer(
         }
       }
 
-      const contentRaw = await vscode.workspace.fs.readFile(file);
-      const content =
-        type === "binary"
-          ? Buffer.from(contentRaw).toString("base64")
-          : Buffer.from(contentRaw).toString();
+      const contentRaw = Buffer.from(await vscode.workspace.fs.readFile(file));
+      // Preserve known binary formats and inspect bytes for unknown or
+      // misclassified extensions. The detector samples bytes, so also validate
+      // the entire buffer before decoding it as UTF-8 to avoid data loss.
+      const type =
+        isBinary(file.fsPath) ||
+        isBinary(null, contentRaw) ||
+        !isUtf8(contentRaw)
+          ? "binary"
+          : "text";
+      const content = contentRaw.toString(
+        type === "binary" ? "base64" : "utf8"
+      );
 
       switch (type) {
         case "binary":
@@ -429,7 +437,7 @@ async function askUserForUrl(): Promise<string> {
   return url || "";
 }
 
-let lastUsedDir: vscode.Uri;
+let lastUsedDir: vscode.Uri | undefined;
 
 /**
  * Ask the user for an output location where a single-file Shinylive app will be
@@ -444,8 +452,10 @@ let lastUsedDir: vscode.Uri;
 async function askUserForOutputFile(
   defaultName: string
 ): Promise<vscode.Uri | undefined> {
-  const initDir = lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri;
-  const defaultUri = vscode.Uri.joinPath(initDir, defaultName);
+  const initDir = lastUsedDir || vscode.workspace.workspaceFolders?.[0]?.uri;
+  const defaultUri = initDir
+    ? vscode.Uri.joinPath(initDir, defaultName)
+    : undefined;
 
   const uri = await vscode.window.showSaveDialog({
     defaultUri: defaultUri,
@@ -463,7 +473,7 @@ async function askUserForOutputFile(
   if (!uri) {
     // Reset the last used directory if the user cancels, otherwise they can
     // get stuck in the "local" directory picker on remote vscode instances
-    lastUsedDir = initDir || vscode.Uri.file(".");
+    lastUsedDir = initDir;
 
     return;
   }
@@ -481,7 +491,7 @@ async function askUserForOutputFile(
  * selected directory, or `undefined` if the user canceled the selection.
  */
 async function askUserForOutputDirectory(): Promise<vscode.Uri | undefined> {
-  const defaultUri = lastUsedDir || vscode.workspace.workspaceFolders?.[0].uri;
+  const defaultUri = lastUsedDir || vscode.workspace.workspaceFolders?.[0]?.uri;
 
   const uri = await vscode.window.showSaveDialog({
     defaultUri: defaultUri,
@@ -492,7 +502,7 @@ async function askUserForOutputDirectory(): Promise<vscode.Uri | undefined> {
   if (!uri) {
     // Reset the last used directory if the user cancels, otherwise they can
     // get stuck in the "local" directory picker on remote vscode instances
-    lastUsedDir = defaultUri || vscode.Uri.file(".");
+    lastUsedDir = defaultUri;
 
     return;
   }
@@ -553,28 +563,50 @@ export function shinyliveUrlEncode({ language, files, mode }: ShinyliveBundle) {
  * `undefined` if the URL could not be decoded.
  */
 export function shinyliveUrlDecode(url: string): ShinyliveBundle | undefined {
-  const { hash, pathname } = new URL(url);
-  const { searchParams } = new URL(
-    "https://shinylive.io/?" + hash.substring(1)
-  );
+  try {
+    const { hash, pathname } = new URL(url);
+    const searchParams = new URLSearchParams(hash.substring(1));
+    const code = searchParams.get("code");
 
-  const code = searchParams.get("code");
+    if (!code) {
+      return;
+    }
 
-  if (!code) {
+    const filesJson = lzstring.decompressFromEncodedURIComponent(code);
+    if (!filesJson) {
+      return;
+    }
+
+    const parsed: unknown = JSON.parse(filesJson);
+    if (!Array.isArray(parsed)) {
+      return;
+    }
+
+    const files: ShinyliveFile[] = [];
+    for (const file of parsed) {
+      if (
+        !file ||
+        typeof file.name !== "string" ||
+        !file.name ||
+        file.name.includes("\u0000") ||
+        typeof file.content !== "string" ||
+        (file.type !== undefined &&
+          file.type !== "text" &&
+          file.type !== "binary")
+      ) {
+        return;
+      }
+      files.push({ ...file, name: path.normalize(file.name) });
+    }
+
+    const pathParts = pathname.split("/");
+    const language: ShinyliveLanguage = pathParts.includes("py") ? "py" : "r";
+    const mode: ShinyliveMode = pathParts.includes("editor") ? "editor" : "app";
+
+    return { language, mode, files };
+  } catch {
     return;
   }
-
-  const filesJson = lzstring.decompressFromEncodedURIComponent(code);
-  const files = JSON.parse(filesJson).map((file: ShinyliveFile) => {
-    file.name = path.normalize(file.name);
-    return file;
-  });
-
-  const pathParts = pathname.split("/");
-  const language: ShinyliveLanguage = pathParts.includes("py") ? "py" : "r";
-  const mode: ShinyliveMode = pathParts.includes("editor") ? "editor" : "app";
-
-  return { language, mode, files: files as ShinyliveFile[] };
 }
 
 /**

@@ -22,10 +22,7 @@
   ],
   "activationEvents": [
     "onLanguage:python",
-    "onCommand:shiny.python.runApp",
-    "onCommand:shiny.python.debugApp",
     "onLanguage:r",
-    "onCommand:shiny.r.runApp",
     "onUri"
   ],
   "main": "./out/extension.js",

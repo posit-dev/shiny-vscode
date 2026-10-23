@@ -22,10 +22,7 @@
   ],
   "activationEvents": [
     "onLanguage:python",
-    "onCommand:shiny.python.runApp",
-    "onCommand:shiny.python.debugApp",
     "onLanguage:r",
-    "onCommand:shiny.r.runApp",
     "onUri"
   ],
   "main": "./out/extension.js",
@@ -124,29 +121,29 @@
         },
         {
           "command": "shiny.validateApp",
-          "when": "shiny.python.active || shiny.r.active"
+          "when": "resource in shiny.python.appResources || resource in shiny.r.appResources"
         }
       ],
       "editor/title/run": [
         {
           "command": "shiny.python.runApp",
           "group": "navigation@-3",
-          "when": "shiny.python.active && shellExecutionSupported"
+          "when": "resource in shiny.python.appResources && shellExecutionSupported"
         },
         {
           "command": "shiny.r.runApp",
           "group": "navigation@-3",
-          "when": "shiny.r.active && shellExecutionSupported"
+          "when": "resource in shiny.r.appResources && shellExecutionSupported"
         },
         {
           "command": "shiny.python.debugApp",
           "group": "navigation@-2",
-          "when": "shiny.python.active && shellExecutionSupported"
+          "when": "resource in shiny.python.appResources && shellExecutionSupported"
         },
         {
           "command": "shiny.stopApp",
           "group": "navigation@-1",
-          "when": "shiny.appRunning && (shiny.python.active || shiny.r.active)"
+          "when": "shiny.appRunning && (resource in shiny.python.appResources || resource in shiny.r.appResources)"
         }
       ],
       "editor/title": [
@@ -163,7 +160,7 @@
         {
           "command": "shiny.stopApp",
           "group": "navigation",
-          "when": "shiny.appRunning && (shiny.python.active || shiny.r.active)"
+          "when": "shiny.appRunning && (resource in shiny.python.appResources || resource in shiny.r.appResources)"
         }
       ]
     },
@@ -360,9 +357,9 @@
     "chatParticipants": [
       {
         "id": "chat.shiny-assistant",
-        "fullName": "Shiny Assistant",
+        "fullName": "Shiny Assistant (Deprecated)",
         "name": "shiny",
-        "description": "How can I help you?",
+        "description": "Deprecated. Use Posit Assistant at https://assistant.posit.co instead.",
         "isSticky": true,
         "commands": [
           {

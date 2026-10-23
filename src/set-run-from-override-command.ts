@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { isShinyAppFilename } from "./extension";
+import { isShinyAppFilename } from "./app-filename";
 import type { RunFromOption } from "./working-directory";
 import {
   getRMultiFileAppSiblings,

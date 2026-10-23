@@ -97,7 +97,7 @@ app = App(app_ui, server)
       assert.strictEqual(calcDiags[0].severity, ShinyDiagnosticSeverity.error);
     });
 
-    test("Detects UI output and server function name mismatch with error severity", async () => {
+    test("Reports a possible UI output mismatch as a warning", async () => {
       const buggyApp = `
 from shiny import App, render, ui
 
@@ -119,7 +119,7 @@ app = App(app_ui, server)
       assert.strictEqual(mismatchDiags.length, 1);
       assert.strictEqual(
         mismatchDiags[0].severity,
-        ShinyDiagnosticSeverity.error
+        ShinyDiagnosticSeverity.warning
       );
       assert.ok(mismatchDiags[0].message.includes("mismatched_output_name"));
     });
@@ -152,14 +152,14 @@ app = App(app_ui, server)
       );
     });
 
-    test("Detects global state leak with error severity", async () => {
+    test("Warns when server sessions write a module-level reactive value", async () => {
       const buggyApp = `
 from shiny import App, reactive, render, ui
 
 user_session_state = reactive.value("guest")
 
 def server(input, output, session):
-    pass
+    user_session_state.set(input.name())
 
 app = App(ui.page_fluid(), server)
 `;
@@ -168,7 +168,10 @@ app = App(ui.page_fluid(), server)
         (d) => d.code === ShinyDiagnosticCode.globalStateLeak
       );
       assert.strictEqual(leakDiags.length, 1);
-      assert.strictEqual(leakDiags[0].severity, ShinyDiagnosticSeverity.error);
+      assert.strictEqual(
+        leakDiags[0].severity,
+        ShinyDiagnosticSeverity.warning
+      );
     });
 
     test("Validates Shiny Python module files", async () => {
@@ -285,7 +288,7 @@ server <- function(input, output, session) {
       );
     });
 
-    test("Detects UI output mismatch in R Shiny with error severity", async () => {
+    test("Reports a possible R UI output mismatch as a warning", async () => {
       const buggyApp = `
 library(shiny)
 
@@ -306,7 +309,7 @@ server <- function(input, output, session) {
       assert.strictEqual(mismatchDiags.length, 1);
       assert.strictEqual(
         mismatchDiags[0].severity,
-        ShinyDiagnosticSeverity.error
+        ShinyDiagnosticSeverity.warning
       );
       assert.ok(mismatchDiags[0].message.includes("mismatched_plot"));
     });
@@ -365,6 +368,176 @@ counterServer <- function(id) {
 });
 
 suite("AST validation regressions", () => {
+  test("Shared session state is detected regardless of its variable name", () => {
+    const diagnostics = validateShinyCode(
+      `from shiny import reactive
+shared_state = reactive.Value(None)
+def server(input, output, session):
+    @reactive.effect
+    def update():
+        shared_state.set(input.name())
+`,
+      "python"
+    );
+    assert.strictEqual(diagnostics.length, 1);
+    assert.strictEqual(
+      diagnostics[0].code,
+      ShinyDiagnosticCode.globalStateLeak
+    );
+    assert.strictEqual(
+      diagnostics[0].severity,
+      ShinyDiagnosticSeverity.warning
+    );
+  });
+
+  test("Read-only shared values and locally shadowed values are not session leaks", () => {
+    assert.deepStrictEqual(
+      validateShinyCode(
+        `from shiny import reactive
+user_count = reactive.value(0)
+shared_state = reactive.value(None)
+def server(input, output, session):
+    shared_state = reactive.value(None)
+    @reactive.effect
+    def update():
+        shared_state.set(input.name())
+        print(user_count.get())
+`,
+        "python"
+      ),
+      []
+    );
+  });
+
+  test("Intentional shared writes can suppress the session-state warning", () => {
+    assert.deepStrictEqual(
+      validateShinyCode(
+        `from shiny import reactive
+user_count = reactive.value(0)
+def server(input, output, session):
+    user_count.set(user_count.get() + 1)  # shiny: ignore shiny.globalStateLeak
+`,
+        "python"
+      ),
+      []
+    );
+  });
+
+  for (const [language, text] of [
+    [
+      "python",
+      `from shiny import render, ui
+from extra_ui import extra_ui
+app_ui = ui.page_fluid(ui.output_text("static"), extra_ui)
+def server(input, output, session):
+    @render.text
+    def external_result():
+        return "ok"
+`,
+    ],
+    [
+      "python",
+      `from shiny import reactive, render, ui
+app_ui = ui.page_fluid(ui.output_text("static"))
+def server(input, output, session):
+    @reactive.effect
+    def insert():
+        ui.insert_ui(ui.output_text(input.output_id()), selector="#target")
+    @render.text
+    def dynamic_result():
+        return "ok"
+`,
+    ],
+    [
+      "python",
+      `from shiny import module, render, ui
+from counter_ui import counter_ui
+app_ui = ui.page_fluid(ui.output_text("static"), counter_ui("counter"))
+@module.server
+def counter_server(input, output, session):
+    @render.text
+    def module_result():
+        return "ok"
+`,
+    ],
+    [
+      "r",
+      `library(shiny)
+source("extra-ui.R")
+ui <- fluidPage(textOutput("static"), extra_ui)
+server <- function(input, output, session) {
+  output$external_result <- renderText("ok")
+}
+`,
+    ],
+    [
+      "r",
+      `library(shiny)
+ui <- fluidPage(textOutput("static"))
+server <- function(input, output, session) {
+  observe(insertUI(selector="#target", ui=textOutput(input$output_id)))
+  output$dynamic_result <- renderText("ok")
+}
+`,
+    ],
+    [
+      "r",
+      `library(shiny)
+source("counter-ui.R")
+ui <- fluidPage(textOutput("static"), counterUI("counter"))
+counterServer <- function(id) {
+  moduleServer(id, function(input, output, session) {
+    output$module_result <- renderText("ok")
+  })
+}
+`,
+    ],
+  ] as const) {
+    test(`${language} output matching stays uncertain for ${text.includes("module_result") ? "modules" : text.includes("dynamic_result") ? "dynamic UI" : "external UI"}`, () => {
+      const diagnostics = validateShinyCode(text, language);
+      assert.strictEqual(diagnostics.length, 1);
+      assert.strictEqual(diagnostics[0].code, ShinyDiagnosticCode.idMismatch);
+      assert.strictEqual(
+        diagnostics[0].severity,
+        ShinyDiagnosticSeverity.warning
+      );
+    });
+  }
+
+  for (const language of ["python", "r"] as const) {
+    for (const literal of [
+      '"result"',
+      "'result'",
+      String.raw`"\u0072esult"`,
+      String.raw`"\x72esult"`,
+      String.raw`"\162esult"`,
+      language === "python" ? 'r"result"' : 'r"(result)"',
+    ]) {
+      test(`${language} matches the literal output ID ${literal}`, () => {
+        const text =
+          language === "python"
+            ? `from shiny import render, ui
+app_ui = ui.page_fluid(ui.output_text(${literal}))
+@render.text
+def result():
+    return "ok"
+@render.text
+def missing():
+    return "oops"
+`
+            : `library(shiny)
+ui <- fluidPage(textOutput(${literal}))
+output$result <- renderText("ok")
+output$missing <- renderText("oops")
+`;
+        const diagnostics = validateShinyCode(text, language);
+        assert.strictEqual(diagnostics.length, 1);
+        assert.strictEqual(diagnostics[0].code, ShinyDiagnosticCode.idMismatch);
+        assert.ok(diagnostics[0].message.includes("'missing'"));
+      });
+    }
+  }
+
   test("Python ignores code-like strings and comments", async () => {
     const text = `from shiny import reactive, render
 @reactive.calc

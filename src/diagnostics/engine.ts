@@ -39,12 +39,16 @@ function bind(
   bindings.set(name, kind);
 }
 
-function lookup(symbols: Symbols, node: Node, root: Node): Binding | undefined {
+function lookup(
+  symbols: Symbols,
+  node: Node,
+  root: Node
+): { kind: Binding; owner: Node } | undefined {
   let owner: Node | null = scope(node, root);
   while (owner) {
     const binding = symbols.get(owner.id)?.get(node.text);
     if (binding) {
-      return binding;
+      return { kind: binding, owner };
     }
     owner = owner.id === root.id ? null : scope(owner, root);
   }
@@ -77,16 +81,74 @@ function argumentsOf(call: Node, language: ShinyLanguage): Node[] {
         .filter((node): node is Node => node !== null);
 }
 
-function stringValue(node: Node | undefined): string | undefined {
-  if (node?.type !== "string") {
+function stringValue(
+  node: Node | undefined,
+  language: ShinyLanguage
+): string | undefined {
+  if (node?.type !== "string" || node.hasError) {
     return undefined;
   }
   // Dynamic strings/interpolations cannot determine a static output ID.
   if (node.namedChildren.some((child) => child.type === "interpolation")) {
     return undefined;
   }
-  return node.namedChildren.find((child) => child.type === "string_content")
-    ?.text;
+  const opening =
+    language === "r"
+      ? field(node, "open")
+      : node.namedChildren.find((child) => child.type === "string_start");
+  if (language === "python" && /b/i.test(opening?.text ?? "")) {
+    return undefined;
+  }
+  const contents = node.namedChildren.filter(
+    (child) => child.type === "string_content"
+  );
+  if (/r/i.test(opening?.text ?? "")) {
+    return contents.map((child) => child.text).join("");
+  }
+  const escapes = new Map([
+    ["\\", "\\"],
+    ["'", "'"],
+    ['"', '"'],
+    ["a", "\x07"],
+    ["b", "\b"],
+    ["f", "\f"],
+    ["n", "\n"],
+    ["r", "\r"],
+    ["t", "\t"],
+    ["v", "\v"],
+    ["\n", ""],
+    ["\r\n", ""],
+  ]);
+  let value = "";
+  for (const content of contents) {
+    let offset = 0;
+    for (const escape of content.namedChildren) {
+      if (escape.type !== "escape_sequence") return undefined;
+      value += content.text.slice(
+        offset,
+        escape.startIndex - content.startIndex
+      );
+      const text = escape.text.slice(1);
+      const numeric = text.match(
+        /^(?:[xuU]([\da-fA-F]+)|[uU]\{([\da-fA-F]+)\}|([0-7]{1,3}))$/
+      );
+      if (numeric) {
+        const codePoint = numeric[3]
+          ? parseInt(numeric[3], 8)
+          : parseInt(numeric[1] ?? numeric[2], 16);
+        if (codePoint > 0x10ffff) return undefined;
+        value += String.fromCodePoint(codePoint);
+      } else if (escapes.has(text)) {
+        value += escapes.get(text);
+      } else {
+        // Leave unsupported escapes unresolved rather than inventing an ID.
+        return undefined;
+      }
+      offset = escape.endIndex - content.startIndex;
+    }
+    value += content.text.slice(offset);
+  }
+  return value;
 }
 
 function rAssignment(node: Node): boolean {
@@ -208,7 +270,8 @@ export function validateShinyCode(
     const emit = (
       node: Node,
       code: ShinyDiagnosticCode,
-      message: string
+      message: string,
+      severity = ShinyDiagnosticSeverity.error
     ): void => {
       const row = node.startPosition.row;
       if (
@@ -220,7 +283,7 @@ export function validateShinyCode(
       diagnostics.push({
         code,
         message,
-        severity: ShinyDiagnosticSeverity.error,
+        severity,
         range: {
           startLine: row,
           startChar: node.startPosition.column,
@@ -312,7 +375,7 @@ export function validateShinyCode(
           (language === "r" &&
             /^(?:plot|text|table|ui|verbatimText|html|image)Output$/.test(name))
         ) {
-          const id = stringValue(argumentsOf(node, language)[0]);
+          const id = stringValue(argumentsOf(node, language)[0], language);
           if (id !== undefined) outputs.add(id);
         }
       }
@@ -322,7 +385,7 @@ export function validateShinyCode(
       if (
         node.type === "identifier" &&
         isRead(node, language) &&
-        lookup(symbols, node, root) === "calc"
+        lookup(symbols, node, root)?.kind === "calc"
       ) {
         emit(
           node,
@@ -357,13 +420,38 @@ export function validateShinyCode(
             functionNode &&
             field(functionNode, "attribute")?.text === "set" &&
             receiver &&
-            lookup(symbols, receiver, root) === "value"
+            lookup(symbols, receiver, root)?.kind === "value"
           ) {
             emit(
               functionNode,
               ShinyDiagnosticCode.calcSideEffect,
               "Side-effects detected inside @reactive.calc. Use @reactive.effect to mutate reactive values."
             );
+          }
+          if (
+            functionNode &&
+            field(functionNode, "attribute")?.text === "set" &&
+            receiver &&
+            lookup(symbols, receiver, root)?.kind === "value" &&
+            lookup(symbols, receiver, root)?.owner.id === root.id
+          ) {
+            for (let owner = fn; owner; owner = enclosingFunction(owner)) {
+              if (
+                field(owner, "name")?.text === "server" ||
+                decorators(owner).includes("module.server") ||
+                field(owner, "parameters")?.namedChildren.some(
+                  (parameter) => parameter.text === "session"
+                )
+              ) {
+                emit(
+                  functionNode,
+                  ShinyDiagnosticCode.globalStateLeak,
+                  "This session writes a module-level reactive value shared by all sessions. Move per-session state inside the server function; suppress this warning if sharing is intentional.",
+                  ShinyDiagnosticSeverity.warning
+                );
+                break;
+              }
+            }
           }
           if (
             name === "time.sleep" &&
@@ -374,24 +462,6 @@ export function validateShinyCode(
               functionNode,
               ShinyDiagnosticCode.blockingAsync,
               "Synchronous time.sleep() blocks the asyncio event loop. Use 'await asyncio.sleep()' or 'asyncio.to_thread()'."
-            );
-          }
-        }
-        if (node.type === "assignment" && !fn) {
-          const left = field(node, "left");
-          const right = field(node, "right");
-          if (
-            left?.type === "identifier" &&
-            /user|session|auth|account/.test(left.text) &&
-            right?.type === "call" &&
-            ["reactive.value", "reactive.Value"].includes(
-              callName(field(right, "function"))
-            )
-          ) {
-            emit(
-              right,
-              ShinyDiagnosticCode.globalStateLeak,
-              "User-specific reactive.value defined at global scope may leak state across sessions. Define session state inside the server function."
             );
           }
         }
@@ -432,7 +502,8 @@ export function validateShinyCode(
           emit(
             renderer,
             ShinyDiagnosticCode.idMismatch,
-            `Output renderer '${renderer.text}' has no matching UI output element.`
+            `Output renderer '${renderer.text}' has no statically matched UI output in this file. Its UI may be dynamic or defined in another file or module.`,
+            ShinyDiagnosticSeverity.warning
           );
         }
       }

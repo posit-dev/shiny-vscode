@@ -309,7 +309,7 @@
           "scope": "window",
           "type": "boolean",
           "default": true,
-          "description": "Enable Shiny diagnostics for Python files."
+          "description": "Enable automatic Shiny diagnostics for Python files. Manual validation remains available."
         },
         "shiny.diagnostics.python.run": {
           "order": 15,
@@ -333,7 +333,7 @@
           "scope": "window",
           "type": "boolean",
           "default": true,
-          "description": "Enable Shiny diagnostics for R files."
+          "description": "Enable automatic Shiny diagnostics for R files. Manual validation remains available."
         },
         "shiny.diagnostics.r.run": {
           "order": 17,
@@ -381,6 +381,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "node ./out/test/runTest.js",
+    "test:vsix": "node ./scripts/test-vsix.mjs",
     "pretest-positron": "npm run compile",
     "test-positron": "node ./scripts/run-positron-tests.mjs",
     "vsix": "npx --yes @vscode/vsce package"

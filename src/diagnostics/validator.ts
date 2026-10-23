@@ -54,7 +54,7 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
         }
       }),
       vscode.workspace.onDidOpenTextDocument((document) => {
-        if (this.getRunMode(document.languageId) !== "off") {
+        if (this.getRunMode(document.languageId) === "onType") {
           this.updateDiagnostics(document);
         }
       }),
@@ -110,15 +110,22 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
       return;
     }
 
-    const diags = validateShinyDocument(document);
-    this.diagnosticCollection.set(document.uri, diags);
+    this.validateDocument(document);
+  }
+
+  public validateDocument(document: vscode.TextDocument): vscode.Diagnostic[] {
+    const diagnostics = validateShinyDocument(document);
+    this.diagnosticCollection.set(document.uri, diagnostics);
+    return diagnostics;
   }
 
   public refreshAll(): void {
+    this.debounceTimers.forEach((timer) => clearTimeout(timer));
+    this.debounceTimers.clear();
     for (const doc of vscode.workspace.textDocuments) {
       if (
         this.isLanguageEnabled(doc.languageId) &&
-        this.getRunMode(doc.languageId) !== "off"
+        this.getRunMode(doc.languageId) === "onType"
       ) {
         this.updateDiagnostics(doc);
       } else {
@@ -136,7 +143,9 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
 
     const timer = setTimeout(() => {
       this.debounceTimers.delete(key);
-      this.updateDiagnostics(document);
+      if (this.getRunMode(document.languageId) === "onType") {
+        this.updateDiagnostics(document);
+      }
     }, 250);
 
     this.debounceTimers.set(key, timer);

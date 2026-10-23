@@ -2,10 +2,7 @@ import * as vscode from "vscode";
 import { activateAppDetection } from "./app-contexts";
 import { activateAssistant, deactivateAssistant } from "./assistant/extension";
 import { initializeParsers } from "./diagnostics/parser";
-import {
-  ShinyDiagnosticsController,
-  validateShinyDocument,
-} from "./diagnostics/validator";
+import { ShinyDiagnosticsController } from "./diagnostics/validator";
 import { handlePositShinyUri } from "./extension-onUri";
 import {
   onDidStartDebugSession,
@@ -33,8 +30,13 @@ async function validateActiveApp(): Promise<void> {
     return;
   }
 
-  const diags = validateShinyDocument(editor.document);
-  diagnosticsController?.updateDiagnostics(editor.document);
+  if (!diagnosticsController) {
+    vscode.window.showWarningMessage(
+      "Shiny diagnostics are unavailable. Reload the window to try again."
+    );
+    return;
+  }
+  const diags = diagnosticsController.validateDocument(editor.document);
 
   if (diags.length > 0) {
     vscode.window.showErrorMessage(
@@ -45,11 +47,7 @@ async function validateActiveApp(): Promise<void> {
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log("Activating Shiny extension");
-  await initializeParsers();
-  diagnosticsController = new ShinyDiagnosticsController();
-
   context.subscriptions.push(
-    diagnosticsController,
     vscode.commands.registerCommand("shiny.validateApp", validateActiveApp),
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
@@ -98,6 +96,18 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   vscode.debug.onDidStartDebugSession(onDidStartDebugSession);
+
+  // Diagnostics must not prevent the run/debug commands from activating.
+  try {
+    await initializeParsers();
+    diagnosticsController = new ShinyDiagnosticsController();
+    context.subscriptions.push(diagnosticsController);
+  } catch (error) {
+    console.error("Shiny diagnostics could not start:", error);
+    vscode.window.showWarningMessage(
+      "Shiny diagnostics could not start. Reload the window to try again."
+    );
+  }
 }
 
 // this method is called when your extension is deactivated
@@ -106,4 +116,3 @@ export function deactivate() {
   diagnosticsController?.dispose();
   diagnosticsController = undefined;
 }
-

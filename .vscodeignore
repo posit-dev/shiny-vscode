@@ -15,6 +15,7 @@ snippets/README.txt
 esbuild.js
 eslint.config.mjs
 out/test/**
+scripts/test-vsix.mjs
 .windsurfrules
 temp/**
 .mypy_cache/**

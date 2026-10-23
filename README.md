@@ -22,7 +22,14 @@ For a complete Shiny for Python experience in VS Code, please [visit our docs fo
 
 Shiny diagnostics check Python and R apps and modules as you type. Diagnostics
 appear in the Problems panel. Run **Shiny: Validate Shiny App** to check the active
-file manually; a clean result does not show a notification.
+file manually, even when automatic diagnostics are disabled; a clean result does
+not show a notification.
+
+Output-ID mismatches are warnings because UI can be dynamic or defined in other
+files or modules. Writes from a server session to a module-level reactive value
+also produce warnings because the value is shared by all sessions. If sharing
+is intentional, suppress the warning with `# shiny: ignore shiny.globalStateLeak`
+on the write.
 
 Use `# shiny: ignore` at the end of a line to suppress its diagnostics, or
 `# shiny: ignore-next-line` on the preceding line. Optionally list rule codes to
@@ -44,7 +51,9 @@ runtime errors.
 Configure automatic diagnostics separately for Python and R with
 `shiny.diagnostics.python.enable` / `shiny.diagnostics.r.enable` and
 `shiny.diagnostics.python.run` / `shiny.diagnostics.r.run` (`onType`, `onSave`, or
-`off`).
+`off`). With `onSave`, opening or editing a file does not trigger validation;
+save it or run **Shiny: Validate Shiny App**. The `enable` settings control
+automatic diagnostics; manual validation always publishes its results.
 
 ### Shinylive
 

@@ -3,7 +3,11 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { getSelectedPythonInterpreter } from "../run";
-import { type PythonReport, validateWithPython } from "./python";
+import {
+  type PythonReport,
+  type PythonValidationRequest,
+  validateWithPython,
+} from "./python";
 
 export type PythonDocumentValidator = (
   document: vscode.TextDocument,
@@ -25,6 +29,29 @@ export function documentPath(document: vscode.TextDocument): string {
   }
 }
 
+export function pythonValidationRequest(
+  document: vscode.TextDocument
+): PythonValidationRequest {
+  const filename = documentPath(document);
+  const sources: Record<string, string> = {};
+  for (const source of vscode.workspace.textDocuments) {
+    const relative = path.relative(
+      path.dirname(filename),
+      documentPath(source)
+    );
+    if (
+      source.languageId === "python" &&
+      (source.uri.scheme === "file" || source === document) &&
+      relative !== ".." &&
+      !relative.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relative)
+    ) {
+      sources[documentPath(source)] = source.getText();
+    }
+  }
+  return { path: filename, sources };
+}
+
 // Bound interpreter startups when several Shiny documents are opened together.
 let pending: Promise<unknown> = Promise.resolve();
 
@@ -42,22 +69,13 @@ export const validatePythonDocument: PythonDocumentValidator = async (
   if (!interpreter) return undefined;
   const extension = vscode.extensions.getExtension("Posit.shiny");
   if (!extension) return undefined;
-  const filename = documentPath(document);
-  const sources: Record<string, string> = {};
-  for (const source of vscode.workspace.textDocuments) {
-    if (
-      source.languageId === "python" &&
-      (source.uri.scheme === "file" || source === document)
-    ) {
-      sources[documentPath(source)] = source.getText();
-    }
-  }
+  const request = pythonValidationRequest(document);
   const task = pending.then(() => {
     if (signal.aborted) throw signal.reason;
     return validateWithPython(
       interpreter,
       path.join(extension.extensionPath, "python/validate.py"),
-      { path: filename, sources },
+      request,
       signal
     );
   });

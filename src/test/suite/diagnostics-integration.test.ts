@@ -3,11 +3,56 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { initializeParsers } from "../../diagnostics/parser";
-import type { PythonIssue, PythonReport } from "../../diagnostics/python";
+import type { PythonIssue } from "../../diagnostics/python";
 import { ShinyDiagnosticsController } from "../../diagnostics/validator";
 
-suite("Shiny diagnostics integration", () => {
+async function waitFor(check: () => boolean): Promise<void> {
+  const deadline = Date.now() + 5000;
+  while (!check() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.ok(check(), "Expected diagnostic was not published");
+}
+
+suite("Shiny diagnostics integration", function () {
+  this.timeout(10000);
+  test("Warning-only manual results do not show an error notification", async () => {
+    await vscode.extensions.getExtension("Posit.shiny")!.activate();
+    const original = Object.getOwnPropertyDescriptor(
+      vscode.window,
+      "showErrorMessage"
+    )!;
+    const errors: string[] = [];
+    Object.defineProperty(vscode.window, "showErrorMessage", {
+      configurable: true,
+      value: async (message: string) => {
+        errors.push(message);
+      },
+    });
+    try {
+      const document = await vscode.workspace.openTextDocument({
+        language: "r",
+        content:
+          'library(shiny)\nui <- fluidPage(textOutput("present"))\noutput$missing <- renderText("ok")\n',
+      });
+      await vscode.window.showTextDocument(document);
+      await vscode.commands.executeCommand("shiny.validateApp");
+      const diagnostics = vscode.languages
+        .getDiagnostics(document.uri)
+        .filter((issue) => issue.source === "shiny");
+      assert.strictEqual(diagnostics[0]?.code, "shiny.idMismatch");
+      assert.strictEqual(
+        diagnostics[0].severity,
+        vscode.DiagnosticSeverity.Warning
+      );
+      assert.deepStrictEqual(errors, []);
+    } finally {
+      Object.defineProperty(vscode.window, "showErrorMessage", original);
+      await vscode.commands.executeCommand(
+        "workbench.action.revertAndCloseActiveEditor"
+      );
+    }
+  });
   test("Python reports publish in imported files and clear after resolution", async () => {
     const configuration = vscode.workspace.getConfiguration("shiny");
     const previous = configuration.inspect(
@@ -74,12 +119,10 @@ suite("Shiny diagnostics integration", () => {
       const extension = vscode.extensions.getExtension("Posit.shiny");
       assert.ok(extension);
       await extension.activate();
-      await initializeParsers(path.resolve(__dirname, "../../parsers"));
       const configuration = vscode.workspace.getConfiguration("shiny");
       const key = `diagnostics.${language}.run`;
       const previous = configuration.inspect(key)?.workspaceValue;
       const directory = fs.mkdtempSync(path.join(os.tmpdir(), "shiny-save-"));
-      let controller: ShinyDiagnosticsController | undefined;
       try {
         await configuration.update(
           key,
@@ -102,28 +145,28 @@ suite("Shiny diagnostics integration", () => {
           vscode.languages.getDiagnostics(document.uri),
           []
         );
-        controller = new ShinyDiagnosticsController();
-        controller.refreshAll();
-        assert.deepStrictEqual(
-          vscode.languages.getDiagnostics(document.uri),
-          []
-        );
         const edit = new vscode.WorkspaceEdit();
         edit.insert(document.uri, new vscode.Position(0, 0), "# edited\n");
         assert.ok(await vscode.workspace.applyEdit(edit));
-        await new Promise((resolve) => setTimeout(resolve, 350));
         assert.deepStrictEqual(
           vscode.languages.getDiagnostics(document.uri),
           []
         );
         assert.ok(await document.save());
-        assert.ok(
+        await waitFor(() =>
           vscode.languages
             .getDiagnostics(document.uri)
-            .some((diagnostic) => diagnostic.source === "shiny")
+            .some(
+              (diagnostic) =>
+                diagnostic.code ===
+                  (language === "python"
+                    ? "UNCALLED_INPUT"
+                    : "shiny.uncalledReactive") &&
+                diagnostic.severity === vscode.DiagnosticSeverity.Error &&
+                diagnostic.range.start.line === (language === "python" ? 4 : 3)
+            )
         );
       } finally {
-        controller?.dispose();
         await vscode.commands.executeCommand(
           "workbench.action.revertAndCloseActiveEditor"
         );

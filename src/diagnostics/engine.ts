@@ -372,10 +372,17 @@ export function validateShinyCode(
         const name = callName(field(node, "function"));
         if (
           (language === "python" && name.startsWith("ui.output_")) ||
-          (language === "r" &&
-            /^(?:plot|text|table|ui|verbatimText|html|image)Output$/.test(name))
+          (language === "r" && name.endsWith("Output"))
         ) {
-          const id = stringValue(argumentsOf(node, language)[0], language);
+          let argument = argumentsOf(node, language)[0];
+          if (
+            language === "r" &&
+            argument?.type === "call" &&
+            callName(field(argument, "function")) === "ns"
+          ) {
+            argument = argumentsOf(argument, language)[0];
+          }
+          const id = stringValue(argument, language);
           if (id !== undefined) outputs.add(id);
         }
       }

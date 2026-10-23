@@ -71,6 +71,11 @@ Configure automatic diagnostics separately for Python and R with
 save it or run **Shiny: Validate Shiny App**. The `enable` settings control
 automatic diagnostics; manual validation always publishes its results.
 
+Python checks wait for a short pause in typing before starting. Changes to tracked
+local imports on disk also refresh the app's diagnostics. If a scan fails, the
+Problems panel keeps the previous results and shows a validation failure warning
+until a scan succeeds.
+
 Like the CLI, Python import analysis stays within the entry file's directory.
 Installed dependencies, unresolved imports, and dynamic imports are not scanned.
 CLI options such as `--validator module:attr` are not configured by the extension;

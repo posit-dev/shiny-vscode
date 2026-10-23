@@ -1,10 +1,10 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { initializeParsers } from "../../diagnostics/parser";
 import type { PythonReport } from "../../diagnostics/python";
+import { pythonValidationRequest } from "../../diagnostics/python-document";
 import { ShinyDiagnosticsController } from "../../diagnostics/validator";
 
 async function waitFor(check: () => boolean): Promise<void> {
@@ -52,7 +52,12 @@ suite("Asynchronous Python diagnostics", function () {
       vscode.ConfigurationTarget.Workspace
     );
     directory = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "shiny-async-"))
+      fs.mkdtempSync(
+        path.join(
+          vscode.workspace.workspaceFolders![0].uri.fsPath,
+          "shiny-async-"
+        )
+      )
     );
     const filename = path.join(directory, "app.py");
     fs.writeFileSync(filename, "from shiny import ui\nimport worker\n");
@@ -92,6 +97,171 @@ suite("Asynchronous Python diagnostics", function () {
       diagnostics().map((diagnostic) => diagnostic.code),
       ["NEW_RESULT"]
     );
+  });
+
+  test("Subprocess input excludes unrelated Python buffers", async () => {
+    const child = await vscode.workspace.openTextDocument(imported);
+    const unrelated = path.join(directory + "-other", "private.py");
+    fs.mkdirSync(path.dirname(unrelated));
+    fs.writeFileSync(unrelated, "secret = 1\n");
+    const other = await vscode.workspace.openTextDocument(unrelated);
+    try {
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(
+        other.uri,
+        new vscode.Position(0, 0),
+        "# unrelated unsaved source\n"
+      );
+      assert.ok(await vscode.workspace.applyEdit(edit));
+      const request = pythonValidationRequest(document);
+      assert.strictEqual(
+        request.sources[document.uri.fsPath],
+        document.getText()
+      );
+      assert.strictEqual(request.sources[imported.fsPath], child.getText());
+      assert.ok(
+        !Object.hasOwn(request.sources, unrelated),
+        "Unrelated unsaved source must not reach the interpreter"
+      );
+    } finally {
+      await vscode.window.showTextDocument(other);
+      await vscode.commands.executeCommand(
+        "workbench.action.revertAndCloseActiveEditor"
+      );
+      fs.rmSync(path.dirname(unrelated), { recursive: true, force: true });
+    }
+  });
+
+  test("Python typing bursts coalesce into one scan", async () => {
+    let scans = 0;
+    controller = new ShinyDiagnosticsController(async (entry) => {
+      if (entry === document) scans++;
+      return {
+        available: true,
+        entry: entry.uri.fsPath,
+        files: [entry.uri.fsPath],
+        diagnostics: entry === document ? report("COALESCED").diagnostics : [],
+      };
+    });
+    await configuration.update(
+      "diagnostics.python.run",
+      "onType",
+      vscode.ConfigurationTarget.Workspace
+    );
+    await waitFor(() =>
+      diagnostics().some((issue) => issue.code === "COALESCED")
+    );
+    scans = 0;
+    for (let i = 0; i < 3; i++) {
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(document.uri, new vscode.Position(0, 0), "# typing\n");
+      assert.ok(await vscode.workspace.applyEdit(edit));
+      if (i < 2) await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    await waitFor(() => scans > 0);
+    assert.strictEqual(
+      scans,
+      1,
+      "Brief pauses while typing must not start repeated Python scans"
+    );
+  });
+
+  test("A failed scan preserves previous results until recovery", async () => {
+    let failing = false;
+    let resolved = false;
+    controller = new ShinyDiagnosticsController(async () => {
+      if (failing) throw new Error("Interpreter stopped");
+      return {
+        ...report("EXISTING_ERROR"),
+        diagnostics: resolved ? [] : report("EXISTING_ERROR").diagnostics,
+      };
+    });
+    await controller.validateDocument(document, false);
+    failing = true;
+    await controller.validateDocument(document, false);
+    assert.deepStrictEqual(
+      diagnostics().map((issue) => issue.code),
+      ["EXISTING_ERROR"]
+    );
+    const failure = vscode.languages
+      .getDiagnostics(document.uri)
+      .find((issue) => issue.code === "shiny.validationFailed");
+    assert.ok(failure, "Automatic failures must be visible in Problems");
+    assert.strictEqual(failure.severity, vscode.DiagnosticSeverity.Warning);
+    failing = false;
+    resolved = true;
+    await controller.validateDocument(document, false);
+    assert.deepStrictEqual(diagnostics(), []);
+    assert.ok(
+      !vscode.languages
+        .getDiagnostics(document.uri)
+        .some((issue) => issue.code === "shiny.validationFailed")
+    );
+  });
+
+  test("Manual validation consumes a pending typing scan", async () => {
+    let slow = false;
+    controller = new ShinyDiagnosticsController(async (entry) => {
+      if (entry === document && slow) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      return {
+        available: true,
+        entry: entry.uri.fsPath,
+        files: [entry.uri.fsPath],
+        diagnostics:
+          entry === document ? report("MANUAL_RESULT").diagnostics : [],
+      };
+    });
+    await configuration.update(
+      "diagnostics.python.run",
+      "onType",
+      vscode.ConfigurationTarget.Workspace
+    );
+    await waitFor(() =>
+      diagnostics().some((issue) => issue.code === "MANUAL_RESULT")
+    );
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(
+      document.uri,
+      new vscode.Position(0, 0),
+      "# typing before command\n"
+    );
+    assert.ok(await vscode.workspace.applyEdit(edit));
+    slow = true;
+    const result = await controller.validateDocument(document);
+    assert.deepStrictEqual(
+      result.map((issue) => issue.code),
+      ["MANUAL_RESULT"],
+      "The old typing timer must not cancel a manual scan that is still running"
+    );
+  });
+
+  test("A closed imported file changed on disk refreshes its app", async () => {
+    controller = new ShinyDiagnosticsController(async () => ({
+      ...report("DISK_ERROR"),
+      diagnostics: fs.readFileSync(imported.fsPath, "utf8").includes("fixed")
+        ? []
+        : report("DISK_ERROR").diagnostics,
+    }));
+    await configuration.update(
+      "diagnostics.python.run",
+      "onSave",
+      vscode.ConfigurationTarget.Workspace
+    );
+    await controller.validateDocument(document, false);
+    assert.deepStrictEqual(
+      diagnostics().map((issue) => issue.code),
+      ["DISK_ERROR"]
+    );
+    assert.ok(
+      !vscode.workspace.textDocuments.some(
+        (source) =>
+          source.uri.toString() === imported.toString() && !source.isClosed
+      )
+    );
+    fs.writeFileSync(imported.fsPath, "# fixed\n");
+    await waitFor(() => diagnostics().length === 0);
   });
 
   test("Closing an entry point cancels its pending imported-file diagnostics", async () => {

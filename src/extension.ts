@@ -38,9 +38,12 @@ async function validateActiveApp(): Promise<void> {
   }
   const diags = await diagnosticsController.validateDocument(editor.document);
 
-  if (diags.length > 0) {
+  const errors = diags.filter(
+    (diagnostic) => diagnostic.severity === vscode.DiagnosticSeverity.Error
+  );
+  if (errors.length > 0) {
     vscode.window.showErrorMessage(
-      `Shiny: Found ${diags.length} potential issue(s). Check the Problems panel for details.`
+      `Shiny: Found ${errors.length} error(s). Check the Problems panel for details.`
     );
   }
 }

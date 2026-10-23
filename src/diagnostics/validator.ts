@@ -50,6 +50,8 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
   private reports = new Map<string, DocumentReport>();
+  private failures = new Map<string, [vscode.Uri, vscode.Diagnostic[]]>();
+  private dependencyWatchers = new Map<string, vscode.FileSystemWatcher>();
   private requests = new Map<
     string,
     { document: vscode.TextDocument; controller: AbortController }
@@ -184,6 +186,8 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
     manual = true
   ): Promise<vscode.Diagnostic[]> {
     const key = document.uri.toString();
+    clearTimeout(this.debounceTimers.get(key));
+    this.debounceTimers.delete(key);
     this.requests.get(key)?.controller.abort();
     const controller = new AbortController();
     this.requests.set(key, { document, controller });
@@ -249,13 +253,21 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
         }
       }
       this.reports.set(key, report);
+      this.failures.delete(key);
       this.publish();
       return [...report.diagnostics.values()].flatMap(
         ([, diagnostics]) => diagnostics
       );
     } catch (error) {
       if (!controller.signal.aborted && !this.disposed) {
-        this.reports.delete(key);
+        const failure = new vscode.Diagnostic(
+          new vscode.Range(0, 0, 0, 1),
+          `Shiny validation failed. Previous results may be out of date. ${error instanceof Error ? error.message : String(error)}`,
+          vscode.DiagnosticSeverity.Warning
+        );
+        failure.source = "shiny";
+        failure.code = "shiny.validationFailed";
+        this.failures.set(key, [document.uri, [failure]]);
         this.publish();
         console.warn("Shiny validation failed:", error);
         if (manual) {
@@ -299,8 +311,11 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
 
   private publish(): void {
     const files = new Map<string, [vscode.Uri, vscode.Diagnostic[]]>();
-    for (const report of this.reports.values()) {
-      for (const [key, [uri, diagnostics]] of report.diagnostics) {
+    const reports = [...this.reports.values()].map(
+      (report) => report.diagnostics
+    );
+    for (const diagnosticsByFile of [...reports, this.failures]) {
+      for (const [key, [uri, diagnostics]] of diagnosticsByFile) {
         const file = files.get(key) ?? [uri, []];
         for (const diagnostic of diagnostics) {
           if (
@@ -321,6 +336,56 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
       if (!files.has(uri.toString())) this.diagnosticCollection.delete(uri);
     });
     this.diagnosticCollection.set([...files.values()]);
+    this.watchDependencies();
+  }
+
+  private watchDependencies(): void {
+    const dependencies = new Set<string>();
+    for (const report of this.reports.values()) {
+      for (const filename of report.files) {
+        if (filename !== documentPath(report.document)) {
+          dependencies.add(filename);
+        }
+      }
+    }
+    for (const [filename, watcher] of this.dependencyWatchers) {
+      if (!dependencies.has(filename)) {
+        watcher.dispose();
+        this.dependencyWatchers.delete(filename);
+      }
+    }
+    for (const filename of dependencies) {
+      if (this.dependencyWatchers.has(filename)) continue;
+      const watcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(
+          path.dirname(filename),
+          path.basename(filename)
+        )
+      );
+      const refresh = () => {
+        // Unsaved buffers remain authoritative over external disk edits.
+        if (
+          vscode.workspace.textDocuments.some(
+            (source) => source.isDirty && documentPath(source) === filename
+          )
+        ) {
+          return;
+        }
+        for (const report of this.reports.values()) {
+          if (
+            report.files.has(filename) &&
+            !report.document.isClosed &&
+            this.getRunMode(report.document.languageId) !== "off"
+          ) {
+            this.debounceUpdate(report.document, true);
+          }
+        }
+      };
+      watcher.onDidChange(refresh);
+      watcher.onDidCreate(refresh);
+      watcher.onDidDelete(refresh);
+      this.dependencyWatchers.set(filename, watcher);
+    }
   }
 
   public refreshAll(): void {
@@ -335,18 +400,27 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
     }
   }
 
-  private debounceUpdate(document: vscode.TextDocument): void {
+  private debounceUpdate(
+    document: vscode.TextDocument,
+    diskChange = false
+  ): void {
     const key = document.uri.toString();
     this.requests.get(key)?.controller.abort();
     clearTimeout(this.debounceTimers.get(key));
     this.debounceTimers.set(
       key,
-      setTimeout(() => {
-        this.debounceTimers.delete(key);
-        if (this.getRunMode(document.languageId) === "onType") {
-          void this.updateDiagnostics(document);
-        }
-      }, 250)
+      setTimeout(
+        () => {
+          this.debounceTimers.delete(key);
+          if (
+            this.getRunMode(document.languageId) === "onType" ||
+            (diskChange && this.getRunMode(document.languageId) === "onSave")
+          ) {
+            void this.updateDiagnostics(document);
+          }
+        },
+        document.languageId === "python" ? 750 : 250
+      )
     );
   }
 
@@ -357,6 +431,7 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
     this.requests.get(key)?.controller.abort();
     this.requests.delete(key);
     this.reports.delete(key);
+    this.failures.delete(key);
     this.publish();
   }
 
@@ -366,6 +441,9 @@ export class ShinyDiagnosticsController implements vscode.Disposable {
     this.requests.forEach(({ controller }) => controller.abort());
     this.requests.clear();
     this.reports.clear();
+    this.failures.clear();
+    this.dependencyWatchers.forEach((watcher) => watcher.dispose());
+    this.dependencyWatchers.clear();
     this.diagnosticCollection.clear();
   }
 

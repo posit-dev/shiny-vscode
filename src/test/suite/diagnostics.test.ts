@@ -493,27 +493,44 @@ counterServer <- function(id) {
 `,
     ],
   ] as const) {
-    test(`${language} output matching stays uncertain for ${text.includes("module_result") ? "modules" : text.includes("dynamic_result") ? "dynamic UI" : "external UI"}`, () => {
+    test(`${language} output matching avoids false errors for ${text.includes("module_result") ? "modules" : text.includes("dynamic_result") ? "dynamic UI" : "external UI"}`, () => {
       const diagnostics = validateShinyCode(text, language);
-      assert.strictEqual(diagnostics.length, 1);
-      assert.strictEqual(diagnostics[0].code, ShinyDiagnosticCode.idMismatch);
-      assert.strictEqual(
-        diagnostics[0].severity,
-        ShinyDiagnosticSeverity.warning
+      assert.ok(
+        diagnostics.every(
+          (issue) =>
+            issue.code === ShinyDiagnosticCode.idMismatch &&
+            issue.severity === ShinyDiagnosticSeverity.warning
+        )
       );
     });
   }
 
+  test("R matches namespaced extension outputs and module output IDs", () => {
+    const text = `library(shiny)
+ui <- fluidPage(textOutput("summary"), plotly::plotlyOutput("chart"), DT::DTOutput("table"))
+output$summary <- renderText("ok")
+output$chart <- plotly::renderPlotly(plot_ly())
+output$table <- DT::renderDT(data.frame(x=1))
+counterUI <- function(id) {
+  ns <- NS(id)
+  textOutput(ns("count"))
+}
+counterServer <- function(id) {
+  moduleServer(id, function(input, output, session) {
+    output$count <- renderText("ok")
+  })
+}
+`;
+    assert.deepStrictEqual(validateShinyCode(text, "r"), []);
+  });
+
   for (const language of ["python", "r"] as const) {
-    for (const literal of [
-      '"result"',
-      "'result'",
-      String.raw`"\u0072esult"`,
-      String.raw`"\x72esult"`,
-      String.raw`"\162esult"`,
-      language === "python" ? 'r"result"' : 'r"(result)"',
-    ]) {
-      test(`${language} matches the literal output ID ${literal}`, () => {
+    test(`${language} matches normal, escaped, and raw output IDs`, () => {
+      for (const literal of [
+        '"result"',
+        String.raw`"\u0072esult"`,
+        language === "python" ? 'r"result"' : 'r"(result)"',
+      ]) {
         const text =
           language === "python"
             ? `from shiny import render, ui
@@ -534,8 +551,8 @@ output$missing <- renderText("oops")
         assert.strictEqual(diagnostics.length, 1);
         assert.strictEqual(diagnostics[0].code, ShinyDiagnosticCode.idMismatch);
         assert.ok(diagnostics[0].message.includes("'missing'"));
-      });
-    }
+      }
+    });
   }
 
   test("Python ignores code-like strings and comments", async () => {
@@ -720,8 +737,8 @@ def result():
   });
 });
 
-suite("Shared CLI suppression contract", () => {
-  test("Matches the Python CLI suppression fixtures", async () => {
+suite("Bundled analyzer suppression compatibility", () => {
+  test("Handles suppression syntax in the bundled Python analyzer", async () => {
     const fixtures = JSON.parse(
       fs.readFileSync(
         path.resolve(

@@ -2,6 +2,7 @@
 
 ## UNRELEASED
 
+- Python diagnostics use the selected environment's `shiny.validate` rules when available, including local imports, unsaved edits, and installed library validators (#117).
 - Added live reactivity diagnostics and validation for Shiny apps and modules in Python and R (#117).
 - Added settings to configure diagnostics independently for Python and R (`shiny.diagnostics.python.*` and `shiny.diagnostics.r.*`) (#117).
 - Added "Shiny: Validate Shiny App" command in the Command Palette (#117).

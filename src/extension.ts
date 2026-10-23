@@ -36,7 +36,7 @@ async function validateActiveApp(): Promise<void> {
     );
     return;
   }
-  const diags = diagnosticsController.validateDocument(editor.document);
+  const diags = await diagnosticsController.validateDocument(editor.document);
 
   if (diags.length > 0) {
     vscode.window.showErrorMessage(
@@ -100,14 +100,14 @@ export async function activate(context: vscode.ExtensionContext) {
   // Diagnostics must not prevent the run/debug commands from activating.
   try {
     await initializeParsers();
-    diagnosticsController = new ShinyDiagnosticsController();
-    context.subscriptions.push(diagnosticsController);
   } catch (error) {
-    console.error("Shiny diagnostics could not start:", error);
+    console.error("Built-in Shiny diagnostics could not start:", error);
     vscode.window.showWarningMessage(
-      "Shiny diagnostics could not start. Reload the window to try again."
+      "Built-in Shiny diagnostics could not start. Python checks can still run with a compatible selected environment. Reload the window to retry the built-in checks."
     );
   }
+  diagnosticsController = new ShinyDiagnosticsController();
+  context.subscriptions.push(diagnosticsController);
 }
 
 // this method is called when your extension is deactivated

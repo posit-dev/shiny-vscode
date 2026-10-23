@@ -4,9 +4,71 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { initializeParsers } from "../../diagnostics/parser";
+import type { PythonIssue, PythonReport } from "../../diagnostics/python";
 import { ShinyDiagnosticsController } from "../../diagnostics/validator";
 
 suite("Shiny diagnostics integration", () => {
+  test("Python reports publish in imported files and clear after resolution", async () => {
+    const configuration = vscode.workspace.getConfiguration("shiny");
+    const previous = configuration.inspect(
+      "diagnostics.python.run"
+    )?.workspaceValue;
+    const directory = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "shiny-report-"))
+    );
+    const filename = path.join(directory, "app.py");
+    const imported = path.join(directory, "worker.py");
+    fs.writeFileSync(filename, "from shiny import ui\nimport worker\n");
+    fs.writeFileSync(imported, "from shiny import reactive\n");
+    let controller: ShinyDiagnosticsController | undefined;
+    try {
+      await configuration.update(
+        "diagnostics.python.run",
+        "off",
+        vscode.ConfigurationTarget.Workspace
+      );
+      const document = await vscode.workspace.openTextDocument(filename);
+      let issues: PythonIssue[] = [
+        {
+          file: imported,
+          line: 3,
+          code: "EXTENDED_TASK_REACTIVE_READ",
+          message: "Read inputs before invoking the task",
+          severity: "error",
+          sourceLine: "    return input.n()",
+        },
+      ];
+      controller = new ShinyDiagnosticsController(async () => ({
+        available: true,
+        entry: filename,
+        files: [filename, imported],
+        diagnostics: issues,
+      }));
+      assert.strictEqual(
+        (await controller.validateDocument(document)).length,
+        1
+      );
+      let diagnostics = vscode.languages.getDiagnostics(
+        vscode.Uri.file(imported)
+      );
+      assert.strictEqual(diagnostics[0].code, "EXTENDED_TASK_REACTIVE_READ");
+      assert.strictEqual(diagnostics[0].range.start.line, 2);
+      assert.strictEqual(diagnostics[0].range.start.character, 4);
+      issues = [];
+      await controller.validateDocument(document);
+      diagnostics = vscode.languages.getDiagnostics(vscode.Uri.file(imported));
+      assert.deepStrictEqual(diagnostics, []);
+    } finally {
+      controller?.dispose();
+      await configuration.update(
+        "diagnostics.python.run",
+        previous,
+        vscode.ConfigurationTarget.Workspace
+      );
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   for (const language of ["python", "r"] as const) {
     test(`${language} onSave waits for a save on open, refresh, and edit`, async () => {
       const extension = vscode.extensions.getExtension("Posit.shiny");

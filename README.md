@@ -25,9 +25,25 @@ appear in the Problems panel. Run **Shiny: Validate Shiny App** to check the act
 file manually, even when automatic diagnostics are disabled; a clean result does
 not show a notification.
 
-Output-ID mismatches are warnings because UI can be dynamic or defined in other
-files or modules. Writes from a server session to a module-level reactive value
-also produce warnings because the value is shared by all sessions. If sharing
+For Python, the extension uses `shiny.validate` from the Python environment
+selected in VS Code. When that API is available, editor diagnostics use the same
+rules, rule codes, severities, suppression comments, and installed library rules
+as `shiny validate`. The app and its local imports are checked without running
+the app. Findings in imported files appear under those files in the Problems
+panel, even when they are closed. Unsaved editor text is used for both the app
+and its imported files, without writing it to disk.
+
+The shared Python validator requires a trusted workspace and a Shiny version
+that provides `shiny.validate`. With older Shiny versions or no selected Python
+environment, the extension uses its limited built-in checks. Manual validation
+reports when those limited checks are in use. Select an environment that supports
+`shiny validate` to get full Python coverage. R continues to use the built-in
+analyzer.
+
+In the built-in analyzer, output-ID mismatches are warnings because UI can be
+dynamic or defined in other files or modules. Writes from a server session to a
+module-level reactive value also produce warnings because the value is shared
+by all sessions. If sharing
 is intentional, suppress the warning with `# shiny: ignore shiny.globalStateLeak`
 on the write.
 
@@ -54,6 +70,11 @@ Configure automatic diagnostics separately for Python and R with
 `off`). With `onSave`, opening or editing a file does not trigger validation;
 save it or run **Shiny: Validate Shiny App**. The `enable` settings control
 automatic diagnostics; manual validation always publishes its results.
+
+Like the CLI, Python import analysis stays within the entry file's directory.
+Installed dependencies, unresolved imports, and dynamic imports are not scanned.
+CLI options such as `--validator module:attr` are not configured by the extension;
+rules registered by installed libraries are picked up automatically.
 
 ### Shinylive
 

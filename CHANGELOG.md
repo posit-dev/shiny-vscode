@@ -1,5 +1,11 @@
 # Change Log
 
+## UNRELEASED
+
+- Added live reactivity diagnostics and validation for Shiny apps and modules in Python and R (#117).
+- Added settings to configure diagnostics independently for Python and R (`shiny.diagnostics.python.*` and `shiny.diagnostics.r.*`) (#117).
+- Added "Shiny: Validate Shiny App" command in the Command Palette (#117).
+
 ## 1.5.0
 
 - Shiny Assistant (`@shiny`) is deprecated and will be removed in v1.6.0. The assistant now shows a deprecation notice at the start of each chat session, pointing to [Posit Assistant](https://assistant.posit.co), where assistant development is now focused.
@@ -9,10 +15,6 @@
 - Each editor's Run Shiny App and Debug Shiny App buttons now reflect its own file, rather than the focused editor's file, when several editors are open side by side. The `shiny.python.active` and `shiny.r.active` context keys are replaced by `shiny.python.appResources` and `shiny.r.appResources`, which list the open Shiny apps, so a keybinding `when` clause such as `shiny.python.active` should become `resource in shiny.python.appResources`. (#131)
 
 - Fixed Shinylive imports when no workspace folder is open, handling of encoded links, and error messages for malformed links. Binary file contents are now preserved when exporting apps to Shinylive. (#138)
-
-- Added live reactivity diagnostics and validation for Shiny apps and modules in Python and R (#117).
-- Added settings to configure diagnostics independently for Python and R (`shiny.diagnostics.python.*` and `shiny.diagnostics.r.*`) (#117).
-- Added "Shiny: Validate Shiny App" command in the Command Palette (#117).
 
 ## 1.4.3
 

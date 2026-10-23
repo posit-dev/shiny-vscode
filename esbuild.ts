@@ -1,5 +1,6 @@
 import * as esbuild from "esbuild";
 import * as fs from "fs";
+import * as path from "path";
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
@@ -92,6 +93,24 @@ const metafilePlugin: esbuild.Plugin = {
 };
 
 async function main() {
+  fs.mkdirSync("out/parsers", { recursive: true });
+  for (const [language, packageName] of [
+    ["python", "tree-sitter-python"],
+    ["r", "@davisvaughan/tree-sitter-r"],
+  ]) {
+    const filename = `tree-sitter-${language}.wasm`;
+    const directory = path.dirname(
+      require.resolve(`${packageName}/package.json`)
+    );
+    fs.copyFileSync(
+      path.join(directory, filename),
+      path.join("out/parsers", filename)
+    );
+    fs.copyFileSync(
+      path.join(directory, "LICENSE"),
+      path.join("out/parsers", `${language}-LICENSE`)
+    );
+  }
   const buildmap = {
     extension: esbuild.context({
       entryPoints: ["src/extension.ts"],
@@ -102,7 +121,7 @@ async function main() {
       sourcemap: !production,
       sourcesContent: false,
       platform: "node",
-      external: ["vscode"],
+      external: ["vscode", "web-tree-sitter"],
       logLevel: "silent",
       metafile: metafile,
       plugins: [metafilePlugin, esbuildProblemMatcherPlugin],
@@ -116,7 +135,7 @@ async function main() {
       sourcemap: false,
       sourcesContent: false,
       platform: "node",
-      external: ["vscode"],
+      external: ["vscode", "web-tree-sitter"],
       logLevel: "silent",
       metafile: false,
       plugins: [esbuildProblemMatcherPlugin],

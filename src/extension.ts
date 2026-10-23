@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { activateAppDetection } from "./app-contexts";
 import { activateAssistant, deactivateAssistant } from "./assistant/extension";
+import { initializeParsers } from "./diagnostics/parser";
+import { ShinyDiagnosticsController } from "./diagnostics/validator";
 import { handlePositShinyUri } from "./extension-onUri";
 import {
   onDidStartDebugSession,
@@ -17,10 +19,39 @@ import {
   shinyliveCreateFromExplorer,
   shinyliveSaveAppFromUrl,
 } from "./shinylive";
+export { isShinyAppFilename, isShinyAppRPart } from "./app-filename";
+
+let diagnosticsController: ShinyDiagnosticsController | undefined;
+
+async function validateActiveApp(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showInformationMessage("No active editor found to validate.");
+    return;
+  }
+
+  if (!diagnosticsController) {
+    vscode.window.showWarningMessage(
+      "Shiny diagnostics are unavailable. Reload the window to try again."
+    );
+    return;
+  }
+  const diags = await diagnosticsController.validateDocument(editor.document);
+
+  const errors = diags.filter(
+    (diagnostic) => diagnostic.severity === vscode.DiagnosticSeverity.Error
+  );
+  if (errors.length > 0) {
+    vscode.window.showErrorMessage(
+      `Shiny: Found ${errors.length} error(s). Check the Problems panel for details.`
+    );
+  }
+}
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log("Activating Shiny extension");
   context.subscriptions.push(
+    vscode.commands.registerCommand("shiny.validateApp", validateActiveApp),
     vscode.commands.registerCommand("shiny.python.runApp", pyRunApp),
     vscode.commands.registerCommand("shiny.python.debugApp", pyDebugApp),
     vscode.commands.registerCommand("shiny.r.runApp", rRunApp),
@@ -68,9 +99,23 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   vscode.debug.onDidStartDebugSession(onDidStartDebugSession);
+
+  // Diagnostics must not prevent the run/debug commands from activating.
+  try {
+    await initializeParsers();
+  } catch (error) {
+    console.error("Built-in Shiny diagnostics could not start:", error);
+    vscode.window.showWarningMessage(
+      "Built-in Shiny diagnostics could not start. Python checks can still run with a compatible selected environment. Reload the window to retry the built-in checks."
+    );
+  }
+  diagnosticsController = new ShinyDiagnosticsController();
+  context.subscriptions.push(diagnosticsController);
 }
 
 // this method is called when your extension is deactivated
 export function deactivate() {
   deactivateAssistant();
+  diagnosticsController?.dispose();
+  diagnosticsController = undefined;
 }

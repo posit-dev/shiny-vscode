@@ -506,10 +506,12 @@ async function checkForPythonExtension(): Promise<boolean> {
  *
  * @param resource The document the interpreter will run, used to resolve
  *  workspace-folder-scoped interpreter settings.
+ * @param silent Suppress the selection prompt for background diagnostics.
  * @returns A path, or false if no interpreter is selected.
  */
 export async function getSelectedPythonInterpreter(
-  resource?: vscode.Uri
+  resource?: vscode.Uri,
+  silent = false
 ): Promise<string | false> {
   // Gather details of the current Python interpreter. We want to make sure
   // only to re-use a terminal if it's using the same interpreter.
@@ -523,10 +525,12 @@ export async function getSelectedPythonInterpreter(
   const resolvedEnv =
     await pythonAPI.environments.resolveEnvironment(unresolvedEnv);
   if (!resolvedEnv) {
-    vscode.window.showErrorMessage(
-      "Unable to find Python interpreter. " +
-        'Please use the "Python: Select Interpreter" command, and try again.'
-    );
+    if (!silent) {
+      vscode.window.showErrorMessage(
+        "Unable to find Python interpreter. " +
+          'Please use the "Python: Select Interpreter" command, and try again.'
+      );
+    }
     return false;
   }
 

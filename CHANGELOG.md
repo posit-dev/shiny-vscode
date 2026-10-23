@@ -1,5 +1,12 @@
 # Change Log
 
+## UNRELEASED
+
+- Python diagnostics use the selected environment's `shiny.validate` rules when available, including local imports, unsaved edits, and installed library validators (#117).
+- Added live reactivity diagnostics and validation for Shiny apps and modules in Python and R (#117).
+- Added settings to configure diagnostics independently for Python and R (`shiny.diagnostics.python.*` and `shiny.diagnostics.r.*`) (#117).
+- Added "Shiny: Validate Shiny App" command in the Command Palette (#117).
+
 ## 1.5.0
 
 - Shiny Assistant (`@shiny`) is deprecated and will be removed in v1.6.0. The assistant now shows a deprecation notice at the start of each chat session, pointing to [Posit Assistant](https://assistant.posit.co), where assistant development is now focused.

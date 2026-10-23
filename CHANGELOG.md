@@ -4,6 +4,10 @@
 
 - Shiny Assistant (`@shiny`) is deprecated and will be removed in v1.6.0. The assistant now shows a deprecation notice at the start of each chat session, pointing to [Posit Assistant](https://assistant.posit.co), where assistant development is now focused.
 
+- When a Shiny app run in the Positron console fails to start (e.g. an error in `app.R`), the failure is now reported as soon as the console session goes back to idle, instead of after the URL detection timeout. (#123)
+
+- When a Shiny for R app run in a VS Code terminal fails to start (e.g. an error in `app.R`), the failure is now reported immediately, with the R error message, instead of after the startup timeout. (#123)
+
 - Run Shiny App and Debug Shiny App now run the file whose button was clicked, rather than the focused editor's file. The commands also take an optional URI, so a keybinding's `args` or an agent can run a file without first opening and focusing it. (#117)
 
 - Each editor's Run Shiny App and Debug Shiny App buttons now reflect its own file, rather than the focused editor's file, when several editors are open side by side. The `shiny.python.active` and `shiny.r.active` context keys are replaced by `shiny.python.appResources` and `shiny.r.appResources`, which list the open Shiny apps, so a keybinding `when` clause such as `shiny.python.active` should become `resource in shiny.python.appResources`. (#131)

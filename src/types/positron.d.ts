@@ -89,6 +89,61 @@ declare module "positron" {
     extraRuntimeData: any;
   }
 
+  /**
+   * Possible states of the language runtime
+   */
+  export enum RuntimeState {
+    /** The runtime has not been started or initialized yet. */
+    Uninitialized = "uninitialized",
+
+    /** The runtime is initializing (preparing to start). */
+    Initializing = "initializing",
+
+    /** The runtime is in the process of starting up. It isn't ready for messages. */
+    Starting = "starting",
+
+    /** The runtime has a heartbeat and is ready for messages. */
+    Ready = "ready",
+
+    /** The runtime is ready to execute code. */
+    Idle = "idle",
+
+    /** The runtime is busy executing code. */
+    Busy = "busy",
+
+    /** The runtime is in the process of restarting. */
+    Restarting = "restarting",
+
+    /** The runtime is in the process of shutting down. */
+    Exiting = "exiting",
+
+    /** The runtime's host process has ended. */
+    Exited = "exited",
+
+    /** The runtime is not responding to heartbeats and is presumed offline. */
+    Offline = "offline",
+
+    /** The user has interrupted a busy runtime, but the runtime is not idle yet. */
+    Interrupting = "interrupting",
+  }
+
+  /**
+   * A language runtime session.
+   *
+   * This is the subset of Positron's LanguageRuntimeSession interface used by
+   * this extension.
+   */
+  export interface LanguageRuntimeSession {
+    /**
+     * An object supplying metadata about the runtime with which this session
+     * is associated.
+     */
+    readonly runtimeMetadata: LanguageRuntimeMetadata;
+
+    /** An object that emits the current state of the runtime */
+    onDidChangeRuntimeState: vscode.Event<RuntimeState>;
+  }
+
   namespace window {
     /**
      * Create and show a new preview panel.

@@ -1,5 +1,9 @@
 # Change Log
 
+## UNRELEASED
+
+- Shiny for Python apps now open correctly on Posit Workbench. (#143)
+
 ## 1.5.0
 
 - Shiny Assistant (`@shiny`) is deprecated and will be removed in v1.6.0. The assistant now shows a deprecation notice at the start of each chat session, pointing to [Posit Assistant](https://assistant.posit.co), where assistant development is now focused.

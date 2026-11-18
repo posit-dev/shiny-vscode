@@ -63,8 +63,10 @@ async function getForwardedWorkbenchUrl(local_port: number): Promise<string> {
     );
   }
 
-  const forwarded_port = port_forward_cmd_output.stdout[0]?.trim();
-  if (!forwarded_port || !/^\d+$/.test(forwarded_port)) {
+  // Workbench returns a proxy path token, not a numeric TCP port. Reassemble
+  // stdout chunks before validating the token, which may contain hex letters.
+  const forwarded_token = port_forward_cmd_output.stdout.join("").trim();
+  if (!forwarded_token || !/^[0-9a-f]+$/i.test(forwarded_token)) {
     throw new Error(
       "Failed to get Posit workbench forwarded port. Output:\n" +
         port_forward_cmd_output.stdout.join("") +
@@ -78,5 +80,5 @@ async function getForwardedWorkbenchUrl(local_port: number): Promise<string> {
     throw new Error("Can't find URL for workbench.");
   }
 
-  return `${server_url}${session_url.slice(1)}p/${forwarded_port}/`;
+  return `${server_url}${session_url.slice(1)}p/${forwarded_token}/`;
 }

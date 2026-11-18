@@ -81,6 +81,14 @@ function getPositronAPI(): undefined | PositronApi {
   return globalThis.acquirePositronApi();
 }
 
+/**
+ * Get the Positron API object itself, for runtime/session APIs not covered by
+ * the helpers above. Returns undefined in VS Code.
+ */
+export function getPositronApi(): undefined | PositronApi {
+  return getPositronAPI();
+}
+
 /** Check if we're running in Positron (vs VS Code). */
 export function isPositron(): boolean {
   return getPositronAPI() !== undefined;

@@ -11,14 +11,59 @@ port <- as.integer(args[2])
 stopifnot(is.integer(port))
 devmode <- "--devmode" %in% args
 
-if (devmode) {
-  shiny::devmode()
-} else {
-  options(shiny.autoreload = TRUE)
+# When the extension launches this script it sets SHINY_RUN_APP_STATUS_FILE to
+# a per-run file path. While it waits for the app's port to open, it also
+# watches that file so a failed startup can be reported immediately instead of
+# after a timeout. We write "error" (followed by the error message) if the app
+# errors, or "exited" when shiny::runApp() returns. The extension only reads
+# these statuses while waiting for the port to open.
+status_file <- Sys.getenv("SHINY_RUN_APP_STATUS_FILE", unset = "")
+
+write_status <- function(status, details = "") {
+  if (!nzchar(status_file)) {
+    return(invisible())
+  }
+  # Best-effort only. The extension removes the status file's directory as
+  # soon as its startup wait ends, so a late write (shiny::runApp() returning
+  # or erroring after that) lands in a directory that may no longer exist.
+  # That write is useless anyway once nobody is watching, and failing here
+  # would mask the app's own error or exit status, so swallow any error.
+  # Warnings are muffled too: a failed writeLines() also warns about the
+  # unopenable connection, which is noise next to the app's own output.
+  suppressWarnings(tryCatch(
+    {
+      lines <- if (nzchar(details)) c(status, details) else status
+      # Write to a temp file and rename, so the extension never reads a
+      # partially-written status.
+      tmp <- paste0(status_file, ".tmp")
+      writeLines(lines, tmp)
+      file.rename(tmp, status_file)
+    },
+    error = function(e) NULL
+  ))
+  invisible()
 }
 
-message("Running Shiny app")
-message("-----------------")
-message(sprintf('shiny::runApp(%s, port = %d)\n', deparse(path), port))
+tryCatch(
+  {
+    if (devmode) {
+      shiny::devmode()
+    } else {
+      options(shiny.autoreload = TRUE)
+    }
 
-shiny::runApp(path, port = port, launch.browser = FALSE)
+    message("Running Shiny app")
+    message("-----------------")
+    message(sprintf('shiny::runApp(%s, port = %d)\n', deparse(path), port))
+
+    shiny::runApp(path, port = port, launch.browser = FALSE)
+
+    # shiny::runApp() blocks while the app is serving. If it returns, the app
+    # stopped (or never started, e.g. the file didn't create an app object).
+    write_status("exited")
+  },
+  error = function(e) {
+    write_status("error", conditionMessage(e))
+    stop(e)
+  }
+)

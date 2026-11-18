@@ -24,6 +24,11 @@ jobs:
         with:
           node-version: "22.x"
           cache: "npm"
+      # Exercise the R launcher lifecycle tests instead of skipping them when
+      # R or shiny is unavailable on the runner.
+      - uses: r-lib/actions/setup-r@v2
+      - name: Install Shiny for launcher tests
+        run: Rscript -e 'install.packages("shiny"); stopifnot(requireNamespace("shiny", quietly = TRUE))'
       - id: get-date
         run: echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_OUTPUT
         shell: bash

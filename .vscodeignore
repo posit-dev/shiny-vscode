@@ -17,3 +17,7 @@ eslint.config.mjs
 out/test/**
 .windsurfrules
 temp/**
+.venv/**
+_dev/**
+.ruff_cache/**
+.positron-test/**

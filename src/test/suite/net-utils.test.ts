@@ -1,6 +1,13 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import * as vscode from "vscode";
-import { configShinyTimeoutOpenBrowserForPositronConsole } from "../../net-utils";
+import {
+  appStatusFileMessage,
+  configShinyTimeoutOpenBrowserForPositronConsole,
+  watchAppStatusFile,
+} from "../../net-utils";
 
 const SETTING = "shiny.timeoutOpenBrowser";
 
@@ -80,6 +87,134 @@ suite("configShinyTimeoutOpenBrowserForPositronConsole", () => {
     assert.strictEqual(
       configShinyTimeoutOpenBrowserForPositronConsole(),
       30_000
+    );
+  });
+});
+
+suite("watchAppStatusFile", () => {
+  test("observes an atomically published startup error", async function () {
+    this.timeout(8_000);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shiny-status-test-"));
+    const statusFile = path.join(dir, "status");
+    const watch = watchAppStatusFile(statusFile);
+    let timeout: NodeJS.Timeout | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(
+        () => reject(new Error("Status was not observed")),
+        5_000
+      );
+    });
+
+    try {
+      fs.writeFileSync(`${statusFile}.tmp`, "error\nstartup failed\n");
+      fs.renameSync(`${statusFile}.tmp`, statusFile);
+      assert.strictEqual(
+        await Promise.race([watch.status, deadline]),
+        "error\nstartup failed\n"
+      );
+    } finally {
+      clearTimeout(timeout);
+      watch.dispose();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("stops observing after disposal", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shiny-status-test-"));
+    const statusFile = path.join(dir, "status");
+    const watch = watchAppStatusFile(statusFile);
+    let timeout: NodeJS.Timeout | undefined;
+
+    try {
+      watch.dispose();
+      fs.writeFileSync(statusFile, "error\nstartup failed\n");
+      const observed = await Promise.race([
+        watch.status.then(() => true),
+        // Allow multiple polling intervals to pass after disposal.
+        new Promise<boolean>((resolve) => {
+          timeout = setTimeout(() => resolve(false), 500);
+        }),
+      ]);
+      assert.strictEqual(observed, false);
+    } finally {
+      clearTimeout(timeout);
+      watch.dispose();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+suite("appStatusFileMessage", () => {
+  test("surfaces the launcher's error message", () => {
+    assert.strictEqual(
+      appStatusFileMessage("error\nobject 'broken_title' not found\n"),
+      "Shiny app failed to start: object 'broken_title' not found"
+    );
+  });
+
+  test("surfaces error messages with Windows line endings", () => {
+    assert.strictEqual(
+      appStatusFileMessage("error\r\nobject 'broken_title' not found\r\n"),
+      "Shiny app failed to start: object 'broken_title' not found"
+    );
+    assert.strictEqual(
+      appStatusFileMessage("error\r\nfirst line\r\nsecond line\r\n"),
+      "Shiny app failed to start: first line second line"
+    );
+  });
+
+  test("flattens multi-line error details into one line", () => {
+    assert.strictEqual(
+      appStatusFileMessage("error\nfirst line\nsecond line"),
+      "Shiny app failed to start: first line second line"
+    );
+  });
+
+  test("handles an error status with no details", () => {
+    assert.strictEqual(
+      appStatusFileMessage("error"),
+      "Shiny app failed to start."
+    );
+  });
+
+  test("strips ANSI styling from the launcher's error message", () => {
+    assert.strictEqual(
+      appStatusFileMessage(
+        "error\n\x1B[1m\x1B[22mI haven't built that yet. \x1B[36m\u2139\x1B[39m but I will one day!\n"
+      ),
+      "Shiny app failed to start: I haven't built that yet. \u2139 but I will one day!"
+    );
+  });
+
+  test("strips ANSI hyperlinks from the launcher's error message", () => {
+    assert.strictEqual(
+      appStatusFileMessage(
+        "error\nfailed: \x1B]8;;https://example.com\x1B\\docs\x1B]8;;\x1B\\\n"
+      ),
+      "Shiny app failed to start: failed: docs"
+    );
+  });
+
+  test("caps long error details for the notification", () => {
+    const message = appStatusFileMessage(`error\n${"a".repeat(500)}`);
+    assert.ok(
+      message.startsWith(`Shiny app failed to start: ${"a".repeat(300)}`)
+    );
+    assert.ok(message.endsWith("…"));
+  });
+
+  test("does not truncate error details at the cap boundary", () => {
+    const details = "a".repeat(300);
+    assert.strictEqual(
+      appStatusFileMessage(`error\n${details}`),
+      `Shiny app failed to start: ${details}`
+    );
+  });
+
+  test("explains plain exits without blaming an error", () => {
+    assert.strictEqual(
+      appStatusFileMessage("exited"),
+      "Shiny app exited before it finished starting, so we have not opened the preview."
     );
   });
 });

@@ -2,6 +2,10 @@
 
 ## UNRELEASED
 
+- When previewing a Shiny for R app in a terminal, startup errors are reported with the R error message instead of waiting for the startup timeout. (#123)
+
+- When previewing a Shiny for R app in an older Positron console, startup failures are reported before the URL-detection timeout. Positron 2026.10.0 build 297 and later handles the failure notification and closes its startup progress. (#123)
+
 - Shiny for Python apps now open correctly on Posit Workbench. (#143)
 
 ## 1.5.0

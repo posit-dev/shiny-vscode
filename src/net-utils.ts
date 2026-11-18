@@ -223,7 +223,7 @@ export function watchAppStatusFile(statusFile: string): {
  * blocks are not an option -- and the toast collapses newlines anyway.)
  */
 export function appStatusFileMessage(contents: string): string {
-  const [firstLine, ...rest] = contents.trim().split("\n");
+  const [firstLine, ...rest] = contents.trim().split(/\r?\n/);
   if (firstLine === "error") {
     const details = formatStatusDetails(rest.join(" "));
     return `Shiny app failed to start${details ? `: ${details}` : "."}`;

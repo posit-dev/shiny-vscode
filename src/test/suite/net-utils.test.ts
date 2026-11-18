@@ -152,6 +152,17 @@ suite("appStatusFileMessage", () => {
     );
   });
 
+  test("surfaces error messages with Windows line endings", () => {
+    assert.strictEqual(
+      appStatusFileMessage("error\r\nobject 'broken_title' not found\r\n"),
+      "Shiny app failed to start: object 'broken_title' not found"
+    );
+    assert.strictEqual(
+      appStatusFileMessage("error\r\nfirst line\r\nsecond line\r\n"),
+      "Shiny app failed to start: first line second line"
+    );
+  });
+
   test("flattens multi-line error details into one line", () => {
     assert.strictEqual(
       appStatusFileMessage("error\nfirst line\nsecond line"),

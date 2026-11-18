@@ -2,7 +2,7 @@
 
 ## UNRELEASED
 
-- Fixed Shiny for Python apps on Posit Workbench staying on `about:blank` in the Positron Viewer when Workbench's proxy token contained hexadecimal letters (for example, `7550ccb7`). (#143)
+- Shiny for Python apps now open correctly on Posit Workbench. (#143)
 
 ## 1.5.0
 

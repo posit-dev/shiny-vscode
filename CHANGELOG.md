@@ -6,6 +6,8 @@
 
 - When previewing a Shiny for R app in an older Positron console, startup failures are reported before the URL-detection timeout. Positron 2026.10.0 build 297 and later handles the failure notification and closes its startup progress. (#123)
 
+- Shiny for Python apps now open correctly on Posit Workbench. (#143)
+
 ## 1.5.0
 
 - Shiny Assistant (`@shiny`) is deprecated and will be removed in v1.6.0. The assistant now shows a deprecation notice at the start of each chat session, pointing to [Posit Assistant](https://assistant.posit.co), where assistant development is now focused.

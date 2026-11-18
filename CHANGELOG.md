@@ -1,6 +1,6 @@
 # Change Log
 
-## UNRELEASED
+## 1.5.1
 
 - Run and debug commands no longer require an active editor when given a file URI. (#130)
 

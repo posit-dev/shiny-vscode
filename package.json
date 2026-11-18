@@ -43,21 +43,21 @@
         "command": "shiny.python.runApp",
         "title": "Run Shiny App",
         "icon": "$(play)",
-        "enablement": "editorLangId == python && shellExecutionSupported"
+        "enablement": "shellExecutionSupported"
       },
       {
         "category": "Shiny",
         "command": "shiny.python.debugApp",
         "title": "Debug Shiny App",
         "icon": "$(debug-alt)",
-        "enablement": "editorLangId == python && shellExecutionSupported"
+        "enablement": "shellExecutionSupported"
       },
       {
         "category": "Shiny",
         "command": "shiny.r.runApp",
         "title": "Run Shiny App",
         "icon": "$(play)",
-        "enablement": "editorLangId == r && shellExecutionSupported"
+        "enablement": "shellExecutionSupported"
       },
       {
         "category": "Shiny",
@@ -104,6 +104,18 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "shiny.python.runApp",
+          "when": "editorLangId == python"
+        },
+        {
+          "command": "shiny.python.debugApp",
+          "when": "editorLangId == python"
+        },
+        {
+          "command": "shiny.r.runApp",
+          "when": "editorLangId == r"
+        },
         {
           "command": "shiny.shinylive.createFromExplorer",
           "when": "false"

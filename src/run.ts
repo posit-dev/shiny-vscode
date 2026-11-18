@@ -97,7 +97,7 @@ export function registerTerminalCloseHandler(): vscode.Disposable {
 // - `string` when an agent uses the `positronCommand` tool
 // - `undefined` when the user uses it from the command palette
 export async function pyRunApp(uri?: vscode.Uri | string): Promise<void> {
-  const document = await resolveAppDocument(uri);
+  const document = await resolveAppDocument(uri, "python");
   if (!document) {
     return;
   }
@@ -200,14 +200,15 @@ export async function pyRunApp(uri?: vscode.Uri | string): Promise<void> {
 // - `string` when an agent uses the `positronCommand` tool
 // - `undefined` when the user uses it from the command palette
 export async function pyDebugApp(uri?: vscode.Uri | string): Promise<void> {
+  const document = await resolveAppDocument(uri, "python");
+  if (!document) {
+    return;
+  }
+
   if (vscode.debug.activeDebugSession?.name === DEBUG_NAME) {
     await vscode.debug.stopDebugging(vscode.debug.activeDebugSession);
   }
 
-  const document = await resolveAppDocument(uri);
-  if (!document) {
-    return;
-  }
   const path = document.uri.fsPath;
 
   if (!(await checkForPythonExtension())) {
@@ -275,6 +276,11 @@ function buildRConsoleCode(appPath: string, port: number, cwd: string): string {
 // - `string` when an agent uses the `positronCommand` tool
 // - `undefined` when the user uses it from the command palette
 export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
+  const document = await resolveAppDocument(uri, "r");
+  if (!document) {
+    return;
+  }
+
   // Undocumented `shiny.r.runAppIn`: "console" (default) or "terminal".
   // Only meaningful in Positron, where it forces the terminal path, in which
   // this extension owns the startup wait and its dialogs (#123).
@@ -285,15 +291,7 @@ export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
     runAppIn === "terminal" ? undefined : await getPositronRunAppApi();
   if (runAppApi) {
     return runShinyAppInConsole(runAppApi, {
-      // Leave this `undefined` when no URI was passed: the Run App API falls
-      // back to the active editor itself.
-      //
-      // Positron versions whose bundled positron-run-app extension predates
-      // this option ignore it and use the active editor regardless, so on
-      // those the command runs the active editor's app rather than `uri`'s.
-      // That's the behaviour we had before, and it corrects itself once
-      // Positron is updated.
-      document: await openAppDocument(uri),
+      document,
       language: "r",
       appUrlStrings: ["Listening on {{APP_URL}}"],
       buildCode: buildRConsoleCode,
@@ -302,10 +300,6 @@ export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
     });
   }
 
-  const document = await resolveAppDocument(uri);
-  if (!document) {
-    return;
-  }
   const pathFile = document.uri.fsPath;
 
   await saveDocument(document);
@@ -420,8 +414,8 @@ export async function rRunApp(uri?: vscode.Uri | string): Promise<void> {
 }
 
 interface ConsoleAppOptions {
-  /** The document to run. When omitted, the Run App API uses the active editor's. */
-  document?: vscode.TextDocument;
+  /** The resolved and validated document to run. */
+  document: vscode.TextDocument;
   language: "python" | "r";
   appUrlStrings: string[];
   buildCode: (appPath: string, port: number, cwd: string) => string;
@@ -433,10 +427,7 @@ async function runShinyAppInConsole(
   api: PositronRunApp,
   opts: ConsoleAppOptions
 ): Promise<void> {
-  // Not `resolveAppDocument`: that's for the terminal path, which needs a
-  // concrete document and errors when there is none. Here the Run App API owns
-  // the fallback, so mirror it to save whichever document it will run.
-  await saveDocument(opts.document ?? vscode.window.activeTextEditor?.document);
+  await saveDocument(opts.document);
   const urlDetectionTimeout = configShinyTimeoutOpenBrowserForPositronConsole();
 
   // Watch the console session while the app starts: app servers block the
@@ -457,6 +448,14 @@ async function runShinyAppInConsole(
     document: opts.document,
     debugAdapterType: opts.debugAdapterType,
     async getConsoleCode(_runtime, document, _urlPrefix) {
+      // Older versions of Positron ignore the document option and use the
+      // active editor. Never silently run a different file in that case.
+      if (document.uri.toString() !== opts.document.uri.toString()) {
+        vscode.window.showErrorMessage(
+          "Cannot run Shiny app: Positron selected a different file. Update Positron and try again."
+        );
+        return undefined;
+      }
       const appPath = document.uri.fsPath;
       const port = await getAppPort("run", opts.language);
       const cwd = await resolveWorkingDirectory(appPath);
@@ -667,12 +666,20 @@ async function openAppDocument(
 
 /** The document to run: the command's `uri` argument, else the active editor's. */
 async function resolveAppDocument(
-  uri?: vscode.Uri | string
+  uri: vscode.Uri | string | undefined,
+  language: "python" | "r"
 ): Promise<vscode.TextDocument | undefined> {
   const document =
     (await openAppDocument(uri)) ?? vscode.window.activeTextEditor?.document;
   if (!document) {
     vscode.window.showErrorMessage("No active file");
+    return undefined;
+  }
+  if (document.languageId !== language) {
+    const expected = language === "python" ? "a Python" : "an R";
+    vscode.window.showErrorMessage(
+      `Cannot run Shiny app: the selected file must be ${expected} file.`
+    );
     return undefined;
   }
   return document;

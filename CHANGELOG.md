@@ -1,5 +1,9 @@
 # Change Log
 
+## UNRELEASED
+
+- Fixed Shiny for Python apps on Posit Workbench staying on `about:blank` in the Positron Viewer when Workbench's proxy token contained hexadecimal letters (for example, `7550ccb7`). (#143)
+
 ## 1.5.0
 
 - Shiny Assistant (`@shiny`) is deprecated and will be removed in v1.6.0. The assistant now shows a deprecation notice at the start of each chat session, pointing to [Posit Assistant](https://assistant.posit.co), where assistant development is now focused.
